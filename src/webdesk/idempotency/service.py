@@ -41,6 +41,66 @@ def check_revision(current: int, expected: int) -> None:
         raise IdempotencyError(409, "revision_conflict")
 
 
+def lookup(
+    conn: Connection,
+    *,
+    actor: uuid.UUID,
+    endpoint: str,
+    key: uuid.UUID,
+    payload: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Return the stored response for an identical replay, or None if the key is new.
+
+    Runs before any authorization or revision check, so a true replay returns the original
+    response even after the project has moved on. A different payload is still refused.
+    """
+    existing = conn.execute(
+        text(
+            """SELECT request_hash, response, expires_at > now() AS live
+               FROM idempotency_keys
+               WHERE actor_id = :actor AND endpoint = :endpoint AND idempotency_key = :key"""
+        ),
+        {"actor": str(actor), "endpoint": endpoint, "key": key},
+    ).one_or_none()
+    if existing is None:
+        return None
+    if existing[0] != request_hash(payload):
+        raise IdempotencyError(409, "idempotency_key_reused")
+    if not existing[2]:
+        raise IdempotencyError(409, "idempotency_key_expired")
+    return dict(existing[1])
+
+
+def record(
+    conn: Connection,
+    *,
+    actor: uuid.UUID,
+    endpoint: str,
+    key: uuid.UUID,
+    payload: Mapping[str, Any],
+    response: dict[str, Any],
+) -> None:
+    """Store the response of a successful operation under its key."""
+    try:
+        with conn.begin_nested():
+            conn.execute(
+                text(
+                    """INSERT INTO idempotency_keys (actor_id, endpoint, idempotency_key,
+                           request_hash, response)
+                       VALUES (:actor, :endpoint, :key, :digest, CAST(:response AS jsonb))"""
+                ),
+                {
+                    "actor": str(actor),
+                    "endpoint": endpoint,
+                    "key": key,
+                    "digest": request_hash(payload),
+                    "response": json.dumps(response, default=str),
+                },
+            )
+    except SQLAlchemyError as exc:
+        raise IdempotencyError(409, "concurrent_request") from exc
+
+
 def run_idempotent(
     conn: Connection,
     *,
