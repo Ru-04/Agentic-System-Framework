@@ -57,4 +57,5 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "integration: requires a running PostgreSQL (WEBDESK_TEST_DATABASE_URL)",
+    "hardening: negative tests run as the restricted webdesk_app_login role (WEBDESK_HARDENING_APP_URL)",
 ]
