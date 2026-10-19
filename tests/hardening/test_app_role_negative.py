@@ -23,11 +23,13 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import DBAPIError
 
 from webdesk.identity import contacts
+from webdesk.identity.contacts import ContactServiceError
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.reassess import ReassessError, reassess_source_classification
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
+from webdesk.runs.service import start_run
 from webdesk.storage.content_store import ContentStore
 
 from .conftest import POLICY, _email, make_active_user, new_pending_contact
@@ -47,6 +49,8 @@ def _refused(
     conn: Connection,
     statements: Sequence[Statement],
     probe: Statement,
+    *,
+    message: str | None = None,
 ) -> str:
     """Run the statements as the login role and require a refusal with an expected SQLSTATE.
 
@@ -62,6 +66,8 @@ def _refused(
         state = str(getattr(refusal.orig, "sqlstate", None))
         if state not in REFUSED_STATES:
             raise RuntimeError(f"unexpected SQLSTATE {state}: {refusal.orig}") from refusal
+        if message is not None and message not in str(refusal.orig):
+            raise RuntimeError(f"refused for another reason: {refusal.orig}") from refusal
         assert _scalar(conn, probe) == before, "refused write still changed the protected row"
         return state
     raise AssertionError("the database allowed the write")
@@ -365,6 +371,217 @@ def test_n19_a_non_administrator_cannot_reassess_classification(
             )
         ],
         ("SELECT access_classification FROM sources WHERE source_id = :s", {"s": source}),
+    )
+
+
+def test_n6_a_consumed_appointment_cannot_be_reused(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    # The installation appointment was consumed when the second Administrator was appointed.
+    appointment = _scalar(
+        conn,
+        (
+            "SELECT approval_id::text FROM user_contact_approvals "
+            "WHERE appointment_consumed_at IS NOT NULL LIMIT 1",
+            {},
+        ),
+    )
+    staff = make_active_user(app_engine, world)
+    _refused(
+        conn,
+        [
+            ("SELECT set_config('webdesk.consume_appointment', :a, true)", {"a": appointment}),
+            (
+                "INSERT INTO role_assignments "
+                "(user_id, role, assigned_by_user_id, appointment_approval_id) "
+                "VALUES (:u, 'Administrator', :admin, :a)",
+                {"u": staff, "admin": world["admin"], "a": appointment},
+            ),
+        ],
+        (
+            "SELECT count(*) FROM role_assignments WHERE appointment_approval_id = :a",
+            {"a": appointment},
+        ),
+        message="consumed",
+    )
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
+def test_n10_an_access_grant_cannot_be_moved_to_another_user(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    staff = make_active_user(app_engine, world)
+    other = make_active_user(app_engine, world)
+    project = projects.create_project(
+        conn, world["admin"], name="N10", data_classification="internal"
+    )
+    grant = projects.grant_project_access(conn, world["admin"], project, staff, ["project.view"])
+    _refused(
+        conn,
+        [
+            (
+                "UPDATE project_access_grants SET user_id = :o WHERE grant_id = :g",
+                {"o": other, "g": grant},
+            )
+        ],
+        ("SELECT user_id::text FROM project_access_grants WHERE grant_id = :g", {"g": grant}),
+    )
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
+def test_n10_a_restricted_content_grant_cannot_be_moved_to_another_user(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    staff = make_active_user(app_engine, world)
+    other = make_active_user(app_engine, world)
+    project = projects.create_project(
+        conn, world["admin"], name="N10R", data_classification="restricted"
+    )
+    grant = projects.grant_restricted(
+        conn,
+        world["second"],
+        resource_type="project",
+        resource_id=project,
+        user=staff,
+        reason="N10 setup",
+    )
+    _refused(
+        conn,
+        [
+            (
+                "UPDATE restricted_content_grants SET user_id = :o WHERE grant_id = :g",
+                {"o": other, "g": grant},
+            )
+        ],
+        (
+            "SELECT user_id::text FROM restricted_content_grants WHERE grant_id = :g",
+            {"g": grant},
+        ),
+    )
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
+def test_n13_a_segment_cannot_be_inserted_for_a_quarantined_version(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    project = projects.create_project(
+        conn, world["admin"], name="N13", data_classification="restricted"
+    )
+    projects.grant_restricted(
+        conn,
+        world["second"],
+        resource_type="project",
+        resource_id=project,
+        user=world["admin"],
+        reason="hardening N13 setup",
+    )
+    result, _ = ingest_source(
+        conn,
+        ContentStore(_store_root()),
+        world["admin"],
+        project,
+        title="N13",
+        source_type="client_brief",
+        source_trust="untrusted_input",
+        access_classification="restricted",
+        filename="n13.txt",
+        declared_mime="text/plain",
+        data=b"n13 line\n",
+        expected_project_revision=_revision(conn, project),
+    )
+    assert result.scan_status == "quarantined"  # setup check
+    version = result.source_version_id
+    _refused(
+        conn,
+        [
+            (
+                "INSERT INTO source_segments (source_version_id, project_id, extraction_version, "
+                "locator_type, locator, locator_key, text_content, text_content_hash) "
+                "VALUES (:v, :p, 'v1', 'txt_line_range', CAST(:loc AS jsonb), 'line:1', "
+                "'n13 text', :h)",
+                {
+                    "v": version,
+                    "p": project,
+                    "loc": '{"line_start": 1, "line_end": 1}',
+                    "h": "0" * 64,
+                },
+            )
+        ],
+        (
+            "SELECT count(*) FROM source_segments WHERE source_version_id = :v",
+            {"v": version},
+        ),
+    )
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
+def test_n14_a_run_snapshot_cannot_reference_another_project(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    analyst = make_active_user(app_engine, world)
+    assign_role(conn, world["admin"], analyst, Role.ANALYST)
+    project_a = projects.create_project(
+        conn, world["admin"], name="N14A", data_classification="internal"
+    )
+    projects.add_member(conn, world["admin"], project_a, analyst)
+    run = start_run(
+        conn, analyst, project_a, expected_project_revision=_revision(conn, project_a)
+    )
+    project_b = projects.create_project(
+        conn, world["admin"], name="N14B", data_classification="internal"
+    )
+    projects.add_member(conn, world["admin"], project_b, analyst)
+    result, _ = ingest_source(
+        conn,
+        ContentStore(_store_root()),
+        analyst,
+        project_b,
+        title="N14",
+        source_type="client_brief",
+        source_trust="untrusted_input",
+        access_classification="internal",
+        filename="n14.txt",
+        declared_mime="text/plain",
+        data=b"n14 line\n",
+        expected_project_revision=_revision(conn, project_b),
+    )
+    _refused(
+        conn,
+        [
+            (
+                "INSERT INTO run_input_snapshots (run_id, project_id, source_id, "
+                "source_version_id, included_reason, input_revision_hash) "
+                "VALUES (:r, :p, :s, :v, 'pending', :h)",
+                {
+                    "r": run,
+                    "p": project_b,
+                    "s": result.source_id,
+                    "v": result.source_version_id,
+                    "h": "0" * 64,
+                },
+            )
+        ],
+        (
+            "SELECT count(*) FROM run_input_snapshots WHERE run_id = :r",
+            {"r": run},
+        ),
+    )
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
+def test_n17_an_activated_user_cannot_be_withdrawn_or_disabled(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    staff = make_active_user(app_engine, world)
+    revision = _scalar(conn, ("SELECT revision FROM users WHERE user_id = :u", {"u": staff}))
+    # Service path: an activated account is not withdrawable.
+    with pytest.raises(ContactServiceError):
+        contacts.withdraw(conn, world["admin"], staff, "hardening N17", int(revision))
+    # Raw path: pending_contact_approval -> disabled is the only permitted disable transition.
+    _refused(
+        conn,
+        [("UPDATE users SET status = 'disabled' WHERE user_id = :u", {"u": staff})],
+        ("SELECT status FROM users WHERE user_id = :u", {"u": staff}),
     )
 
 
