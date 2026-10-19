@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Base64 of 32 random bytes. Seals prior contact addresses in the outbox (AES-256-GCM).
     outbox_encryption_key: SecretStr | None = None
 
+    # Absolute directory for uploaded bytes. Outside the repository (D-7). Unset = intake disabled.
+    storage_root: Path | None = None
+
     # ----- derived views -------------------------------------------------------------
 
     @property
@@ -107,6 +110,15 @@ class Settings(BaseSettings):
             missing.append("WEBDESK_OUTBOX_DEAD_LETTER_THRESHOLD")
         if self.outbox_encryption_key is None:
             missing.append("WEBDESK_OUTBOX_ENCRYPTION_KEY")
+        return CapabilityReport(enabled=not missing, missing=tuple(missing))
+
+    def intake_capability(self) -> CapabilityReport:
+        """Source upload needs an absolute storage root that already exists or can be created."""
+        missing: list[str] = []
+        if self.storage_root is None:
+            missing.append("WEBDESK_STORAGE_ROOT")
+        elif not self.storage_root.is_absolute():
+            missing.append("WEBDESK_STORAGE_ROOT (must be absolute)")
         return CapabilityReport(enabled=not missing, missing=tuple(missing))
 
     def ceremony_capability(self) -> CapabilityReport:
