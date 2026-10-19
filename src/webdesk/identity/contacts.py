@@ -103,7 +103,7 @@ def request_create(
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.create.denied")
     normalized = _normalize(policy, raw_email)
     if _contact_is_reserved(conn, normalized):
-        raise ContactServiceError(409, "contact_reserved")
+        raise _refusal(conn, actor, "contact.request.denied", 409, "contact_reserved")
     try:
         with conn.begin_nested():
             user_id = uuid.UUID(
@@ -152,6 +152,63 @@ def request_create(
     return user_id, approval_id
 
 
+def request_replacement_create(
+    conn: Connection,
+    actor: uuid.UUID,
+    policy: ContactEmailPolicy,
+    user_id: uuid.UUID,
+    raw_email: str,
+) -> uuid.UUID:
+    """C-4: a fresh create request for a pending account whose contact reservation is retained.
+
+    Allowed only after the previous create request expired or was rejected. The address must be the
+    account's current contact, which is held by its retained reservation (SCHEMA §3.1 C3).
+    """
+    _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.create.denied")
+    normalized = _normalize(policy, raw_email)
+    current = conn.execute(
+        text(
+            """SELECT status, normalized_email,
+                      EXISTS (SELECT 1 FROM user_contact_approvals a
+                              WHERE a.user_id = u.user_id AND a.status = 'approved') AS approved,
+                      EXISTS (SELECT 1 FROM user_contact_approvals a
+                              WHERE a.user_id = u.user_id AND a.request_type = 'create'
+                                AND a.status = 'pending' AND a.expires_at > now()) AS live
+               FROM users u WHERE user_id = :u FOR UPDATE"""
+        ),
+        {"u": user_id},
+    ).one_or_none()
+    if current is None:
+        raise _refusal(conn, actor, "contact.request.denied", 404, "user_not_found")
+    if current[0] != "pending_contact_approval" or current[2]:
+        raise _refusal(conn, actor, "contact.request.denied", 409, "not_eligible")
+    if current[1] != normalized:
+        raise _refusal(conn, actor, "contact.request.denied", 409, "contact_mismatch")
+    if current[3]:
+        raise _refusal(conn, actor, "contact.request.denied", 409, "request_still_pending")
+    approval_id = uuid.UUID(
+        str(
+            conn.execute(
+                text(
+                    """INSERT INTO user_contact_approvals (user_id, request_type,
+                           requested_email_normalized, requested_by_user_id, status, expires_at)
+                       VALUES (:u, 'create', :e, :actor, 'pending',
+                           now() + interval '24 hours')
+                       RETURNING approval_id"""
+                ),
+                {"u": user_id, "e": normalized, "actor": actor},
+            ).scalar_one()
+        )
+    )
+    _audit(
+        conn,
+        actor,
+        "contact.create.replacement_requested",
+        record_refs=[str(user_id), str(approval_id)],
+    )
+    return approval_id
+
+
 def _pending_approval(
     conn: Connection, approval_id: uuid.UUID, request_type: str
 ) -> dict[str, Any]:
@@ -184,8 +241,8 @@ def approve_create(
     """A different active Administrator approves the contact, with an opaque proof reference."""
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.approve.denied")
     if not proof_ref.strip():
-        raise ContactServiceError(422, "proof_ref_required")
-    approval = _pending_approval(conn, approval_id, "create")
+        raise _refusal(conn, approver, "contact.approve.denied", 422, "proof_ref_required")
+    approval = _pending_or_refuse(conn, approver, approval_id, "create", "contact.approve.denied")
     if approval["requested_by_user_id"] == approver:
         _audit_denial(conn, approver, "contact.approve.denied", "self_approval")
         raise ContactServiceError(403, "self_approval")
@@ -221,7 +278,7 @@ def approve_create(
 def reject_create(conn: Connection, approver: uuid.UUID, approval_id: uuid.UUID) -> None:
     """Reject a create request. The account stays pending and the reservation is kept (C3)."""
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.reject.denied")
-    approval = _pending_approval(conn, approval_id, "create")
+    approval = _pending_or_refuse(conn, approver, approval_id, "create", "contact.reject.denied")
     conn.execute(
         text("UPDATE user_contact_approvals SET status = 'rejected' WHERE approval_id = :a"),
         {"a": approval_id},
@@ -249,11 +306,11 @@ def request_change(
         {"u": user_id},
     ).one_or_none()
     if current is None:
-        raise ContactServiceError(404, "user_not_found")
+        raise _refusal(conn, actor, "contact.request.denied", 404, "user_not_found")
     if current[0] != "active":
-        raise ContactServiceError(409, "user_not_active")
+        raise _refusal(conn, actor, "contact.request.denied", 409, "user_not_active")
     if _contact_is_reserved(conn, normalized):
-        raise ContactServiceError(409, "contact_reserved")
+        raise _refusal(conn, actor, "contact.request.denied", 409, "contact_reserved")
     try:
         with conn.begin_nested():
             approval_id = uuid.UUID(
@@ -300,8 +357,8 @@ def approve_change(
     """Approve a contact change: revoke tokens and sessions, release the old contact, notify."""
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.change.denied")
     if not proof_ref.strip():
-        raise ContactServiceError(422, "proof_ref_required")
-    approval = _pending_approval(conn, approval_id, "change")
+        raise _refusal(conn, approver, "contact.change.denied", 422, "proof_ref_required")
+    approval = _pending_or_refuse(conn, approver, approval_id, "change", "contact.change.denied")
     if approval["requested_by_user_id"] == approver:
         _audit_denial(conn, approver, "contact.change.denied", "self_approval")
         raise ContactServiceError(403, "self_approval")
@@ -384,7 +441,7 @@ def approve_change(
 def cancel_change(conn: Connection, actor: uuid.UUID, approval_id: uuid.UUID) -> None:
     """Requester or an administrator cancels a pending change and releases its target."""
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
-    approval = _pending_approval(conn, approval_id, "change")
+    approval = _pending_or_refuse(conn, actor, approval_id, "change", "contact.change.denied")
     conn.execute(
         text("UPDATE user_contact_approvals SET status = 'cancelled' WHERE approval_id = :a"),
         {"a": approval_id},
@@ -414,7 +471,7 @@ def withdraw(
     """Withdraw a never-approved pending account and release its contact (EVAL-F11d)."""
     _actor_can(conn, actor, Permission.USER_WITHDRAW, event="user.withdraw.denied")
     if not reason.strip():
-        raise ContactServiceError(422, "reason_required")
+        raise _refusal(conn, actor, "user.withdraw.denied", 422, "reason_required")
     current = conn.execute(
         text(
             """SELECT status, revision,
@@ -425,7 +482,7 @@ def withdraw(
         {"u": user_id},
     ).one_or_none()
     if current is None:
-        raise ContactServiceError(404, "user_not_found")
+        raise _refusal(conn, actor, "user.withdraw.denied", 404, "user_not_found")
     if current[1] != expected_revision:
         _audit_denial(conn, actor, "user.withdraw.denied", "revision_conflict")
         raise ContactServiceError(409, "revision_conflict")
@@ -498,3 +555,21 @@ def _audit_denial(conn: Connection, actor: uuid.UUID, event: str, reason: str) -
         outcome="denied",
         error_class=reason,
     )
+
+
+def _refusal(
+    conn: Connection, actor: uuid.UUID, event: str, status: int, reason: str
+) -> ContactServiceError:
+    """Record the denial in the audit log, then return the refusal for the caller to raise."""
+    _audit_denial(conn, actor, event, reason)
+    return ContactServiceError(status, reason)
+
+
+def _pending_or_refuse(
+    conn: Connection, actor: uuid.UUID, approval_id: uuid.UUID, request_type: str, event: str
+) -> dict[str, Any]:
+    try:
+        return _pending_approval(conn, approval_id, request_type)
+    except ContactServiceError as exc:
+        _audit_denial(conn, actor, event, exc.reason)
+        raise
