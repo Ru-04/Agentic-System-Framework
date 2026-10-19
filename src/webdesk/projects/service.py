@@ -6,9 +6,8 @@
   self-grant are refused in the service and by database CHECKs (R2; C-2).
 - Archive is allowed in Gate 1. Archived projects refuse membership and grant changes with 409.
 
-Known gap, to be closed in Increment 2: archive must also refuse with 409 while a run is queued,
-running or waiting_human (R3). The ``workflow_runs`` table does not exist yet. No run can exist
-before Increment 2, so the check is not yet reachable.
+Archive refuses with 409 while any run is queued, running or waiting_human (R3). A parked run does
+not block archive.
 """
 
 from __future__ import annotations
@@ -285,6 +284,25 @@ def archive_project(
             raise ProjectServiceError(404, "project_not_found")
         if int(current[0]) != expected_revision:
             raise ProjectServiceError(409, "revision_conflict")
+    # R3: no archive while a run is queued, running or waiting for a human.
+    # A parked (blocked_pending_decision) run does not block archive.
+    active = conn.execute(
+        text(
+            """SELECT 1 FROM workflow_runs
+               WHERE project_id = :p AND status IN ('queued', 'running', 'waiting_human')"""
+        ),
+        {"p": project},
+    ).first()
+    if active is not None:
+        record_event(
+            conn,
+            actor_type="human",
+            actor_id=str(actor),
+            event_type="project.archive.denied",
+            outcome="denied",
+            error_class="active_run_exists",
+        )
+        raise ProjectServiceError(409, "active_run_exists")
     result = conn.execute(
         text(
             """UPDATE projects SET status = 'archived', revision = revision + 1, updated_at = now()
