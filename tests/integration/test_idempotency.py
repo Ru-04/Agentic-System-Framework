@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
@@ -62,10 +63,8 @@ def _two_admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
         clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text("UPDATE users SET status = 'active' WHERE user_id IN (:a, :b)"),
-        {"a": result.user_ids[0], "b": result.user_ids[1]},
-    )
+    activate_user(conn, result.user_ids[0])
+    activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     conn.execute(
         text(

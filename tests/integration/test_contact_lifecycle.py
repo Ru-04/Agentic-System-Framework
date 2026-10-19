@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
@@ -74,10 +75,8 @@ def admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
         clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text("UPDATE users SET status = 'active' WHERE user_id IN (:a, :b)"),
-        {"a": result.user_ids[0], "b": result.user_ids[1]},
-    )
+    activate_user(conn, result.user_ids[0])
+    activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     conn.execute(
         text(
@@ -226,7 +225,7 @@ def test_contact_change_revokes_sessions_releases_old_contact_and_queues_notice(
     user_id, approval_id = contacts.request_create(conn, creator, POLICY, old_email, "Mover")
     contacts.approve_create(conn, approver, approval_id, "proof-a")
     _owner(conn)
-    conn.execute(text("UPDATE users SET status = 'active' WHERE user_id = :u"), {"u": user_id})
+    activate_user(conn, user_id)
     _as_app(conn)
 
     new_email = _email()
@@ -271,7 +270,7 @@ def test_requester_cannot_approve_their_own_contact_change(
     user_id, approval_id = contacts.request_create(conn, creator, POLICY, _email(), "Chg")
     contacts.approve_create(conn, approver, approval_id, "proof")
     _owner(conn)
-    conn.execute(text("UPDATE users SET status = 'active' WHERE user_id = :u"), {"u": user_id})
+    activate_user(conn, user_id)
     _as_app(conn)
     change = contacts.request_change(conn, creator, POLICY, user_id, _email())
     with pytest.raises(ContactServiceError) as exc:

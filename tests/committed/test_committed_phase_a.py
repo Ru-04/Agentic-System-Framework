@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from tests.support.activation import activate_user
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -60,7 +61,7 @@ def _active_user(engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]) -> uuid.UU
         user, approval = contacts.request_create(conn, creator, POLICY, _email(), "Staff")
         contacts.approve_create(conn, approver, approval, "proof-c")
         conn.execute(text("RESET ROLE"))
-        conn.execute(text("UPDATE users SET status = 'active' WHERE user_id = :u"), {"u": user})
+        activate_user(conn, user)
     return user
 
 

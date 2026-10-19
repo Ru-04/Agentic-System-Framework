@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
@@ -88,10 +89,8 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
             clock=_Clock(),
         )
         conn.execute(text("RESET ROLE"))
-        conn.execute(
-            text("UPDATE users SET status = 'active' WHERE user_id IN (:a, :b)"),
-            {"a": result.user_ids[0], "b": result.user_ids[1]},
-        )
+        activate_user(conn, result.user_ids[0])
+        activate_user(conn, result.user_ids[1])
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         conn.execute(
             text(

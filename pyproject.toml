@@ -54,6 +54,7 @@ files = ["src/webdesk"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 markers = [
     "integration: requires a running PostgreSQL (WEBDESK_TEST_DATABASE_URL)",

@@ -377,17 +377,18 @@ def approve_change(
                 ),
                 {"approver": approver, "proof": proof_ref.strip(), "a": approval_id},
             )
+            # The contact and its revision change only through the guard-owner function (H-03).
+            conn.execute(
+                text("SELECT webdesk_guard.fn_advance_contact_revision(:u, :a)"),
+                {"a": approval_id, "u": user_id},
+            )
             conn.execute(
                 text(
-                    """UPDATE users
-                       SET normalized_email = (SELECT requested_email_normalized
-                                               FROM user_contact_approvals WHERE approval_id = :a),
-                           contact_revision = contact_revision + 1,
-                           session_epoch = session_epoch + 1,
+                    """UPDATE users SET session_epoch = session_epoch + 1,
                            revision = revision + 1
                        WHERE user_id = :u"""
                 ),
-                {"a": approval_id, "u": user_id},
+                {"u": user_id},
             )
             conn.execute(
                 text(

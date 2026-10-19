@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
@@ -69,7 +70,7 @@ def _install(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
 def _solo_admin(conn: Connection) -> uuid.UUID:
     """One active Administrator. The second install contact's appointment is left expired."""
     first, _second, second_approval = _install(conn)
-    conn.execute(text("UPDATE users SET status = 'active' WHERE user_id = :u"), {"u": first})
+    activate_user(conn, first)
     conn.execute(
         text(
             "UPDATE user_contact_approvals SET expires_at = now() - interval '1 minute' "
@@ -230,10 +231,8 @@ def test_recovery_refuses_zero_active_administrators_and_offers_no_in_app_path(
 def test_recovery_is_refused_when_two_administrators_are_effective(conn: Connection) -> None:
     first, second, _approval = _install(conn)
     conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text("UPDATE users SET status = 'active' WHERE user_id IN (:a, :b)"),
-        {"a": first, "b": second},
-    )
+    activate_user(conn, first)
+    activate_user(conn, second)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     conn.execute(
         text(

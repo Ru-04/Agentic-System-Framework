@@ -14,6 +14,8 @@ from typing import Any
 
 import psycopg
 import pytest
+
+from tests.support.activation import activate_user
 from psycopg.errors import (
     CheckViolation,
     InsufficientPrivilege,
@@ -124,7 +126,7 @@ def bootstrap_admin(conn: Conn, user_id: uuid.UUID) -> None:
         (user_id, approval),
         role="webdesk_ceremony",
     )
-    x(conn, "UPDATE users SET status = 'active' WHERE user_id = %s", (user_id,))
+    activate_user(conn, user_id)
 
 
 def grant_admin(
