@@ -94,9 +94,25 @@ def _store_hash(conn: Connection, user_id: uuid.UUID, password: str) -> None:
     )
 
 
+def _policy_or_audit(conn: Connection, password: str) -> None:
+    """A weak password is refused and the refusal is audited (F12)."""
+    try:
+        _check_password_policy(password)
+    except AuthError as exc:
+        _audit(
+            conn,
+            actor_type="system",
+            actor="anonymous",
+            event="account.password.denied",
+            outcome="denied",
+            error_class=exc.reason,
+        )
+        raise
+
+
 def activate(conn: Connection, *, token: str, password: str) -> uuid.UUID:
     """Consume an activation token, set the password and activate the account atomically."""
-    _check_password_policy(password)
+    _policy_or_audit(conn, password)
     try:
         with conn.begin_nested():
             user_id = tokens.consume(conn, token=token, purpose="activate")
@@ -125,7 +141,7 @@ def activate(conn: Connection, *, token: str, password: str) -> uuid.UUID:
 
 def reset_password(conn: Connection, *, token: str, password: str) -> uuid.UUID:
     """Consume a reset token, set a new password, and revoke every existing session."""
-    _check_password_policy(password)
+    _policy_or_audit(conn, password)
     try:
         with conn.begin_nested():
             user_id = tokens.consume(conn, token=token, purpose="reset")
