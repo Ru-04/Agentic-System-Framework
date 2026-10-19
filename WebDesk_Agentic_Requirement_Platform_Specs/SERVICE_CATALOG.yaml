@@ -1,0 +1,946 @@
+catalog:
+  catalog_id: webdesk_ecommerce_service_catalog
+  version: 0.3.10-foundation-gate1-review
+  status: working_draft_unapproved
+  last_updated: '2026-10-16'
+  owner: stakeholder_to_assign
+  evidence_policy: GOVERNANCE.md
+  schema:
+    required_fields:
+    - id
+    - name
+    - category
+    - description
+    - platforms
+    - problem_signals
+    - solution_approaches
+    - prerequisites
+    - feasibility_checks
+    - evidence_requirements
+    - security_operations
+    - testing_acceptance_guidance
+    - estimation_factors
+    - exclusions
+    - open_questions
+    - status
+    - version
+    optional_fields:
+    - specialist_category
+    - depends_on_service_ids
+    - implementation_status
+    - technical_confirmation_required
+    enums:
+      category:
+      - platform_customization
+      - api_webhooks
+      - third_party_integration
+      - middleware_backend
+      - data_sync
+      - authentication_authorization
+      - ai_automation
+      - testing_deployment_monitoring_security
+      - three_d_product_configuration
+      - cms_commerce_customization
+      - standalone_application_architecture
+      - platform_migration
+      status:
+      - proposed
+      - verified_pattern
+      - deprecated
+      - blocked
+      implementation_status:
+      - specification_only
+      - prototype
+      - implemented
+      - verified
+      evidence_state:
+      - verified
+      - illustrative
+      - unverified
+    rules:
+    - Catalog patterns are reusable options, not client requirements or commitments.
+    - Platform-specific claims require current, relevant official evidence.
+    - No invented API limits, prices, plan requirements, or vendor capabilities.
+    - Use unverified until the cited source has been accessed and checked.
+  entries:
+  - id: SVC-3D-CART-SHIFT-SHOPIFY-001
+    name: 3dcart / Shift4Shop eCommerce platform investigation (legacy identifier)
+    category: platform_customization
+    specialist_category: three_d_cart_shift_shopify_specialist
+    description: Assess 3dcart/Shift4Shop as an independent eCommerce platform. Do not infer 3D visualization, Shopify
+      dependency or migration from the legacy pattern name.
+    platforms:
+    - 3dcart_shift4shop
+    problem_signals:
+    - 3dcart platform requirement
+    - Shift4Shop platform requirement
+    - 3dcart storefront themes APIs and commerce customization
+    solution_approaches:
+    - Map client requirements against 3dcart/Shift4Shop documented platform functionality
+    - Verify official platform version-specific evidence
+    - Evaluate native options third-party solutions and custom integrations
+    prerequisites:
+    - Identify current platform version, deployment and permissions
+    - Clarify relevant storefront catalog checkout and integration requirements
+    feasibility_checks:
+    - Verify applicable 3dcart/Shift4Shop platform docs for native capabilities and API permissions
+    - Confirm version and integration limitations
+    - Check security, data handling and testing dependencies
+    evidence_requirements:
+    - type: official_platform_documentation
+      source: null
+      evidence_state: unverified
+      note: Verify official Shift4Shop/3dcart documentation and applicable platform version; no capability assertion
+        approved.
+    security_operations:
+    - Assess platform roles, authentication and API permissions
+    - Check handling of customer/order information and third-party access
+    testing_acceptance_guidance:
+    - Validate representative 3dcart/Shift4Shop store workflows
+    - Verify documented API behavior against permitted test environments
+    - Record unsupported or uncertain platform capabilities
+    estimation_factors:
+    - Platform version and configuration
+    - Scope of customization
+    - API availability and integration requirements
+    - Catalog and operational complexity
+    - Regression test coverage
+    exclusions:
+    - Do not assume product visualisation or product configurator features
+    - Do not assume migration to or from Shopify
+    - No platform feature guarantee without verified evidence
+    open_questions:
+    - Which 3dcart/Shift4Shop platform/version is used?
+    - Which specific platform behaviors and integrations are required?
+    status: proposed
+    version: 0.3.0
+    implementation_status: specification_only
+    technical_confirmation_required: true
+  - id: SVC-WORDPRESS-WOOCOMMERCE-001
+    name: WordPress and WooCommerce combined analysis
+    category: cms_commerce_customization
+    specialist_category: wordpress_woocommerce_specialist
+    description: Analyze WordPress CMS concerns and WooCommerce commerce concerns through one combined specialist
+      category.
+    platforms:
+    - wordpress
+    - woocommerce
+    problem_signals:
+    - WordPress website
+    - WooCommerce store
+    - theme or plugin customization
+    - PHP extension
+    - commerce workflow
+    solution_approaches:
+    - Separate CMS from commerce concerns in analysis
+    - Check theme/plugin/version compatibility
+    - Evaluate API and integration boundaries
+    prerequisites:
+    - WordPress and WooCommerce versions
+    - Theme/plugin inventory
+    - Hosting/runtime constraints
+    - Required store workflows
+    feasibility_checks:
+    - Verify applicable official docs and plugin compatibility
+    - Identify PHP/runtime and hosting constraints
+    - Check API/authentication requirements
+    - Surface update/security risks
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Add current official WordPress and WooCommerce sources for the versions in scope.
+    security_operations:
+    - Review plugin provenance and update posture
+    - Least privilege
+    - Protect order/customer data
+    testing_acceptance_guidance:
+    - CMS behavior
+    - Commerce checkout/order flows where in scope
+    - Plugin conflict and version compatibility
+    - API and permission failures
+    estimation_factors:
+    - Version/plugin count
+    - Theme customizations
+    - Commerce workflow complexity
+    - Hosting access
+    - Integration count
+    exclusions:
+    - No assumed plugin license or compatibility
+    - No platform capability claims without evidence
+    open_questions:
+    - Which versions and plugins are installed?
+    - Who controls hosting and deployment?
+    - Which workflows are in scope?
+    status: proposed
+    version: 0.2.0
+    implementation_status: specification_only
+  - id: SVC-BIGCOMMERCE-001
+    name: BigCommerce platform requirement analysis
+    category: platform_customization
+    specialist_category: bigcommerce_specialist
+    description: Analyze BigCommerce storefront, API, customization, extension, and commerce-workflow requirements
+      using version-appropriate evidence.
+    platforms:
+    - bigcommerce
+    problem_signals:
+    - BigCommerce store
+    - storefront customization
+    - BigCommerce API
+    - commerce workflow
+    solution_approaches:
+    - Check native configuration first
+    - Evaluate documented storefront/customization options
+    - Use middleware only when cross-system requirements justify it
+    prerequisites:
+    - Storefront architecture
+    - API/version context
+    - Required workflow and actor
+    - Access/permission context
+    feasibility_checks:
+    - Verify current official API and extension documentation
+    - Confirm required permissions and supported surface
+    - Identify integration and testing dependencies
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Vendor source must be added and checked for the applicable version/context.
+    security_operations:
+    - Least-privilege access
+    - Secret management
+    - Redacted audit logs
+    testing_acceptance_guidance:
+    - Happy path
+    - Permission failures
+    - API error handling
+    - Storefront and integration regression
+    estimation_factors:
+    - API/customization scope
+    - Version/context
+    - Access readiness
+    - Test environments
+    exclusions:
+    - No unsupported API/extension assumptions
+    open_questions:
+    - Which storefront and API version apply?
+    - What access and permissions are available?
+    status: proposed
+    version: 0.2.0
+    implementation_status: specification_only
+  - id: SVC-MAGENTO-ADOBE-COMMERCE-001
+    name: Magento / Adobe Commerce requirement analysis
+    category: platform_customization
+    specialist_category: magento_adobe_commerce_specialist
+    description: Analyze modules, storefront customization, commerce workflows, architecture, and integrations with
+      explicit edition/version context.
+    platforms:
+    - magento
+    - adobe_commerce
+    problem_signals:
+    - Magento
+    - Adobe Commerce
+    - module customization
+    - storefront or checkout workflow
+    solution_approaches:
+    - Establish edition/version/deployment model
+    - Check native/module options
+    - Assess custom module or integration only with evidence and rationale
+    prerequisites:
+    - Product edition/version
+    - Deployment architecture
+    - Module inventory
+    - Target workflow
+    feasibility_checks:
+    - Verify version-specific official docs
+    - Identify module compatibility and upgrade implications
+    - Confirm integration/authentication constraints
+    - Document operational dependencies
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Use official Adobe Commerce/Magento sources applicable to the confirmed edition and version.
+    security_operations:
+    - Least privilege
+    - Dependency and module review
+    - Sensitive commerce-data handling
+    testing_acceptance_guidance:
+    - Version-compatible module tests
+    - Commerce workflow regression
+    - Integration failure paths
+    - Upgrade/deployment checks
+    estimation_factors:
+    - Edition/version
+    - Module/customization complexity
+    - Deployment access
+    - Integration count
+    - Upgrade constraints
+    exclusions:
+    - Do not treat editions/versions as interchangeable
+    open_questions:
+    - Which edition and version?
+    - What deployment model and modules are used?
+    status: proposed
+    version: 0.2.0
+    implementation_status: specification_only
+  - id: SVC-STANDALONE-APPLICATION-001
+    name: Standalone application architecture assessment
+    category: standalone_application_architecture
+    specialist_category: standalone_applications_specialist
+    description: Analyze custom web applications, SaaS products, and internal tools independently of eCommerce platform
+      assumptions.
+    platforms:
+    - platform_agnostic
+    problem_signals:
+    - custom application
+    - SaaS product
+    - internal tool
+    - user roles and workflows
+    - application architecture
+    solution_approaches:
+    - Define application boundaries and data flows
+    - Compare conventional architecture options
+    - Identify API/security/data/QA/deployment requirements
+    prerequisites:
+    - User journeys
+    - Data entities and ownership
+    - Nonfunctional requirements
+    - Hosting/operations constraints
+    feasibility_checks:
+    - Check existing-system integration
+    - Identify auth and data protection needs
+    - Avoid unjustified infrastructure
+    - Define testable acceptance criteria
+    evidence_requirements:
+    - type: project_requirements
+      source: null
+      evidence_state: unverified
+      note: Architecture choices depend on project constraints; no platform evidence is implied.
+    security_operations:
+    - Role-based access
+    - Secrets management
+    - Auditability
+    - Backup and monitoring proportionate to need
+    testing_acceptance_guidance:
+    - Unit/API/contract tests
+    - Authorization tests
+    - Data integrity
+    - Deployment and recovery tests
+    estimation_factors:
+    - Workflow count
+    - Roles
+    - Data complexity
+    - Integrations
+    - Nonfunctional needs
+    exclusions:
+    - Do not add eCommerce platform assumptions or infrastructure without evidence
+    open_questions:
+    - Who owns hosting and operations?
+    - What scale/availability is required?
+    - Which systems must integrate?
+    status: proposed
+    version: 0.2.0
+    implementation_status: specification_only
+  - id: SVC-MIDDLEWARE-APPLICATION-001
+    name: Technology-neutral middleware and integration design
+    category: middleware_backend
+    specialist_category: middleware_applications_specialist
+    description: Design integration-layer responsibilities for API orchestration, webhooks, mapping, sync, auth,
+      retries, idempotency, background processing, and observability.
+    platforms:
+    - platform_agnostic
+    problem_signals:
+    - multi-system orchestration
+    - webhooks
+    - data transformation
+    - synchronization
+    - retry and reconciliation
+    - background processing
+    solution_approaches:
+    - Compare Node.js, Python, PHP, or other suitable technologies against constraints
+    - Use synchronous or background processing based on workload/recovery requirements
+    - Add queues or separate services only when justified
+    prerequisites:
+    - System/API contracts
+    - Data ownership and mapping
+    - Volume/frequency
+    - Authentication model
+    - Operations owner
+    feasibility_checks:
+    - Verify each system's API/events/auth
+    - Define idempotency and retry boundaries
+    - Specify reconciliation and observability
+    - Evaluate technology fit without language assumptions
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Each connected vendor/system needs its own verified documentation.
+    security_operations:
+    - Least privilege
+    - Secret management
+    - Redacted structured logs
+    - Data minimization
+    testing_acceptance_guidance:
+    - Contract tests
+    - Duplicate/reordered events
+    - Transient/permanent failures
+    - Reconciliation
+    - Observability alerts
+    estimation_factors:
+    - System count
+    - Mapping complexity
+    - Volume/frequency
+    - Failure recovery
+    - Hosting and operations
+    exclusions:
+    - No language exclusivity
+    - No queue/broker/microservice unless justified
+    open_questions:
+    - Which runtime constraints exist?
+    - What are the freshness and recovery targets?
+    - Who owns monitoring?
+    status: proposed
+    version: 0.2.0
+    implementation_status: specification_only
+  - id: SVC-SHOPIFY-CUSTOMIZATION-001
+    name: Shopify customization and extension analysis
+    category: platform_customization
+    description: Assess whether a requested storefront or admin experience fits a documented platform extension
+      point, configuration option, theme change, app, or custom service.
+    platforms:
+    - shopify
+    problem_signals:
+    - storefront behavior change
+    - admin workflow enhancement
+    - merchant-facing interface
+    - checkout or theme customization
+    solution_approaches:
+    - Check native configuration and theme capabilities first.
+    - Evaluate documented app extension points applicable to the required surface.
+    - Consider an external app or custom backend only when justified.
+    prerequisites:
+    - Exact user journey and target interface
+    - Store/platform context
+    - Required permissions and ownership
+    feasibility_checks:
+    - Verify the relevant extension point exists for the intended surface
+    - Check platform/API version and eligibility
+    - Separate platform constraints from implementation preferences
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: https://shopify.dev/docs/apps/build/app-extensions
+      evidence_state: illustrative
+      note: Reference provided as a starting point; implementation must retrieve and verify the applicable documentation.
+    security_operations:
+    - Least-privilege access
+    - Review data exposure and app permissions
+    - Document operational ownership
+    testing_acceptance_guidance:
+    - State supported surface and user role
+    - Define observable expected behavior
+    - Test supported platform configurations and failure states
+    estimation_factors:
+    - Number of interfaces
+    - Design complexity
+    - Extension eligibility
+    - Backend/API dependencies
+    - Testing matrix
+    exclusions:
+    - Do not assume a specific extension point is supported without verification
+    open_questions:
+    - Which interface and user role are in scope?
+    - What store configuration and access are available?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-SHOPIFY-API-WEBHOOK-001
+    name: Shopify API and webhook analysis
+    category: api_webhooks
+    description: Investigate whether documented Shopify APIs and event mechanisms support the required read/write
+      or event-driven behavior.
+    platforms:
+    - shopify
+    problem_signals:
+    - read or update store data
+    - react to order/product/inventory events
+    - synchronize external system
+    solution_approaches:
+    - Identify relevant API and data objects
+    - Determine authentication and least-privilege scopes
+    - Evaluate event delivery plus reconciliation needs
+    prerequisites:
+    - Data objects and fields
+    - Required operations
+    - App type and access context
+    - API version
+    feasibility_checks:
+    - Verify official API reference and version
+    - Check access scopes and merchant authorization
+    - Check rate limits and retry semantics for the applicable API
+    - Do not generalize limits across APIs
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: https://shopify.dev/docs/apps/build/authentication-authorization
+      evidence_state: illustrative
+      note: Authentication entry point; exact API behavior must be checked in the relevant official reference.
+    security_operations:
+    - Protect access tokens
+    - Minimize scopes
+    - Audit data access
+    - Avoid secrets in logs
+    testing_acceptance_guidance:
+    - Test permitted and denied access
+    - Test pagination and throttling
+    - Test duplicate events and retry behavior where applicable
+    estimation_factors:
+    - Objects/fields
+    - Read/write operations
+    - Scopes and app setup
+    - Event types
+    - Rate handling
+    - Test fixtures
+    exclusions:
+    - No claim of API availability, quota, or access approval until verified
+    open_questions:
+    - Which fields and operations are required?
+    - Who authorizes app access?
+    - What API version applies?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-THIRD-PARTY-INTEGRATION-001
+    name: Third-party integration discovery
+    category: third_party_integration
+    description: Assess an integration between the eCommerce platform and an external SaaS, ERP, CRM, warehouse,
+      payment, or business system.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - connect vendor systems
+    - exchange records
+    - trigger downstream workflow
+    - remove manual data entry
+    solution_approaches:
+    - Vendor-supported connector
+    - Direct API integration
+    - Middleware
+    - Manual or batch process if sufficient
+    prerequisites:
+    - Named system and vendor
+    - API/docs/access
+    - Data ownership
+    - Business process owner
+    feasibility_checks:
+    - Verify API availability and authentication
+    - Check data model and identifiers
+    - Check vendor plan/access constraints only from evidence
+    - Define error and reconciliation behavior
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Vendor and product are project-specific; add a verified source after discovery.
+    security_operations:
+    - Credential rotation
+    - Data minimization
+    - Access review
+    - Vendor dependency and outage handling
+    testing_acceptance_guidance:
+    - Happy path and validation errors
+    - Timeout/retry/duplicate handling
+    - Data reconciliation
+    - Permission failures
+    estimation_factors:
+    - API maturity
+    - Field mapping
+    - Volume/frequency
+    - Data quality
+    - Sandbox availability
+    - Monitoring needs
+    exclusions:
+    - Do not assume sandbox or credentials exist
+    open_questions:
+    - Which vendor/version?
+    - Who provides test access?
+    - What is the source of truth?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-MIDDLEWARE-BACKEND-001
+    name: Middleware and backend service design
+    category: middleware_backend
+    description: Assess a dedicated service for orchestration, transformations, business rules, secure API calls,
+      or integrations that cannot be appropriately handled by configuration alone.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - multi-system workflow
+    - complex mapping
+    - custom business rules
+    - asynchronous processing
+    - centralized integration logic
+    solution_approaches:
+    - Small modular backend
+    - Scheduled job
+    - Event-driven endpoint
+    - Queue/worker only when justified by workload and recovery needs
+    prerequisites:
+    - Workflow diagram
+    - Data contracts
+    - Hosting/operations owner
+    - Security requirements
+    feasibility_checks:
+    - Confirm which component owns state
+    - Define idempotency and recovery
+    - Estimate runtime and storage needs
+    - Justify infrastructure components by measured need
+    evidence_requirements:
+    - type: architecture_evidence
+      source: null
+      evidence_state: unverified
+      note: Requires project-specific requirements and design review.
+    security_operations:
+    - Validate inputs
+    - Least privilege
+    - Secret management
+    - Structured redacted logs
+    - Backup and monitoring
+    testing_acceptance_guidance:
+    - Unit and contract tests
+    - Integration tests
+    - Failure recovery
+    - Operational alerts
+    estimation_factors:
+    - Number of flows
+    - Statefulness
+    - Error handling
+    - Environments
+    - Monitoring and support
+    exclusions:
+    - Do not add Kafka, Redis, or microservices without a demonstrated requirement
+    open_questions:
+    - Who operates the service?
+    - What availability and recovery targets are required?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-DATA-SYNC-001
+    name: Data synchronization and reconciliation
+    category: data_sync
+    description: Define synchronization of agreed entities/fields between systems with explicit ownership, timing,
+      conflict handling, retries and reconciliation.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - inventory sync
+    - order/customer/product sync
+    - keep records aligned
+    - periodic import/export
+    solution_approaches:
+    - Event-driven sync where supported
+    - Scheduled polling or batch
+    - Hybrid event plus reconciliation
+    prerequisites:
+    - Source of truth per field
+    - Identifiers
+    - Field mapping
+    - Expected volume and freshness
+    - Conflict policy
+    feasibility_checks:
+    - Confirm event/API support
+    - Check limits and pagination
+    - Define duplicate handling
+    - Define retry and dead-letter/manual recovery approach appropriate to complexity
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: null
+      evidence_state: unverified
+      note: Verify both systems' current API and event documentation.
+    security_operations:
+    - Minimize copied personal data
+    - Secure transport and credentials
+    - Log sync outcomes without sensitive payloads
+    testing_acceptance_guidance:
+    - Initial load
+    - Incremental update
+    - Duplicate/reordered events
+    - Partial failure
+    - Reconciliation discrepancy
+    estimation_factors:
+    - Entities/fields
+    - Volume
+    - Frequency
+    - Initial migration
+    - Conflict logic
+    - Monitoring
+    exclusions:
+    - Do not promise real-time synchronization without defined and verified targets
+    open_questions:
+    - What is the source of truth?
+    - What does 'real time' mean?
+    - How are conflicts resolved?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-AUTHZ-001
+    name: Authentication and authorization assessment
+    category: authentication_authorization
+    description: Identify identities, trust boundaries, authentication flows, permission scopes and credential lifecycle
+      for each integration.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - connect an account
+    - read/write protected data
+    - role-specific actions
+    - store credentials
+    solution_approaches:
+    - Vendor-supported OAuth or token flow
+    - Service identity
+    - Role-based authorization
+    - Least-privilege scoped access
+    prerequisites:
+    - Actors and roles
+    - Data/action matrix
+    - App type
+    - Identity provider
+    feasibility_checks:
+    - Use official provider-specific authentication guidance
+    - Confirm token lifecycle and scopes
+    - Check revocation and permission-denied behavior
+    evidence_requirements:
+    - type: official_vendor_documentation
+      source: https://shopify.dev/docs/apps/build/authentication-authorization
+      evidence_state: illustrative
+      note: Shopify reference only; other vendors require their own official references.
+    security_operations:
+    - No secrets in prompts/logs/repositories
+    - Least privilege
+    - Rotation/revocation
+    - Audit privileged actions
+    testing_acceptance_guidance:
+    - Unauthorized request denied
+    - Scope boundaries
+    - Expired/revoked credentials
+    - Cross-project access denied
+    estimation_factors:
+    - Number of identity types
+    - Consent flow
+    - Roles
+    - Token lifecycle
+    - Audit requirements
+    exclusions:
+    - Do not assume credentials or approvals are available
+    open_questions:
+    - Who owns authorization?
+    - Which actions and data are permitted?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-AI-AUTOMATION-001
+    name: AI and rule-based automation assessment
+    category: ai_automation
+    description: Determine whether a requirement is best met by deterministic rules, conventional software, an existing
+      product, or an AI/ML component.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - unstructured text processing
+    - classification or extraction
+    - language generation
+    - decision support with uncertainty
+    - repetitive deterministic process
+    solution_approaches:
+    - Deterministic rules first when sufficient
+    - Existing vendor capability
+    - LLM with schema validation and human review
+    - Trained model only when justified by data and evaluation
+    prerequisites:
+    - Problem and success metric
+    - Input/output examples
+    - Error tolerance
+    - Data permissions
+    - Human escalation policy
+    feasibility_checks:
+    - Compare non-AI baseline
+    - Assess failure impact
+    - Evaluate privacy and provider terms
+    - Define abstention and human review
+    - Benchmark with representative data
+    evidence_requirements:
+    - type: evaluation_evidence
+      source: null
+      evidence_state: unverified
+      note: A specific AI recommendation requires use-case evidence and measured evaluation.
+    security_operations:
+    - Prompt injection defense
+    - Sensitive-data minimization
+    - Output validation
+    - Logging redaction
+    - Fallback and escalation
+    testing_acceptance_guidance:
+    - Gold dataset
+    - Precision/recall or task-specific metrics
+    - Adversarial tests
+    - Human evaluation
+    - Regression tests
+    estimation_factors:
+    - Data readiness
+    - Evaluation effort
+    - Integration complexity
+    - Human review rate
+    - Provider cost/latency
+    exclusions:
+    - Do not recommend AI solely because it is available
+    - Do not claim measured accuracy before testing
+    open_questions:
+    - Can rules solve the task?
+    - What errors are tolerable?
+    - Who reviews uncertain outputs?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-QUALITY-OPS-001
+    name: Testing, deployment, monitoring and security planning
+    category: testing_deployment_monitoring_security
+    description: Identify verification, deployment, observability, security and operational requirements for a proposed
+      solution.
+    platforms:
+    - shopify
+    - platform_agnostic
+    problem_signals:
+    - production integration
+    - data-changing automation
+    - availability expectations
+    - sensitive data
+    - ongoing service
+    solution_approaches:
+    - Automated unit/contract/integration tests
+    - Staged deployment
+    - Structured logs and metrics
+    - Alerting and runbooks proportionate to risk
+    prerequisites:
+    - Environment ownership
+    - Release process
+    - Operational owner
+    - Risk profile
+    feasibility_checks:
+    - Define test environments and test data
+    - Confirm deployment permissions
+    - Define recovery and monitoring responsibility
+    evidence_requirements:
+    - type: project_requirements
+      source: null
+      evidence_state: unverified
+      note: Project-specific expectations must be elicited; do not assume WebDesk's current operating process.
+    security_operations:
+    - Threat modeling
+    - Secrets management
+    - Least privilege
+    - Dependency updates
+    - Audit and recovery
+    testing_acceptance_guidance:
+    - Acceptance tests mapped to requirements
+    - Negative and failure tests
+    - Deployment verification
+    - Operational handover criteria
+    estimation_factors:
+    - Coverage expectations
+    - Environments
+    - CI/CD readiness
+    - Monitoring and support scope
+    exclusions:
+    - Do not promise 24/7 support or service levels unless explicitly agreed
+    open_questions:
+    - Who operates the solution?
+    - What deployment/release process applies?
+    - What support is in scope?
+    status: proposed
+    version: 0.2.0
+  - id: SVC-PLATFORM-MIGRATION-001
+    name: Cross-platform eCommerce migration investigation
+    category: platform_migration
+    specialist_category: middleware_applications_specialist
+    description: Investigate migrations between independently identified source and target platforms; invoke platform
+      specialists for both sides as appropriate. Migration is a distinct service pattern, not the definition of
+      any platform.
+    platforms:
+    - platform_agnostic
+    problem_signals:
+    - eCommerce platform migration
+    - store replatforming
+    - migrate products customers orders
+    - SEO and redirects for store migration
+    solution_approaches:
+    - Inventory source and target objects and constraints
+    - Compare native migration tools and third-party solutions
+    - Investigate custom migration and verification strategy
+    prerequisites:
+    - Named source and target platforms and versions
+    - Authorized access to data export/import and platform documentation
+    - Defined data classes, target behavior and cutover expectations
+    feasibility_checks:
+    - Verify source export and target import/API capabilities
+    - Evaluate identity, password, privacy and payment-data limitations
+    - Check SEO URL migration, redirects, integration parity and rollback
+    evidence_requirements:
+    - type: official_source_and_target_documentation
+      source: null
+      evidence_state: unverified
+      note: Evidence required for both source and target platform/version limitations.
+    security_operations:
+    - Define secure handling of client and customer data
+    - Check access minimization and regulatory obligations
+    testing_acceptance_guidance:
+    - Sample migration and reconciliation checks
+    - SEO redirects and storefront acceptance
+    - Cutover/rollback feasibility verification
+    estimation_factors:
+    - Entity counts and relationships
+    - Data cleanup and transformation
+    - Integrations and SEO redirects
+    - Testing, reconciliation and downtime requirements
+    exclusions:
+    - Do not assume credential or payment instrument portability
+    - No guaranteed zero downtime without evidence
+    open_questions:
+    - Which source and target platforms and versions?
+    - What records and integrations are included?
+    - What cutover tolerance and SEO requirements apply?
+    status: proposed
+    version: 0.3.0
+    implementation_status: specification_only
+    technical_confirmation_required: true
+  knowledge_categories_approved:
+  - wds_technical_standards
+  - approved_service_patterns
+  - historical_client_sows_proposals
+  - historical_development_estimates
+  - internal_technical_documentation
+  estimation_policy:
+    unit: hours
+    disciplines:
+    - business_analysis
+    - ui_ux
+    - frontend
+    - backend
+    - qa
+    - project_management
+    - devops_deployment
+    sources:
+    - authorized_historical_wds_estimates
+    - approved_wds_reference_ranges
+    ranges:
+    - low
+    - likely
+    - high
+    final_approver: authorized_wds_human
+    catalog_reference_ranges_populated: false
+  specialist_semantics_pending:
+  - SVC-3D-CART-SHIFT-SHOPIFY-001
+  evidence_state_alignment_pending: true
+  decision_update_v030:
+    d01: 3dcart/Shift4Shop independent platform, legacy specialist ID retained
+    d11: Platform migration included in MVP, separate pattern
+    d15: Legacy IDs preserved with proposed alias mapping pending approval
+    status: specification_only

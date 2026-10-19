@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_DB: webdesk
+      POSTGRES_USER: webdesk_owner
+      POSTGRES_PASSWORD: CHANGE_ME_LOCAL_ONLY
+    # Host port 5433: 5432 is commonly held by a local PostgreSQL service on developer machines.
+    ports:
+      - "5433:5432"
+    volumes:
+      - webdesk_pgdata:/var/lib/postgresql/data
+
+volumes:
+  webdesk_pgdata:

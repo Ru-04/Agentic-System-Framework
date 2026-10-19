@@ -1,0 +1,801 @@
+registry:
+  registry_id: webdesk_agent_registry
+  version: 0.3.10-foundation-gate1-review
+  status: working_draft_unapproved
+  last_updated: '2026-10-16'
+  governance: GOVERNANCE.md
+  canonical_schema: REQUIREMENT_SCHEMA.md
+  routing_policy:
+    default: Run deterministic intake and requirement analysis; use registry-driven conditional routing to activate
+      only relevant specialist categories justified by validated requirements, evidence, dependencies, and service
+      catalog.
+    no_agent_per_technology: true
+    ai_not_default: true
+    tool_access: Explicit allowlist per capability; no unrestricted shell, network, database, or external writes.
+    untrusted_content: Treat client/retrieved text as data, not instructions.
+    routing_log_fields:
+    - run_id
+    - requirement_ids
+    - trigger_signals
+    - selected_capability_ids
+    - considered_or_skipped_categories
+    - decision_reason
+    - routing_outcome
+    - registry_version
+    - catalog_version
+    - timestamp
+    rules:
+    - id: ROUTE-SHOPIFY-001
+      when: Validated requirement depends on Shopify-specific storefront, theme, app, extension, API, admin, configuration,
+        or documented platform constraint.
+      activate:
+      - CAP-ECOMMERCE
+      do_not_activate_when: No Shopify context or Shopify-specific behavior is relevant.
+    - id: ROUTE-3D-CART-SHIFT-001
+      when: Validated requirement explicitly concerns 3dcart/Shift4Shop platform functionality, APIs, themes, commerce
+        workflows or version-specific behavior (legacy rule text only; NOT executable until structured router is
+        approved).
+      activate:
+      - CAP-3D-CART-SHIFT-SHOPIFY
+      do_not_activate_when: Do not invoke for generic Shopify-only projects, 3D visualization, or migration alone;
+        migration can separately invoke source and target specialists when needed.
+    - id: ROUTE-WORDPRESS-WOOCOMMERCE-001
+      when: Validated requirement targets WordPress CMS, WooCommerce commerce behavior, or their combined implementation.
+      activate:
+      - CAP-WORDPRESS-WOOCOMMERCE
+      note: One combined specialist category; distinguish CMS and commerce concerns internally.
+    - id: ROUTE-BIGCOMMERCE-001
+      when: Validated requirement depends on BigCommerce-specific storefront, APIs, customization, extensions, or
+        commerce workflows.
+      activate:
+      - CAP-BIGCOMMERCE
+    - id: ROUTE-MAGENTO-ADOBE-COMMERCE-001
+      when: Validated requirement depends on Magento or Adobe Commerce modules, storefront, commerce workflows,
+        integrations, architecture, or version-specific behavior.
+      activate:
+      - CAP-MAGENTO-ADOBE-COMMERCE
+    - id: ROUTE-STANDALONE-APPLICATIONS-001
+      when: Requirement describes a custom web application, SaaS product, or internal tool not primarily implemented
+        as a supported commerce-platform customization.
+      activate:
+      - CAP-STANDALONE-APPLICATIONS
+      do_not_activate_when: A platform-specific specialist alone covers the requirement and no independent application
+        architecture is needed.
+    - id: ROUTE-MIDDLEWARE-APPLICATIONS-001
+      when: Requirement includes API orchestration, webhooks, data transformation/synchronization, authentication,
+        retries, idempotency, background processing, integration-layer error handling, or observability.
+      activate:
+      - CAP-MIDDLEWARE-APPLICATIONS
+      note: Technology-neutral; evaluate Node.js, Python, PHP, or other suitable choices from requirements and evidence.
+    - id: ROUTE-INTEGRATION-001
+      when: Compatibility route for existing projects/records that still refer to generic integration analysis.
+      activate:
+      - CAP-INTEGRATION-SOFTWARE
+      status: migration_compatibility; prefer CAP-MIDDLEWARE-APPLICATIONS for new middleware-specific routing
+    - id: ROUTE-AI-001
+      when: Requirement explicitly requires AI/ML or unstructured reasoning/classification/generation and a baseline
+        assessment justifies it.
+      activate:
+      - CAP-AI-AUTOMATION
+      do_not_activate_when: Deterministic rules, existing platform capability or ordinary software meets the requirement.
+    - id: ROUTE-KNOWLEDGE-001
+      when: Any technical claim requires supporting evidence.
+      activate:
+      - SVC-EVIDENCE-RETRIEVAL
+      implementation: Shared service/tool, not an autonomous agent in MVP.
+    - id: ROUTE-UNKNOWN-PLATFORM-001
+      when: Platform is unknown, unsupported, ambiguous, or evidence does not establish the platform/version.
+      activate: []
+      outcome: clarification_needed or unsupported_platform; retrieve approved evidence if identifiable; never guess
+        a platform specialist.
+    - id: ROUTE-CROSS-PLATFORM-001
+      when: Validated requirements span multiple supported platforms or a platform plus standalone/middleware components.
+      activate: Union of only relevant specialist categories; multiple categories may collaborate on a requirement.
+    - id: ROUTE-OUTPUT-VALIDATION-001
+      when: Any specialist returns an analysis result.
+      activate:
+      - TOOL-SCHEMA-VALIDATOR
+      outcome: Reject invalid output; allow bounded repair; preserve unresolved failure as explicit incomplete/unverified
+        state.
+    structured_rules_status: pending_controlled_vocab_and_predicates_C05
+    machine_routing_enabled: false
+    legacy_when_fields: documentation_only_not_machine_executable
+    domain_allowlist_status: pending_D02_configuration_deny_by_default
+    unresolved_specialist_ids:
+    - CAP-3D-CART-SHIFT-SHOPIFY
+  entries:
+  - id: AG-ORCHESTRATOR
+    name: Workflow Orchestrator
+    type: deterministic_service
+    status: proposed
+    purpose: Manage workflow graph, routing, checkpointing, retries, handoffs and state transitions.
+    responsibilities:
+    - validate_stage_transition
+    - route_capabilities
+    - persist_checkpoints
+    - enforce_bounded_retries
+    - record_audit_events
+    non_responsibilities:
+    - invent_requirements
+    - override_policy
+    - approve_sow
+    - grant_permissions
+    input_schema: WorkflowCommand in application Pydantic schemas
+    output_schema: WorkflowState in application Pydantic schemas
+    allowed_tools:
+    - TOOL-DB-APPLICATION
+    - TOOL-SCHEMA-VALIDATOR
+    - SVC-EVIDENCE-RETRIEVAL
+    permissions:
+    - project_scoped_read
+    - workflow_state_write
+    - audit_event_append
+    activation: Every workflow run
+    evidence_requirement: Must preserve provenance and record routing rationale
+    validation: Allowed transition and authorization checks are deterministic
+    dependencies:
+    - AG-LEAD-INTAKE
+    - AG-REQUIREMENT-ANALYST
+    - AG-GOVERNANCE-REVIEW
+    retry_policy: Retry transient failures only; bounded by configuration; never retry permission failures blindly
+    human_approval: Required for approval state; orchestrator cannot approve
+    review_requirement: Workflow transitions covered by unit and integration tests
+    model_config_ref: null
+    version: 0.1.0
+  - id: AG-LEAD-INTAKE
+    name: Lead Intake
+    type: deterministic_service
+    status: proposed
+    purpose: Organize project metadata, sources, versions, parse state and locators.
+    responsibilities:
+    - validate_upload_metadata
+    - compute_content_hash
+    - store_source_references
+    - record_parse_status
+    non_responsibilities:
+    - interpret_source_text_as_policy
+    - approve_content
+    - access_other_projects
+    input_schema: ProjectCreateRequest and SourceIngestRequest
+    output_schema: Project and Source entities
+    allowed_tools:
+    - TOOL-FILE-PARSER
+    - TOOL-DB-APPLICATION
+    permissions:
+    - project_scoped_create
+    - source_metadata_write
+    - authorized_file_read
+    activation: On project/source intake
+    evidence_requirement: Preserve source ID, version and locator information
+    validation: File type/size, access boundary, parser result, content hash
+    dependencies: []
+    retry_policy: Idempotent ingestion; parse failures become explicit statuses
+    human_approval: No, for intake only
+    review_requirement: Security and parsing tests
+    model_config_ref: null
+    version: 0.1.0
+  - id: AG-REQUIREMENT-ANALYST
+    name: Requirement Analyst
+    type: llm_capability
+    status: proposed
+    purpose: Propose atomic normalized requirements, classifications, ambiguities, conflicts and client questions.
+    responsibilities:
+    - preserve_original_wording
+    - propose_normalized_statement
+    - classify_requirement
+    - identify_gaps
+    - suggest_questions
+    non_responsibilities:
+    - rewrite_source
+    - fabricate_priority
+    - declare_unverified_claim_verified
+    - approve_scope
+    input_schema: Source, SourceSegment, ProjectContext
+    output_schema: RequirementCandidate[] and ClarificationQuestionCandidate[]
+    allowed_tools:
+    - TOOL-APPROVED-RETRIEVAL-READ
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_source_read
+    - candidate_record_write
+    activation: After successful intake/parsing
+    evidence_requirement: Client-derived candidates must reference source IDs and locators
+    validation: Pydantic strict schema plus source-reference integrity check
+    dependencies:
+    - AG-LEAD-INTAKE
+    retry_policy: One bounded structured-output repair attempt, then fail/mark for human correction
+    human_approval: Human correction required for material ambiguous/conflicting records before acceptance
+    review_requirement: Extraction, attribution and ambiguity benchmark
+    model_config_ref: MODEL-DEFAULT-STRUCTURED
+    version: 0.1.0
+  - id: CAP-ECOMMERCE
+    name: Shopify Specialist
+    type: llm_capability
+    status: proposed
+    specialist_category: shopify_specialist
+    purpose: Analyze Shopify-specific platform functionality, storefronts, themes, apps, extensions, APIs, constraints,
+      and customization options.
+    responsibilities:
+    - compare_platform_options
+    - identify_platform_prerequisites
+    - flag_version_sensitive_claims
+    non_responsibilities:
+    - claim_unverified_support
+    - assume_plan_or_permission
+    - commit_to_vendor_behavior
+    input_schema: Validated requirements plus relevant source/evidence records
+    output_schema: CandidateSolution[] and Claim[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-SHOPIFY-001
+    evidence_requirement: Platform claims cite applicable official documentation or remain unverified
+    validation: Claim evidence status and context fields required
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    retry_policy: Bounded retries for transient retrieval/model errors
+    human_approval: No autonomous approval
+    review_requirement: Platform feasibility benchmark and reviewer checks
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.1.0
+  - id: CAP-3D-CART-SHIFT-SHOPIFY
+    name: 3dcart / Shift4Shop Platform Specialist (legacy identifier)
+    type: llm_capability
+    specialist_category: three_d_cart_shift_shopify_specialist
+    status: proposed_canonical_name_and_alias_pending
+    purpose: 'Investigate 3dcart/Shift4Shop as an independent eCommerce platform: native features, themes, catalog,
+      checkout, APIs, integrations, settings, security and version-specific constraints. This specialist is not
+      inherently Shopify, 3D visualization, or migration.'
+    responsibilities:
+    - analyze_3dcart_shift4shop_platform_requirements
+    - investigate_platform_native_features_and_limitations
+    - investigate_vendor_documented_apis_and_integrations
+    - compare_platform_options_against_evidence
+    - identify_platform_specific_feasibility_and_testing
+    non_responsibilities:
+    - assume_product_visualization_capability
+    - assume_platform_migration_scope
+    - assume_shopify_dependency
+    - claim_unverified_platform_capabilities
+    - approve_feasibility_without_verified_sources
+    input_schema: Validated 3dcart/Shift4Shop requirements, platform/version context and evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-3D-CART-SHIFT-001
+    evidence_requirement: Identify exact 3dcart/Shift4Shop version and relevant official evidence before supporting
+      platform-specific claims.
+    validation: Treat capabilities, API constraints and version-dependent behavior as unverified until evidence
+      checks pass.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-STANDALONE-APPLICATIONS
+    retry_policy: Bounded retries for transient errors; unknown product identity becomes clarification, not repeated
+      guessing.
+    human_approval: No autonomous approval
+    review_requirement: Review platform/version context and evidence, not an assumed Shopify or 3D configuration
+      flow.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.3.0
+  - id: CAP-WORDPRESS-WOOCOMMERCE
+    name: WordPress & WooCommerce Specialist
+    type: llm_capability
+    specialist_category: wordpress_woocommerce_specialist
+    status: proposed
+    purpose: Analyze WordPress CMS and WooCommerce commerce requirements as one specialist category, distinguishing
+      CMS concerns from commerce concerns internally.
+    responsibilities:
+    - assess_themes_and_plugins
+    - identify_php_extension_questions
+    - analyze_store_workflows_and_apis
+    - identify_integration_and_version_constraints
+    non_responsibilities:
+    - create_separate_wordpress_and_woocommerce_agents
+    - assume_plugin_compatibility
+    - claim_unverified_vendor_behavior
+    input_schema: Validated requirements, WordPress/WooCommerce version context, relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-WORDPRESS-WOOCOMMERCE-001
+    evidence_requirement: Version/plugin/API claims require applicable official or authoritative evidence or remain
+      unverified.
+    validation: Keep CMS and commerce concerns distinguishable in findings while retaining one specialist identity.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-STANDALONE-APPLICATIONS
+    retry_policy: Bounded retries; missing version/plugin details become questions.
+    human_approval: No autonomous approval
+    review_requirement: Version compatibility, plugin dependency, security, and integration checks.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.2.0
+  - id: CAP-BIGCOMMERCE
+    name: BigCommerce Specialist
+    type: llm_capability
+    specialist_category: bigcommerce_specialist
+    status: proposed
+    purpose: Analyze BigCommerce-specific storefronts, APIs, customizations, extensions, commerce workflows, and
+      constraints.
+    responsibilities:
+    - analyze_storefront_and_api_requirements
+    - identify_customization_options
+    - flag_version_and_access_dependencies
+    non_responsibilities:
+    - invent_platform_capabilities
+    - assume_plan_or_permission
+    - treat_unverified_docs_as_verified
+    input_schema: Validated requirements, BigCommerce version/context, relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-BIGCOMMERCE-001
+    evidence_requirement: BigCommerce-specific claims require checked applicable official documentation or remain
+      unverified.
+    validation: Platform/version/context and evidence status required for material claims.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-STANDALONE-APPLICATIONS
+    retry_policy: Bounded transient retries; missing context becomes clarification.
+    human_approval: No autonomous approval
+    review_requirement: Platform feasibility, dependencies, and evidence correctness tests.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.2.0
+  - id: CAP-MAGENTO-ADOBE-COMMERCE
+    name: Magento / Adobe Commerce Specialist
+    type: llm_capability
+    specialist_category: magento_adobe_commerce_specialist
+    status: proposed
+    purpose: Analyze Magento / Adobe Commerce modules, storefront customizations, commerce workflows, architecture,
+      integrations, and version-specific constraints.
+    responsibilities:
+    - identify_version_sensitive_architecture
+    - assess_modules_and_customizations
+    - analyze_commerce_workflows
+    - surface_integration_dependencies
+    non_responsibilities:
+    - assume_versions_are_equivalent
+    - invent_module_or_api_support
+    - claim_unverified_compatibility
+    input_schema: Validated requirements, product/version/deployment context, relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-MAGENTO-ADOBE-COMMERCE-001
+    evidence_requirement: Version-specific claims require checked official evidence or remain unverified.
+    validation: Capture edition/version/deployment assumptions and module/integration dependencies.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-STANDALONE-APPLICATIONS
+    retry_policy: Bounded retries; absent version/deployment context becomes a question.
+    human_approval: No autonomous approval
+    review_requirement: Version/edition-specific feasibility and dependency review.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.2.0
+  - id: CAP-STANDALONE-APPLICATIONS
+    name: Standalone Applications Specialist
+    type: llm_capability
+    specialist_category: standalone_applications_specialist
+    status: proposed
+    purpose: Analyze custom web applications, SaaS products, internal tools, and application architecture not primarily
+      implemented as supported commerce-platform customizations.
+    responsibilities:
+    - analyze_application_boundaries
+    - propose_architecture_options
+    - identify_api_data_security_qa_deployment_needs
+    - identify_nonfunctional_requirements
+    non_responsibilities:
+    - require_ecommerce_platform_without_evidence
+    - assume_infrastructure_or_scale
+    - prescribe_unneeded_services
+    input_schema: Validated requirements, existing-system constraints, relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-STANDALONE-APPLICATIONS-001
+    evidence_requirement: Project-specific constraints must be sourced; architectural options are recommendations,
+      not commitments.
+    validation: Must support standalone analysis with no eCommerce specialist activated when none is relevant.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-AI-AUTOMATION
+    retry_policy: Bounded retries; unresolved requirements remain explicit.
+    human_approval: No autonomous approval
+    review_requirement: Architecture, security, data, QA, deployment and scope-boundary tests.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.2.0
+  - id: CAP-MIDDLEWARE-APPLICATIONS
+    name: Middleware Applications Specialist
+    type: llm_capability
+    specialist_category: middleware_applications_specialist
+    status: proposed
+    purpose: 'Analyze middleware and integration layers: API orchestration, webhooks, transformation, synchronization,
+      authentication, retries, idempotency, error handling, background processing, and observability.'
+    responsibilities:
+    - propose_data_flow
+    - identify_api_prerequisites
+    - define_mapping_and_ownership
+    - assess_retries_and_idempotency
+    - identify_background_processing_and_observability_needs
+    - compare_suitable_technology_options
+    non_responsibilities:
+    - hardcode_nodejs
+    - assume_credentials_exist
+    - invent_vendor_api
+    - add_infrastructure_without_need
+    - authorize_external_write
+    input_schema: Validated requirements, connected-system contracts, platform/version context, evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[], ClarificationQuestionCandidate[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-MIDDLEWARE-APPLICATIONS-001
+    evidence_requirement: Verify each connected system's API/authentication/events; technology selection must explain
+      constraints and evidence.
+    validation: Node.js, Python, PHP, or another suitable technology may be evaluated; no language is the default
+      without rationale.
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - SVC-EVIDENCE-RETRIEVAL
+    handoffs:
+    - CAP-ECOMMERCE
+    - CAP-3D-CART-SHIFT-SHOPIFY
+    - CAP-WORDPRESS-WOOCOMMERCE
+    - CAP-BIGCOMMERCE
+    - CAP-MAGENTO-ADOBE-COMMERCE
+    - CAP-STANDALONE-APPLICATIONS
+    retry_policy: Bounded transient retries; never retry permission failures blindly; exhausted retries leave explicit
+      incomplete status.
+    human_approval: No autonomous approval
+    review_requirement: Contract, auth, mapping, idempotency, retry, reconciliation, observability and evidence
+      tests.
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.2.0
+  - id: CAP-INTEGRATION-SOFTWARE
+    name: Legacy Integration Analysis Capability (compatibility alias)
+    type: llm_capability
+    status: proposed
+    purpose: Compatibility alias for existing generic integration-analysis routes; new middleware-specific routing
+      uses CAP-MIDDLEWARE-APPLICATIONS.
+    responsibilities:
+    - propose_data_flow
+    - identify_api_prerequisites
+    - identify_failure_modes
+    - propose_integration_options
+    non_responsibilities:
+    - assume_credentials_exist
+    - invent_vendor_api
+    - authorize_external_write
+    input_schema: Validated requirements plus relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-INTEGRATION-001 (migration compatibility only)
+    evidence_requirement: Vendor-specific API/authentication claims need relevant vendor evidence
+    validation: Required data ownership, auth, dependencies and unknowns surfaced when applicable
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    retry_policy: Bounded retries; missing access becomes a question, not a retry loop
+    human_approval: No autonomous approval
+    review_requirement: Integration failure-mode and traceability tests
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.1.0
+  - id: CAP-AI-AUTOMATION
+    name: AI & Automation Specialist
+    type: llm_capability
+    status: proposed
+    purpose: Assess AI/ML, rule-based automation, conventional software and human-in-the-loop alternatives.
+    responsibilities:
+    - compare_ai_and_non_ai_options
+    - define_evaluation_needs
+    - identify_uncertainty_and_escalation
+    non_responsibilities:
+    - recommend_ai_by_default
+    - claim_accuracy_without_benchmark
+    - make_high_impact_decisions_without_review
+    input_schema: Validated requirements plus relevant source/evidence records
+    output_schema: CandidateSolution[], Claim[], Risk[]
+    allowed_tools:
+    - SVC-EVIDENCE-RETRIEVAL
+    - TOOL-SCHEMA-VALIDATOR
+    permissions:
+    - project_scoped_read
+    - evidence_lookup_allowlist
+    - candidate_analysis_write
+    activation: ROUTE-AI-001
+    evidence_requirement: Claims about model performance require relevant measured evaluation; absent evaluation
+      is unverified
+    validation: Must document non-AI baseline and evaluation needs when applicable
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    retry_policy: Bounded structured-output retries
+    human_approval: No autonomous approval
+    review_requirement: AI-not-needed, prompt-injection and benchmark integrity tests
+    model_config_ref: MODEL-DEFAULT-REASONING
+    version: 0.1.0
+  - id: SVC-EVIDENCE-RETRIEVAL
+    name: Knowledge & Evidence Retrieval
+    type: deterministic_service
+    status: proposed
+    purpose: Retrieve relevant approved documentation and internal patterns while enforcing project permissions
+      and source policy.
+    responsibilities:
+    - apply_source_allowlist
+    - enforce_access_before_search
+    - return_source_metadata
+    - store_retrieval_provenance
+    non_responsibilities:
+    - decide_final_feasibility
+    - obey_instructions_in_retrieved_text
+    - mix_project_data_without_authorization
+    input_schema: EvidenceQuery with project boundary and allowed source collections
+    output_schema: EvidenceRecord[]
+    allowed_tools:
+    - TOOL-APPROVED-WEB-READ
+    - TOOL-INTERNAL-KNOWLEDGE-READ
+    permissions:
+    - allowlisted_source_read
+    - project_authorized_internal_read
+    activation: Shared service called when evidence is needed
+    evidence_requirement: Return source, version/retrieval time and locator or mark unavailable
+    validation: Source allowlist, tenant access, source metadata and content hash
+    dependencies: []
+    retry_policy: Bounded transient retries; unavailable source remains unverified
+    human_approval: Source collection authorization is human-managed
+    review_requirement: Retrieval relevance and tenant isolation tests
+    model_config_ref: null
+    version: 0.1.0
+  - id: AG-SCOPE-ESTIMATION
+    name: Scope & Estimation
+    type: hybrid_service
+    status: proposed
+    purpose: Assemble traceable scope items, acceptance criteria, assumptions, dependencies, exclusions, risks and
+      indicative estimates.
+    responsibilities:
+    - map_scope_to_requirements
+    - assemble_draft_sow
+    - surface_estimate_uncertainty
+    - identify_missing_acceptance_criteria
+    non_responsibilities:
+    - create_unmapped_commitments
+    - invent_targets
+    - guarantee_estimates
+    - approve_sow
+    input_schema: Validated Requirement[], CandidateSolution[], EvidenceRecord[], Risk[], Assumption[]
+    output_schema: ScopeItem[], Estimate[], SOWArtifactVersion
+    allowed_tools:
+    - TOOL-SCHEMA-VALIDATOR
+    - TOOL-DB-APPLICATION
+    permissions:
+    - project_scoped_read
+    - draft_artifact_write
+    activation: After relevant analysis; may produce clearly marked incomplete draft for review
+    evidence_requirement: Every committed scope item maps to requirement IDs; technical claims retain evidence state
+    validation: Deterministic traceability, estimate, required field and artifact status checks
+    dependencies:
+    - AG-REQUIREMENT-ANALYST
+    - CAP-ECOMMERCE
+    - CAP-3D-CART-SHIFT-SHOPIFY
+    - CAP-WORDPRESS-WOOCOMMERCE
+    - CAP-BIGCOMMERCE
+    - CAP-MAGENTO-ADOBE-COMMERCE
+    - CAP-STANDALONE-APPLICATIONS
+    - CAP-MIDDLEWARE-APPLICATIONS
+    - CAP-AI-AUTOMATION
+    retry_policy: No retry can bypass validation; bounded content repair only
+    human_approval: Required before internal approval
+    review_requirement: Scope coverage and unsupported commitment tests
+    model_config_ref: MODEL-DEFAULT-STRUCTURED
+    version: 0.1.0
+  - id: AG-GOVERNANCE-REVIEW
+    name: Governance & Independent Review
+    type: hybrid_service
+    status: proposed
+    purpose: Independently review scope against original requirements and evidence, run deterministic gates, and
+      produce findings.
+    responsibilities:
+    - review_source_coverage
+    - detect_unsupported_claims
+    - check_scope_traceability
+    - classify_findings
+    - recommend_release_outcome
+    non_responsibilities:
+    - self_approve
+    - suppress_blockers
+    - rely_only_on_prior_summary
+    - create_human_decision
+    input_schema: Original sources, requirements, evidence, scope artifact and REVIEW_POLICY.md checklist
+    output_schema: ReviewResult and ReviewFinding[]
+    allowed_tools:
+    - TOOL-APPROVED-RETRIEVAL-READ
+    - TOOL-SCHEMA-VALIDATOR
+    - TOOL-DB-APPLICATION
+    permissions:
+    - project_scoped_read
+    - review_record_write
+    - audit_event_append
+    activation: Before any internal approval
+    evidence_requirement: Findings should reference source/evidence and affected records
+    validation: Deterministic gates independently computed by code
+    dependencies:
+    - AG-SCOPE-ESTIMATION
+    retry_policy: Review failures keep artifact in review/failed state; no automatic pass
+    human_approval: Required after review for internal approval
+    review_requirement: Seeded-defect recall, false-positive checks, independent-source access tests
+    model_config_ref: MODEL-REVIEW
+    version: 0.1.0
+  services_and_tools:
+  - id: TOOL-DB-APPLICATION
+    type: deterministic_tool
+    purpose: Application-mediated access to PostgreSQL entities; no raw unrestricted SQL for agents.
+    permissions: Project-scoped, role-checked operations only.
+    external_writes: false
+    timeout_seconds: 10
+    retry_policy: Idempotent bounded retry only
+  - id: TOOL-SCHEMA-VALIDATOR
+    type: deterministic_tool
+    purpose: Validate Pydantic schemas, enums, relationships, state transitions and release gates.
+    permissions: No external access.
+    external_writes: false
+    timeout_seconds: 10
+    retry_policy: No retry for deterministic validation failures
+  - id: TOOL-FILE-PARSER
+    type: deterministic_tool
+    purpose: Extract text/metadata from allowed uploaded file types without executing content.
+    permissions: Authorized source files only.
+    external_writes: false
+    timeout_seconds: 60
+    retry_policy: Retry transient parser errors once; otherwise record failure
+  - id: TOOL-APPROVED-RETRIEVAL-READ
+    type: deterministic_tool
+    purpose: Read allowlisted source content and approved internal knowledge under access policy.
+    permissions: Read-only; source allowlist and project boundary enforced.
+    external_writes: false
+    timeout_seconds: 30
+    retry_policy: Bounded transient retry
+  - id: TOOL-APPROVED-WEB-READ
+    type: optional_deterministic_tool
+    purpose: Retrieve public vendor documentation when deployed environment and policy permit.
+    permissions: Read-only allowlisted domains; no login or store mutation.
+    external_writes: false
+    timeout_seconds: 30
+    retry_policy: Bounded transient retry; unavailable content remains unverified
+  - id: TOOL-INTERNAL-KNOWLEDGE-READ
+    type: optional_deterministic_tool
+    purpose: Retrieve authorized internal patterns/historical documents.
+    permissions: Collection authorization plus project access policy.
+    external_writes: false
+    timeout_seconds: 30
+    retry_policy: Bounded transient retry
+  model_configuration:
+  - id: MODEL-DEFAULT-STRUCTURED
+    provider: configurable
+    model_id: environment_configured
+    temperature: environment_configured
+    timeout_seconds: 60
+    max_attempts: 2
+    secret_reference: environment_or_secret_manager
+  - id: MODEL-DEFAULT-REASONING
+    provider: configurable
+    model_id: environment_configured
+    temperature: environment_configured
+    timeout_seconds: 90
+    max_attempts: 2
+    secret_reference: environment_or_secret_manager
+  - id: MODEL-REVIEW
+    provider: configurable
+    model_id: environment_configured
+    temperature: environment_configured
+    timeout_seconds: 90
+    max_attempts: 2
+    secret_reference: environment_or_secret_manager
+    independence_note: Separate review stage and original-source access are required; different model identity alone
+      does not prove independence.
+  approved_decisions:
+  - D-01
+  - D-02
+  - D-03
+  - D-04
+  - D-05
+  - D-06
+  - D-07
+  - D-08
+  - D-09
+  - D-10
+  - D-11
+  - D-12
+  - D-13
+  - D-14
+  - D-15
+  pending_decisions:
+  - D-12-initial-model
+  - D-16-hosting
+  - D-02-domain-allowlist
+  - D-01-canonical-alias
+  access_policy:
+    evidence_strategy: rag_first_then_approved_live_read
+    live_domains: []
+    allowlist_state: pending_approval
+    unauthorized_live_access: denied
+    knowledge_category_ids:
+    - wds_technical_standards
+    - approved_service_patterns
+    - historical_client_sows_proposals
+    - historical_development_estimates
+    - internal_technical_documentation
+    document_level_permission_required: true
+    client_document_redaction_review_required: true
+  governance_policy:
+    materiality: deterministic_unassessed_blocks
+    downgrade_role: technical_reviewer_with_audit
+    inferred_committed_scope: explicit_human_revision_acceptance_required
+    bulk_acceptance: screen_eligibility_audit_each_requirement
+    critical_findings: not_waivable
+    sow_self_approval: forbidden
+    rbac_model: foundation_matrix_approved_later_pending
+  decision_update_v030:
+    d01_platform_interpretation: 3dcart/Shift4Shop is an independent ecommerce platform; legacy identifier retained
+      temporarily
+    d10_sow_formats:
+    - docx
+    - pdf
+    d11_platform_migrations_in_mvp: true
+    d12_llm_provider: configurable_initial_provider_tbd
+    d13_retention: data_class_based_periods_tbd_controlled_delete_audit_tombstones
+    d14_threshold_owner: WDS_Technical_Lead
+    d14_signoff_role: Approver
+    d15_legacy_identifiers: preserve_and_document_aliases
+    d16_hosting: deferred_no_deployment_authorization
+    policy: specification_only_not_executable
