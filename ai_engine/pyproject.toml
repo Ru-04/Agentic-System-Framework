@@ -1,0 +1,41 @@
+[project]
+name = "webdesk-ai-engine"
+version = "0.1.0"
+description = "WebDesk AI Requirement Analysis Engine (Track B) - AI-1 contracts and Requirement Analysis Agent"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic==2.9.2",
+    "pyyaml==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.3",
+    "ruff==0.6.9",
+    "mypy==1.11.2",
+    "types-PyYAML==6.0.12.20240917",
+]
+
+[tool.uv]
+# Prototype is run from source (src layout), not distributed as a wheel.
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/ai_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
