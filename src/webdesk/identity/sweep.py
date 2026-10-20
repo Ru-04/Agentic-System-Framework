@@ -34,10 +34,10 @@ def sweep_expired(conn: Connection) -> dict[str, int]:
         if request_type == "change":
             conn.execute(
                 text(
-                    """UPDATE contact_reservations SET released_at = now()
-                       WHERE approval_id = :a AND released_at IS NULL"""
+                    "SELECT webdesk_guard.fn_release_reservations("
+                    ":u, 'approval_terminal', :a, NULL)"
                 ),
-                {"a": approval_id},
+                {"u": user_id, "a": approval_id},
             )
         record_event(
             conn,

@@ -331,3 +331,7 @@ Foundation execution, concurrency, checkpoints, workflow states and staleness ar
 - **Hosting:** Deployment target and network egress controls remain open; only local/specification work is currently authorized by these decisions.
 
 These are binding design constraints, not a claim that previous incomplete state-machine, routing or DTO contracts have been repaired.
+
+## Authentication boundary (Amendment A2)
+
+Introduce a trustworthy session-identity boundary between the web runtime's restricted database account and protected mutations. A successful browser/API authentication alone is not enough if the DB guard accepts mutable actor arguments. Privileged functions verify actor evidence that the application login cannot read, mint or replay; the guard derives the user and checks session revocation and freshness. A dedicated authority safely owns credential verification, session minting and signing/verification of bounded actor context; keep its credentials out of the normal `webdesk_app_login` trust domain. All mutation workflows preserve transaction/audit semantics. Offline owner-authorized recovery is a separate ceremony and must never become a general-purpose alternate login path.

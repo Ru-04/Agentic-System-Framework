@@ -254,21 +254,38 @@ def test_normalized_email_is_unique_across_all_users(conn: Connection) -> None:
 def test_active_contact_reservation_is_unique_and_released_history_is_kept(
     conn: Connection,
 ) -> None:
+    """N1: an active reservation cannot be duplicated or released by the application role.
+
+    The reservation is released only by the withdrawal service (fn_release_reservations, withdrawal
+    mode), after which the same contact can be reserved again and the released row is kept.
+    """
+    admin, _second = two_admins(conn)
     user = new_user(conn, status="pending_contact_approval")
     email = email_of(conn, user)
-    # The creation request already reserved this contact; a second active reservation is refused.
     with pytest.raises(UniqueViolation):
         x(
             conn,
             "INSERT INTO contact_reservations (normalized_email, user_id) VALUES (%s, %s)",
             (email, user),
         )
-    x(
+    with pytest.raises(InsufficientPrivilege):
+        x(
+            conn,
+            "UPDATE contact_reservations SET released_at = now() WHERE normalized_email = %s",
+            (email,),
+            role="webdesk_app",
+        )
+    revision = _revision(conn, user)
+    conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
+    contacts.withdraw(conn, admin, user, "duplicate request", revision)
+    released = q(
         conn,
-        "UPDATE contact_reservations SET released_at = now() WHERE normalized_email = %s",
+        "SELECT count(*) FROM contact_reservations "
+        "WHERE normalized_email = %s AND released_at IS NOT NULL",
         (email,),
         role="webdesk_app",
     )
+    assert released == 1
     x(
         conn,
         "INSERT INTO contact_reservations (normalized_email, user_id) VALUES (%s, %s)",
@@ -390,7 +407,9 @@ def test_withdrawal_releases_email_only_with_eligible_user_and_same_transaction_
             (target,),
             role="webdesk_app",
         )
-    contacts.withdraw(conn, admin, target, "duplicate request", _revision(conn, target))
+    revision = _revision(conn, target)
+    conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
+    contacts.withdraw(conn, admin, target, "duplicate request", revision)
     assert email_of(conn, target) is None
 
 
@@ -573,5 +592,4 @@ def _revision(conn: Connection, user: uuid.UUID) -> int:
 
 
 def _box() -> Any:
-
     return ContactBox(base64.b64encode(b"\x07" * 32).decode("ascii"))

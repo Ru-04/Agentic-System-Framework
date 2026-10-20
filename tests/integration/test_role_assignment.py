@@ -18,7 +18,7 @@ from sqlalchemy.engine import Connection
 from tests.support.activation import activate_user
 from tests.support.people import install_administrators, new_active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
-from webdesk.ceremony.recovery import RecoveryRequest, apply_recovery
+from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
 from webdesk.rbac.assign import RoleServiceError, assign_role
 from webdesk.rbac.matrix import Role
 
@@ -161,3 +161,32 @@ def test_below_two_an_administrator_grant_needs_an_appointment(conn: Connection)
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, admin, staff, Role.ADMINISTRATOR)
     assert (exc.value.status, exc.value.reason) == (409, "appointment_required")
+
+
+def test_recovery_is_refused_with_coverage_sufficient_and_audited(conn: Connection) -> None:
+    """EVAL-F11f (R3): recovery is refused while two Administrators are effective, and audited."""
+    first, second = install_administrators(conn)
+    staff = new_active_user(conn, first, second)
+    with pytest.raises(RecoveryError) as exc:
+        apply_recovery(
+            conn,
+            RecoveryRequest(
+                request_type="appointment",
+                email=_email_of(conn, staff),
+                display_name="",
+                owner_approval_ref="OWNER-R3",
+                owner_identity_ref="owner:test",
+                authorization_digest="r" * 64,
+            ),
+            operator_id="op-r3",
+            clock=SystemClock(),
+        )
+    assert exc.value.reason == "coverage_sufficient"
+    denied = conn.execute(
+        text(
+            """SELECT count(*) FROM audit_events
+               WHERE event_type = 'ceremony.recover.denied'
+                 AND error_class = 'coverage_sufficient'"""
+        )
+    ).scalar_one()
+    assert denied == 1

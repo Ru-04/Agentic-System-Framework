@@ -411,3 +411,76 @@ Phase 1 scope status
   intake, workflow, outbox and idempotency tables.
 - H-14 disable service: migration 0018, src/webdesk/identity/disable.py, tests/integration/test_disable_user.py.
 - Phase 2 has not been started.
+
+## Amendment A2 (R1-R4, N1-N2, P-INC3-ACTOR-SESSION-06): status 2026-10-20
+
+Status: NOT IMPLEMENTED. The A2 package (Updated Decision Register, PHASE1_R4_OPTION_A_IMPLEMENTATION_CONTRACT.md,
+PHASE1_R1_R4_CLAUDE_CODE_HANDOFF.md, and the governance amendments) was not available in the repository,
+in Downloads, or in the request text. The R1-R4 and N1-N2 definitions therefore could not be read, and no
+implementation was started against an unknown contract. The repository decision register does not contain
+P-INC3-ACTOR-SESSION-06.
+
+Finding confirmed by probe (restricted login role webdesk_app_login, rolled back):
+- R4 (release-blocking, open): webdesk_app holds INSERT on sessions (migration 0001 grant). A row inserted with
+  a chosen token hash for an active user is accepted by webdesk.auth.service.validate_session, so the compromised
+  application role can authenticate as any active user. Test: tests/hardening/test_app_role_negative.py::
+  test_n26_a_forged_session_row_is_not_accepted_as_authentication, a strict xfail with this reason.
+
+Current actor binding (inspected): src/webdesk/api/routes.py::current_actor takes the bearer token and calls
+webdesk.auth.service.validate_session through the application engine. Session rows are looked up by SHA-256 of the
+token, with live, epoch and status checks. Nothing binds the session row to a trusted authentication authority, so
+row creation is the trust boundary, and the application role controls it.
+
+Design direction (to be aligned with A2 before implementation): session rows are created only by a
+separate authentication-authority role after password verification; the application role has no INSERT or
+UPDATE on sessions and no EXECUTE on the issuing function; the token is returned once and only its hash is stored;
+revocation and epoch changes are enforced in the database; the authority role is not reachable from the
+application connection.
+
+Not done: R1, R2, R3, R4 implementation; N1, N2 implementation; the Amendment A2 governance register update.
+
+## Amendment A2 implementation (R1, R2, R3, N1, N2) and R4 status (2026-10-20)
+
+Specifications: the A2 package was extracted and applied to the repository governance documents
+(DECISION_REGISTER.md, GOVERNANCE.md, REQUIREMENT_SCHEMA.md, ARCHITECTURE.md, EVALUATION_PLAN.md, plus the
+A2 contract, handoff and README). Historical decisions are kept; the EVAL-F11i wording was replaced by the A2
+text, and the earlier wording remains in git history.
+
+Migration 0020_r1_r2_n1_hardening (forward only; 0001 to 0019 untouched):
+- R1: every SECURITY DEFINER function (webdesk_guard schema) runs with search_path = pg_catalog, public;
+  TEMP revoked from PUBLIC, webdesk_app and webdesk_ceremony on the database.
+- R2: approval deadlines and ceremony activation deadlines are at most 24 hours after their creation or start
+  time (trigger on insert and update); creation and start times are immutable.
+- N1: contact reservations are released only by webdesk_guard.fn_release_reservations, in three contexts:
+  terminal approval, a withdrawal in the same transaction, and an approved contact change. The runtime login
+  can no longer set released_at directly.
+Services switched to the guard function: identity/contacts.py (cancel, withdraw, contact change) and
+identity/sweep.py. Installation and recovery stamp ceremony start and approval creation with the service clock
+so the 24-hour bound is exact.
+
+R3: test_recovery_is_refused_with_coverage_sufficient_and_audited restored (EVAL-F11f): denial with reason
+coverage_sufficient, and the ceremony.recover.denied audit row asserted.
+
+N2: docs/DEPLOYMENT_CHECKLIST.md section "PostgreSQL 16 role and privilege setup"; test N30 asserts the runtime
+login is not a superuser and cannot create roles, databases or public-schema objects.
+
+Restricted-login tests added (webdesk_app_login, fresh negative database):
+- N27 arbitrary reservation release refused: PASS (42501)
+- N28 temporary object creation refused: PASS (42501)
+- N29 25-hour approval deadline refused: PASS (23514)
+- N30 runtime login role attributes and public-schema creation refused: PASS (42501)
+
+R4 (verified-session actor binding, Option A): NOT IMPLEMENTED. Probed finding: webdesk_app holds INSERT on
+sessions and INSERT, UPDATE, DELETE on credentials; a forged session row is accepted (N26, strict xfail, release-
+blocking). The Option A design requires an authority role, bounded proofs and key custody that are policy
+choices; per the contract they must be proposed and approved before the security-sensitive change. See the
+proposal in the reply. EVAL-F11j is not yet implemented.
+
+Verification (fresh databases, final):
+- Full regression, fresh webdesk_integration: 389 passed, 31 skipped (hardening tests run separately),
+  0 failed, 0 errors.
+- Restricted-login hardening, fresh webdesk_negative: 30 passed, 1 xfailed (N26, R4).
+- Alembic: upgrade head, downgrade 0001_gate1_foundation, upgrade head: passed.
+- Ruff (src, tests, migrations): passed. mypy --strict src/webdesk: passed (49 files).
+
+Phase 1 is NOT complete: R4 and EVAL-F11j remain open. The verified changes are committed separately.

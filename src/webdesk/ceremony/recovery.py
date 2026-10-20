@@ -159,9 +159,9 @@ def apply_recovery(
                                signed_authorization_digest, owner_identity_ref,
                                independent_verifier_id, deployment_operator_id,
                                effective_admin_count_at_start, authorized_user_ids,
-                               activation_deadline, status)
+                               activation_deadline, started_at, status)
                            VALUES ('recover', :ref, :digest, :owner, 'verifier-recovery',
-                               :operator, :active, '{}', :deadline, 'initiated')
+                               :operator, :active, '{}', :deadline, :now, 'initiated')
                            RETURNING ceremony_id"""
                     ),
                     {
@@ -170,6 +170,7 @@ def apply_recovery(
                         "owner": request.owner_identity_ref,
                         "operator": operator_id,
                         "active": active,
+                        "now": now,
                         "deadline": deadline,
                     },
                 ).scalar_one()
@@ -227,8 +228,8 @@ def apply_recovery(
                     text(
                         """INSERT INTO user_contact_approvals (user_id, request_type,
                                requested_email_normalized, ceremony_id, status, expires_at,
-                               approved_at, administrator_appointment)
-                           VALUES (:u, :rt, :e, :c, :s, :deadline, :now, true)
+                               approved_at, created_at, administrator_appointment)
+                           VALUES (:u, :rt, :e, :c, :s, :deadline, :now, :now, true)
                            RETURNING approval_id"""
                     ),
                     {

@@ -190,14 +190,15 @@ def apply_install(
                                signed_authorization_digest, owner_identity_ref,
                                independent_verifier_id, deployment_operator_id,
                                effective_admin_count_at_start, authorized_user_ids,
-                               activation_deadline, status)
+                               activation_deadline, started_at, status)
                            VALUES ('install', :ref, :digest, :owner, :verifier, :operator,
-                               0, '{}', :deadline, 'initiated')
+                               0, '{}', :deadline, :now, 'initiated')
                            RETURNING ceremony_id"""
                     ),
                     {
                         "ref": prepared.owner_approval_ref,
                         "digest": prepared.authorization_digest,
+                        "now": now,
                         "owner": prepared.owner_identity_ref,
                         "verifier": verifier_id,
                         "operator": operator_id,
@@ -235,9 +236,9 @@ def apply_install(
                         text(
                             """INSERT INTO user_contact_approvals (user_id, request_type,
                                    requested_email_normalized, ceremony_id, status,
-                                   expires_at, approved_at, administrator_appointment)
+                                   expires_at, approved_at, created_at, administrator_appointment)
                                VALUES (:user, 'create', :email, :ceremony, 'approved',
-                                   :deadline, :now, true)
+                                   :deadline, :now, :now, true)
                                RETURNING approval_id"""
                         ),
                         {

@@ -694,6 +694,112 @@ def test_n25_an_ingested_source_identity_is_not_updatable_by_the_application_rol
     )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "OPEN R4 (release-blocking): webdesk_app holds INSERT on sessions, so a compromised "
+        "application role can write a session row for an active user and validate_session accepts "
+        "it. Blocked on the verified-session actor-binding design (decision "
+        "P-INC3-ACTOR-SESSION-06, Amendment A2). Remove this marker only when the forged row is "
+        "refused."
+    ),
+)
+def test_n26_a_forged_session_row_is_not_accepted_as_authentication(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """R4: a session row written by the application role must not authenticate an actor."""
+    from webdesk.auth.service import AuthError, validate_session
+    from webdesk.ratelimit.limiter import subject_hash
+
+    token = uuid.uuid4().hex
+    conn.execute(
+        text(
+            """INSERT INTO sessions (session_token_hash, user_id, session_epoch_at_issue,
+                   issued_at, expires_at)
+               VALUES (:h, :u, (SELECT session_epoch FROM users WHERE user_id = :u),
+                   now(), now() + interval '1 hour')"""
+        ),
+        {"h": subject_hash(token), "u": world["admin"]},
+    )
+    try:
+        validate_session(conn, token)
+    except AuthError:
+        return
+    raise AssertionError("a forged session row authenticated an actor")
+
+
+def test_n27_an_arbitrary_contact_reservation_cannot_be_released_by_the_application_role(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """N1: reservations are released only by fn_release_reservations, never by a column UPDATE."""
+    user = new_pending_contact(conn, world["admin"])
+    _refused(
+        conn,
+        [
+            (
+                "UPDATE contact_reservations SET released_at = now() WHERE user_id = :u",
+                {"u": user},
+            )
+        ],
+        (
+            "SELECT count(*) FROM contact_reservations WHERE user_id = :u AND released_at IS NULL",
+            {"u": user},
+        ),
+    )
+
+
+def test_n28_the_application_role_cannot_create_temporary_objects(conn: Connection) -> None:
+    """R1: TEMP is revoked from PUBLIC and from the application roles, so no temporary object can
+    shadow a guard function or relation."""
+    with pytest.raises(DBAPIError) as exc:
+        with conn.begin_nested():
+            conn.execute(text("CREATE TEMP TABLE n28_probe (a int)"))
+    assert exc.value.orig.sqlstate == "42501"
+
+
+def test_n29_an_approval_deadline_beyond_twenty_four_hours_is_refused(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """R2: the database bounds every approval deadline to 24 hours after its creation time."""
+    user = new_pending_contact(conn, world["admin"])
+    _refused(
+        conn,
+        [
+            (
+                "INSERT INTO user_contact_approvals (user_id, request_type, "
+                "requested_email_normalized, requested_by_user_id, status, expires_at) "
+                "SELECT user_id, 'create', normalized_email, :a, 'pending', "
+                "now() + interval '25 hours' FROM users WHERE user_id = :u",
+                {"u": user, "a": world["admin"]},
+            )
+        ],
+        (
+            "SELECT count(*) FROM user_contact_approvals WHERE user_id = :u "
+            "AND expires_at > now() + interval '24 hours'",
+            {"u": user},
+        ),
+    )
+
+
+def test_n30_the_runtime_login_has_no_superuser_role_or_database_creation_rights(
+    conn: Connection,
+) -> None:
+    """N2: the runtime login is not a superuser, cannot create roles or databases, and cannot create
+    objects in the public schema."""
+    attributes = conn.execute(
+        text(
+            """SELECT rolsuper, rolcreaterole, rolcreatedb FROM pg_roles
+               WHERE rolname = current_user"""
+        )
+    ).one()
+    assert attributes == (False, False, False)
+    with pytest.raises(DBAPIError) as exc:
+        with conn.begin_nested():
+            conn.execute(text("CREATE TABLE public.n30_probe (a int)"))
+    assert exc.value.orig.sqlstate == "42501"
+
+
 def _revision(conn: Connection, project: uuid.UUID) -> int:
     return int(
         conn.execute(

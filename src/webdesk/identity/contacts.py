@@ -392,9 +392,8 @@ def approve_change(
             )
             conn.execute(
                 text(
-                    """UPDATE contact_reservations SET released_at = now()
-                       WHERE user_id = :u AND normalized_email = :old AND released_at IS NULL
-                         AND approval_id IS DISTINCT FROM :a"""
+                    "SELECT webdesk_guard.fn_release_reservations("
+                    ":u, 'contact_change', :a, :old)"
                 ),
                 {"u": user_id, "old": old_email, "a": approval_id},
             )
@@ -444,11 +443,8 @@ def cancel_change(conn: Connection, actor: uuid.UUID, approval_id: uuid.UUID) ->
         {"a": approval_id},
     )
     conn.execute(
-        text(
-            """UPDATE contact_reservations SET released_at = now()
-               WHERE approval_id = :a AND released_at IS NULL"""
-        ),
-        {"a": approval_id},
+        text("SELECT webdesk_guard.fn_release_reservations(:u, 'approval_terminal', :a, NULL)"),
+        {"u": approval["user_id"], "a": approval_id},
     )
     _audit(
         conn,
@@ -523,10 +519,7 @@ def withdraw(
                 {"u": user_id},
             )
             conn.execute(
-                text(
-                    """UPDATE contact_reservations SET released_at = now()
-                       WHERE user_id = :u AND released_at IS NULL"""
-                ),
+                text("SELECT webdesk_guard.fn_release_reservations(:u, 'withdrawal', NULL, NULL)"),
                 {"u": user_id},
             )
             conn.execute(
