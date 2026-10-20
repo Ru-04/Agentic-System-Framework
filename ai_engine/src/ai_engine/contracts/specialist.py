@@ -169,6 +169,10 @@ class SpecialistInvestigationResult(ContractModel):
     def _check_result(self) -> Self:
         if self.review_state != AI_REVIEW_STATE:
             raise ValueError("specialist outputs are always pending human review")
+        if any(c.claim_id is not None for c in self.claims) or any(
+            s.solution_id is not None for s in self.candidate_solutions
+        ):
+            raise ValueError("specialist output must carry proposal keys, not Foundation IDs")
         if self.status in {SpecialistOutputStatus.COMPLETED, SpecialistOutputStatus.PARTIAL}:
             if self.validation_errors:
                 raise ValueError("completed or partial results must not carry validation errors")

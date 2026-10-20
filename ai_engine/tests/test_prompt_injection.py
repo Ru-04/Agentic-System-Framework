@@ -50,7 +50,7 @@ def test_instruction_in_one_document_does_not_affect_another() -> None:
     )
     clean = [r for r in result.requirements if "delivery date" in r.original_wording]
     assert len(clean) == 1
-    assert clean[0].status is RequirementStatus.NORMALIZED
+    assert clean[0].status is RequirementStatus.CAPTURED
     assert clean[0].priority is Priority.UNASSIGNED
 
 

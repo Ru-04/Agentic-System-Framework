@@ -165,7 +165,10 @@ def _normalize(text: str) -> str:
     is decided, and it must still pass the wording checks.
     """
     collapsed = " ".join(text.split())
-    return collapsed if collapsed.endswith((".", "!", "?")) else f"{collapsed}."
+    # A full stop must not push the statement past its length limit.
+    if collapsed.endswith((".", "!", "?")) or len(collapsed) >= MAX_STATEMENT_LENGTH:
+        return collapsed
+    return f"{collapsed}."
 
 
 class RequirementAnalysisAgent:
@@ -220,6 +223,11 @@ class RequirementAnalysisAgent:
                         continue
                     candidates.append(self._classify(sentence, keys.next("CAND")))
                 elif _GOAL_RE.search(text) or _CONSTRAINT_RE.search(text):
+                    if len(text) > MAX_STATEMENT_LENGTH:
+                        errors.append(
+                            f"a sentence in {segment.segment_id} is too long and was not recorded"
+                        )
+                        continue
                     kind = StatementKind.GOAL if _GOAL_RE.search(text) else StatementKind.CONSTRAINT
                     statements.append(
                         ProposedStatement(
@@ -415,9 +423,10 @@ class RequirementAnalysisAgent:
             original_wording=candidate.sentence.text,
             normalized_statement=_normalize(candidate.sentence.text),
             requirement_type=candidate.requirement_type,
+            # Deterministic extraction only captures; semantic normalization is not performed.
             status=RequirementStatus.NEEDS_CLARIFICATION
             if needs_clarification
-            else RequirementStatus.NORMALIZED,
+            else RequirementStatus.CAPTURED,
             confidence=ConfidenceBand.LOW if needs_clarification else ConfidenceBand.MEDIUM,
             source_refs=[_reference(candidate.sentence)],
             specialist_category_ids=list(candidate.specialist_ids),

@@ -17,6 +17,7 @@ from ai_engine.contracts.common import (
     SourceId,
     SourceVersionStr,
     VersionStr,
+    proposal_key_is_namespaced,
 )
 from ai_engine.contracts.requirement import AtomicRequirement
 from ai_engine.contracts.source import SourceReference
@@ -119,6 +120,10 @@ class RequirementAnalysisResult(ContractModel):
     def _check_internal_consistency(self) -> Self:
         if self.status is AnalysisStatus.COMPLETED and self.validation_errors:
             raise ValueError("a completed analysis must not carry validation errors")
+        if any(r.requirement_id is not None for r in self.requirements):
+            raise ValueError("analysis output must not carry Foundation requirement IDs")
+        if any(q.question_id is not None for q in self.clarification_questions):
+            raise ValueError("analysis output must not carry Foundation question IDs")
 
         requirement_keys = {r.proposal_key for r in self.requirements}
         question_keys = {q.proposal_key for q in self.clarification_questions if q.proposal_key}
@@ -131,6 +136,8 @@ class RequirementAnalysisResult(ContractModel):
         ]
         if len(set(all_keys)) != len(all_keys):
             raise ValueError("proposal keys must be unique across the analysis result")
+        if not all(proposal_key_is_namespaced(key) for key in all_keys):
+            raise ValueError("a proposal key reuses a Foundation identifier prefix")
 
         for question in self.clarification_questions:
             if question.project_id != self.project_id:

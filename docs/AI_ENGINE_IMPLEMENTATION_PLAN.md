@@ -117,3 +117,44 @@ Stop points: no disputed routing rule (G1), no live LLM (G2), no vendor retrieva
 - Foundation boundary test: cross-project and above-classification reads are refused.
 - Run: `uv run pytest` from `ai_engine/`, plus `uv run ruff check` and `uv run mypy src/ai_engine` (strict).
 - The Foundation test suite is not changed and is not run as part of AI-1 acceptance, because nothing under `src/webdesk` or `tests/` is modified.
+
+## 7. AI-2: specialist framework (implemented)
+
+Scope: shared specialist interface, explicit routing record, requirement-to-task builder, task and
+result validation, evidence policy, unsupported-claim handling, and the execution wrapper. No
+platform specialist, no live evidence, no LLM, no Foundation storage.
+
+| Module | Purpose |
+|---|---|
+| `specialists/base.py` | `SpecialistAgent` protocol, read-only `SpecialistContext`, error taxonomy |
+| `specialists/task_builder.py` | Builds `SpecialistTask` from Foundation-identified requirements; SHA-256 snapshot hash |
+| `specialists/validation.py` | Checks a result against its task, requirements and the evidence actually served |
+| `specialists/execution.py` | `run_specialist`: binding checks, snapshot re-check, evidence recording, status mapping |
+| `routing/explicit.py` | `ExplicitSelection` checked against the registry; `RoutingRecord` with spec log fields |
+| `evidence/lookup.py` | Lookup port; mock is synthetic-only, project-filtered, default-deny on collections |
+| `evidence/policy.py` | Conservative status roll-up; unsupported-claim reasons |
+
+Routing remains explicit: `ExplicitSelection.basis` is fixed to `explicit_human_input_pending_C05`.
+No code selects a specialist.
+
+## 8. AI-1 independent review: disposition
+
+A read-only review of commit `aacba1b` against the specifications produced twelve findings. Each is
+listed below with its disposition. "Fixed" means a regression test now covers it.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Keyword-based `shopify_specialist` classification sits awkwardly beside `machine_routing_enabled: false` | **Open decision.** Kept as an analysis proposal, not a route. Needs WDS ruling on whether classification counts as routing before AI-3 |
+| 2 | AI output could carry Foundation IDs (`REQ-`, `Q-`, `CLAIM-`, `SOL-`) | **Fixed** for analysis and specialist output. Persisted states remain Foundation's responsibility |
+| 3 | Evidence provenance not enforced; `EvidenceKind` is an extension | **Partly fixed.** Verified internal evidence needs `source_version` and hash; lookup enforces project and allowlist. `EvidenceKind` extension **open** for ruling |
+| 4 | Crash on over-length goal/constraint sentences; normalization could exceed 1000 characters | **Fixed** and regression-tested |
+| 5 | Clear requirements emitted as `normalized` although only whitespace was normalized; spec contradiction on conflicting status (Example E vs §6) | `normalized` → `captured` **fixed**. Conflict status **open** (spec contradiction) |
+| 6 | Specialist output field names and embedded evidence differ from §4.3.1; no output integrity check | Integrity check **added** (`validation.py`). Field-name alignment **open** |
+| 7 | Missing spec fields: `text_excerpt_hash`, `created_at`, `revision`, `is_stale`, `input_revision_hash`, `source_id`/version on evidence | **Open.** Server-owned fields are documented as Foundation's; `text_excerpt_hash` still needed |
+| 8 | `ScopeCommitment` and `CriticalityAssessment` enums absent | **Open.** Deferred per G5, but the gate cannot be expressed yet |
+| 9 | Proposal-key prefixes overlapped Foundation prefixes | **Fixed** for Foundation prefixes. `STMT`, `CONF`, `APROP`, `QPROP` not yet in G9 approval |
+| 10 | Routing metadata fields (`platform_refs`, `application_types`, `service_pattern_ids`, trigger signals); `specialist_recommendation` origin excluded | Trigger signals **added** in `RoutingRecord`. Others **open** |
+| 11 | No project status (archived refusal); no ambiguity statements; registry status `proposed` unguarded | **Open** |
+| 12 | Plan claims that were inaccurate (3.1 says retrieval, not the model, sets evidence kind and status; G9 omits STMT, CONF, APROP) | **Noted.** 3.1 describes intended retrieval-layer behaviour; the lookup port now enforces project and allowlist, but no retrieval layer exists yet. G9 gap is row 9 |
+
+Requirement lifecycle: AI output is now limited to `captured`, `needs_clarification` and `blocked`.

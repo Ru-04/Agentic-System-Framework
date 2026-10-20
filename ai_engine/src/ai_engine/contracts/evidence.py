@@ -83,8 +83,15 @@ class EvidenceReference(ContractModel):
             and self.evidence_kind not in _VERIFIABLE_KINDS
         ):
             raise ValueError(f"{self.evidence_kind} cannot support a verified status")
-        if self.evidence_kind is EvidenceKind.APPROVED_INTERNAL and self.source_id is None:
-            raise ValueError("approved internal evidence must cite a source_id")
+        if self.evidence_kind is EvidenceKind.APPROVED_INTERNAL:
+            if self.source_id is None:
+                raise ValueError("approved internal evidence must cite a source_id")
+            if self.evidence_status in _VERIFIED_STATUSES and (
+                self.source_version is None or self.content_hash is None
+            ):
+                raise ValueError(
+                    "verified internal evidence requires source_version and content_hash"
+                )
         if self.evidence_kind is EvidenceKind.OFFICIAL_VENDOR_DOCUMENTATION:
             if self.source_url is None or not self.source_url.startswith("https://"):
                 raise ValueError("official vendor documentation requires an https source_url")

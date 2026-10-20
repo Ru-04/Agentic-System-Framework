@@ -59,6 +59,37 @@ VersionStr = Annotated[str, StringConstraints(min_length=1, max_length=64)]
 SourceVersionStr = Annotated[str, StringConstraints(pattern=r"^[0-9]+$", max_length=32)]
 Sha256Hex = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
+# Prefixes that belong to Foundation identifiers. AI proposal keys must not reuse them (gap G9).
+FOUNDATION_ID_PREFIXES = frozenset(
+    {
+        "PRJ",
+        "SRC",
+        "SEG",
+        "REQ",
+        "Q",
+        "EVD",
+        "SOL",
+        "RUN",
+        "SPT",
+        "EXEC",
+        "SCOPE",
+        "RISK",
+        "ASM",
+        "EXC",
+        "REV",
+        "FIND",
+        "DEC",
+        "SOW",
+        "CLAIM",
+    }
+)
+
+
+def proposal_key_is_namespaced(key: str) -> bool:
+    """True when a proposal key cannot be mistaken for a Foundation identifier."""
+    return key.split("-", 1)[0] not in FOUNDATION_ID_PREFIXES
+
+
 AI_REVIEW_STATE: Literal["proposed_pending_human_review"] = "proposed_pending_human_review"
 
 
