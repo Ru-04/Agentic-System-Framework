@@ -158,3 +158,51 @@ listed below with its disposition. "Fixed" means a regression test now covers it
 | 12 | Plan claims that were inaccurate (3.1 says retrieval, not the model, sets evidence kind and status; G9 omits STMT, CONF, APROP) | **Noted.** 3.1 describes intended retrieval-layer behaviour; the lookup port now enforces project and allowlist, but no retrieval layer exists yet. G9 gap is row 9 |
 
 Requirement lifecycle: AI output is now limited to `captured`, `needs_clarification` and `blocked`.
+
+## 9. AI-3: Shopify Specialist (implemented, synthetic only)
+
+Scope: investigate Shopify-specific requirements on the AI-2 interface. Outputs are structured,
+unverified implementation options. Nothing is selected, verified or accepted.
+
+| Module | Purpose |
+|---|---|
+| `shopify/agent.py` | `ShopifySpecialist` (`CAP-ECOMMERCE`, `shopify_specialist`) |
+| `shopify/synthetic_evidence.py` | Eight synthetic placeholder records in `shopify_synthetic_patterns`; each is `synthetic_mock` and `unverified`, names no publisher, and carries a `[stance:…]` tag for deterministic contradiction scenarios |
+
+Behaviour:
+
+- Refuses non-Shopify platforms and requests with no Shopify-specific behaviour (`UnsupportedRequestError`, mapped to `unsupported_request` by the wrapper).
+- Relevance is decided by the agent's own keyword test. It does not read the requirement's
+  `specialist_category_ids`, which are a non-authoritative proposal (WDS decision). Machine routing stays disabled.
+- Per Shopify-relevant requirement: options for native, third-party app, custom theme or application
+  work, and API integration (only where the requirement is an integration). Each option is
+  `not selected`, `unverified`, and lists its verification tasks.
+- Claims: a platform hypothesis (`CONFLICTING` when the served records contradict each other),
+  an implementation feasibility claim (`feasibility: unknown`), and for integrations an API-behaviour
+  claim. No claim is ever `verified`.
+- Clarification questions (QPROP keys) cover plan and permissions, measurable performance targets,
+  integration source of truth and direction, conflicting availability, and the open allowlist (D-02)
+  when no evidence source returns results.
+- Status: `evidence_unavailable` with an empty allowlist; `partial` when some requirements fall
+  outside Shopify scope (named in `dependencies`); otherwise `completed`.
+
+Verification: 24 scenario tests in `tests/test_shopify_agent.py` cover native, app, custom, API,
+unsupported (task and request), conflicting evidence, missing information, unavailable evidence,
+mixed scope, provenance, reference preservation, and an end-to-end run from the synthetic brief.
+
+### 9.1 Specification gaps surfaced by AI-3
+
+| # | Gap | Effect | Handling |
+|---|---|---|---|
+| S1 | `SpecialistInvestigationResult` has no assumptions field (§4.3.1) | Assumptions cannot be recorded as such | Expressed as dependencies; no assumption is adopted |
+| S2 | `Claim` has no conflict references (§6.8 requires them for conflicting evidence or feasibility) | Conflict is recorded by status and cited evidence IDs only | Conflict carried in `CONFLICTING` status and a risk; scope gate not yet built |
+| S3 | `EvidenceReference` must be `unverified` for synthetic records, so conflicting evidence cannot be expressed on the record itself | Conflict exists only at claim level | Recorded as a claim; flagged for ruling with the EvidenceKind extension |
+| S4 | No service-pattern IDs: `SERVICE_CATALOG.yaml` loader is not built | `service_pattern_ids` is empty | Deferred to a later increment |
+| S5 | Platform version is unknown in every run; §9.3 requires a known version for verified platform claims | No platform claim can ever be verified in this prototype | Expected; blocks live verification until a version is supplied |
+| S6 | Contradiction tags (`[stance:…]`) are a test-fixture convention | Not a spec construct | Documented as synthetic; do not carry into production retrieval |
+
+### 9.2 Readiness for AI-4
+
+Ready for a synthetic end-to-end demonstration: fixture brief → analysis → Foundation-style ID
+assignment → explicit task → Shopify run → human-review-required output. The demonstration must
+not approve requirements, estimates or SOW scope. It must not call a live LLM or vendor source.
