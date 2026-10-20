@@ -73,6 +73,11 @@ class MockFoundationAdapter:
     def __init__(self, fixture: SyntheticFixture) -> None:
         self._fixture = fixture
 
+    @property
+    def project_id(self) -> str:
+        """The one project this mock serves. Used by demonstrations, not by the analysis itself."""
+        return self._fixture.project.project_id
+
     @classmethod
     def from_file(cls, path: Path) -> Self:
         try:

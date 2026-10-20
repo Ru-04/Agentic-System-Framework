@@ -206,3 +206,118 @@ mixed scope, provenance, reference preservation, and an end-to-end run from the 
 Ready for a synthetic end-to-end demonstration: fixture brief → analysis → Foundation-style ID
 assignment → explicit task → Shopify run → human-review-required output. The demonstration must
 not approve requirements, estimates or SOW scope. It must not call a live LLM or vendor source.
+
+## 10. AI-4: synthetic end-to-end demonstration (implemented, synthetic only)
+
+### 10.1 Summary
+
+`ai_engine/src/ai_engine/demo/` runs the whole isolated workflow on the synthetic eCommerce brief:
+
+1. Load the synthetic brief through `MockFoundationAdapter` (project and segments, classification `internal`).
+2. Run `RequirementAnalysisAgent` (AI-1). Output: proposals, goals, constraints, flagged text, conflicts, assumptions, dependencies, questions.
+3. Assign mock requirement IDs (`REQ-MOCK-####`) through an explicitly named mock boundary. The analysis object is not modified.
+4. Build a specialist task with the AI-2 task builder, using an explicit `ExplicitSelection` of `CAP-ECOMMERCE` / `shopify_specialist`. Routing stays disabled.
+5. Run `ShopifySpecialist` (AI-3) through `run_specialist` (AI-2), with evidence served only from the authorised collection.
+6. Assemble `DemonstrationReport`: per-requirement traces, evidence traces, unresolved items, provenance counts, tracked gaps, and fixed review flags.
+
+### 10.2 Workflow boundaries
+
+| Boundary | Enforced by |
+|---|---|
+| No Foundation persistence | `BoundaryRecord.persistence` is fixed to `none`; `foundation_writes` is fixed to `0`. The adapter has no write methods (tested). |
+| Mock IDs are not Foundation IDs | `IdAssignment.assignment_authority` is fixed to `mock_boundary_demo_only`. IDs use the `REQ-MOCK-` prefix. Demo run IDs are never `RUN-`, which is a Foundation prefix. |
+| Project isolation | The adapter refuses other projects; the demo probes this and records `cross_project_probe: refused`. The probe raises if the boundary is not enforced. |
+| No automatic routing | `machine_routing_enabled` is fixed to `false`. The one routing record has trigger `explicit_selection`. |
+| No approval | `ReviewState` fixes `approved_requirement_count=0`, `scope_committed=False`, `sow_generated=False`, `estimates_approved=False`, `implementation_solution_selected=False`, `human_review_required=True`. Pydantic rejects any other value. |
+| No live calls | No LLM, no network, no vendor documentation; the evidence source is the synthetic Shopify collection. |
+| Provenance is explicit | Every trace carries labels: `synthetic_fixture`, `inferred_analysis`, `mock_identifier`, `unverified_evidence`. `human_approved` exists as a label but is never produced. |
+| Nothing dropped | Every analysed requirement has a trace. Requirements outside the explicit selection are `not_selected` and listed as unresolved. Failures are `unsupported_request` or `execution_failure` items. |
+| Traceable keys | Analysis keys are scoped `analysis/...`. Specialist keys are scoped `SPT-DEMO-0001/...`, because both sides number from 001. |
+
+Model and code locations: `demo/model.py` (demonstration-only output model, not a Foundation domain model), `demo/workflow.py` (workflow), `demo/gaps.py` (tracked gaps), `demo/cli.py` and `demo/__main__.py` (CLI).
+
+### 10.3 Demonstration result (synthetic fixture)
+
+- Status: `completed_with_unresolved_items`.
+- Requirements: 9 analysed proposals (6 client-explicit, 3 system-inferred). One is investigated (the storefront wishlist requirement); eight are `not_selected`.
+- Specialist: one task, `SPT-DEMO-0001`, execution `succeeded`. Three candidate options (native platform, third-party app, platform extension). Two claims: one `conflicting` (the wishlist evidence contradicts itself), one `unverified`.
+- Evidence cited: three synthetic records (`EVD-SHP-SYN-0001`, `-0002`, `-0003`), all `synthetic_mock` and `unverified`.
+- Unresolved items: 29 (12 clarification questions, 2 conflicts, 3 unconfirmed assumptions, 8 not-selected requirements, 2 risks, 1 dependency, 1 flagged instruction).
+- Output size: about 52 KB of JSON. Two runs are byte-identical.
+
+### 10.4 How to run
+
+From the `ai_engine/` directory:
+
+```bash
+PYTHONPATH=src uv run python -m ai_engine.demo
+```
+
+To write the JSON to a file instead:
+
+```bash
+PYTHONPATH=src uv run python -m ai_engine.demo --out demo_report.json
+```
+
+Tests:
+
+```bash
+uv run pytest
+uv run ruff check src tests
+uv run mypy
+```
+
+### 10.5 Test results
+
+| Check | Result |
+|---|---|
+| `pytest` (full suite) | 266 passed (238 existing AI-1 to AI-3 tests, plus 28 new end-to-end tests) |
+| `ruff check src tests` | clean |
+| `mypy` (strict, `src/ai_engine`) | clean |
+
+New end-to-end coverage (`tests/test_demo_end_to_end.py`): workflow completion, review-flag immutability, boundary probe, mock-ID labelling, project isolation, source traceability from requirement to segment to task to evidence, scoped references, explicit selection and disabled routing, not-selected requirements listed rather than dropped, conflicts and questions staying visible, instruction-like text flagged, missing evidence as a gap, unsupported / transient / permission failures as observable outcomes, no-candidate runs, determinism, tracked gaps, and the CLI.
+
+### 10.6 Outstanding specification and governance gaps
+
+Every item below is listed in the demonstration output under `tracked_gaps`. None is resolved here.
+
+| ID | Gap | Owner |
+|---|---|---|
+| S1 | Specialist output has no assumptions field (section 4.3.1) | Specification |
+| S2 | `Claim` lacks conflict references required by section 6.8 | Specification |
+| S3 | Conflicting evidence cannot be expressed on a synthetic `EvidenceReference` | Specification / EvidenceKind ruling |
+| S4 | Service catalog loader not built; `service_pattern_ids` empty | Engineering |
+| S5 | Platform version unknown; no platform claim can be verified | Client input |
+| S6 | `[stance:...]` tags are a test-fixture convention | Engineering (remove from production retrieval) |
+| C-05 | Structured routing predicates not approved; machine routing disabled | WDS |
+| D-12 | LLM provider, model and data-processing policy undecided; no LLM called | WDS |
+| D-02 / C-06 | Vendor evidence allowlist undecided; only synthetic evidence used | WDS |
+| D-06 | Criticality predicates undecided; materiality stays unassessed | WDS |
+| D-08 / H-16 | Acceptance eligibility predicates undecided; nothing accepted | WDS |
+| G9 | Proposed ID prefixes (SPT, EXEC, CAND, QPROP, APROP, STMT, CONF) await approval | WDS |
+| G11 | No `ai_proposed` lifecycle state | Specification |
+| G12 | Registry entries are `proposed`; the registry is an unapproved draft | WDS |
+| D-PERS | No Foundation persistence or WorkflowRun integration; IDs are mock-assigned | Foundation integration |
+| D-OP | Operator confirmation of the requirement list is not modelled. The demo default selects requirements whose non-authoritative category proposal names `shopify_specialist`. | WDS / product |
+| D-10 | No approved SOW template; no SOW is generated | WDS |
+| D-04 | No reference estimate dataset; no estimates are produced | WDS |
+
+### 10.7 Contract compatibility concerns found during AI-4
+
+- The demonstration report embeds AI-1 to AI-3 contract objects unchanged. Only one non-contract change was made: a read-only `project_id` property on `MockFoundationAdapter`.
+- The report is a separate model, not a contract. It must not be persisted as a Foundation record without a separate decision.
+- Mock requirement IDs follow the `REQ-` pattern, so the contracts accept them. Only the labels separate them from Foundation IDs. Any future integration must strip or re-issue them.
+- Analysis and specialist keys can collide because both number from 001. The report scopes them, but the contracts do not. This is a gap to raise with the specification owner.
+- The `SpecialistInvestigationResult` status `evidence_unavailable` and the demonstration status `specialist_not_completed` use different vocabularies. This is intentional, but it needs a mapping if statuses are ever shared.
+
+### 10.8 Integration readiness assessment
+
+Ready for an isolated review of the workflow and its outputs. Not ready for Foundation integration:
+
+- Needs a Foundation-owned ID assignment service in place of `assign_mock_ids`.
+- Needs a Foundation-owned persistence path for candidate records (blocked by G9 and D-PERS).
+- Needs operator confirmation of the requirement list (D-OP).
+- Needs approval of the proposed ID prefixes and the EvidenceKind extension.
+- Needs a decision on routing (C-05) before any automatic selection is considered.
+
+Nothing has been pushed or merged. Push or merge requires explicit WDS approval.
