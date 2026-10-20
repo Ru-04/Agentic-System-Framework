@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.people import user_in_state
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError, LoginLimits
 from webdesk.delivery.transport import CaptureTransport
@@ -62,15 +63,8 @@ def _email() -> str:
 
 
 def _user(conn: Connection, status: str) -> tuple[uuid.UUID, str]:
-    email = _email()
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('auth user', :e, :e, :s) RETURNING user_id"""
-        ),
-        {"e": email, "s": status},
-    ).scalar_one()
-    return uuid.UUID(str(value)), email
+    """A test account in the given state, built through the services."""
+    return user_in_state(conn, status)
 
 
 def _activation_token(conn: Connection, user: uuid.UUID) -> str:

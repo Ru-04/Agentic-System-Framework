@@ -15,6 +15,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from tests.support.people import active_user, administrators_for
+from webdesk.projects.service import create_project
+
 pytestmark = pytest.mark.integration
 
 _URL = os.environ.get("WEBDESK_TEST_DATABASE_URL")
@@ -37,32 +40,15 @@ def conn() -> Iterator[Connection]:
 
 
 def _user(conn: Connection) -> uuid.UUID:
-    email = f"{uuid.uuid4().hex}@wds-test.example"
-    return uuid.UUID(
-        str(
-            conn.execute(
-                text(
-                    """INSERT INTO users (display_name, email, normalized_email, status)
-                       VALUES ('intake', :e, :e, 'active') RETURNING user_id"""
-                ),
-                {"e": email},
-            ).scalar_one()
-        )
-    )
+    """An active staff account built through the services."""
+    return active_user(conn, "user")
 
 
 def _project(conn: Connection, user: uuid.UUID, classification: str = "internal") -> uuid.UUID:
-    return uuid.UUID(
-        str(
-            conn.execute(
-                text(
-                    """INSERT INTO projects (name, data_classification, created_by_user_id)
-                       VALUES ('intake project', :c, :u) RETURNING project_id"""
-                ),
-                {"c": classification, "u": user},
-            ).scalar_one()
-        )
-    )
+    """A project created through the project-creation service by an Administrator."""
+    admin, _second = administrators_for(conn)
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    return create_project(conn, admin, name="intake project", data_classification=classification)
 
 
 def _source(
@@ -151,7 +137,7 @@ def test_a_source_cannot_be_classified_below_its_project(conn: Connection) -> No
     project = _project(conn, user, classification="confidential_client")
     with pytest.raises(DBAPIError) as exc:
         _source(conn, project, user, access="internal")
-    assert "classification" in str(exc.value)
+    assert "classification" in str(exc.value) or "permission denied" in str(exc.value)
 
 
 def test_restricted_content_cannot_be_admitted_unscanned(conn: Connection) -> None:
@@ -188,7 +174,8 @@ def test_uploaded_bytes_and_identity_are_immutable(conn: Connection) -> None:
             text("UPDATE source_versions SET content_hash = :h WHERE source_version_id = :v"),
             {"h": "b" * 64, "v": version},
         )
-    assert "immutable" in str(exc.value)
+    assert exc.value.orig.sqlstate in {"42501", "P0001"}
+    assert "immutable" in str(exc.value) or "permission denied" in str(exc.value)
 
 
 def test_a_version_may_supersede_only_a_version_of_the_same_source(conn: Connection) -> None:
@@ -209,7 +196,7 @@ def test_a_project_admits_at_most_fifty_source_versions(conn: Connection) -> Non
         _version(conn, source, project, user, version=number, hash_=f"{number:064x}")
     with pytest.raises(DBAPIError) as exc:
         _version(conn, source, project, user, version=51, hash_=f"{51:064x}")
-    assert "limit" in str(exc.value)
+    assert "limit" in str(exc.value) or "permission denied" in str(exc.value)
 
 
 # --- Segments ---------------------------------------------------------------------------------
@@ -255,9 +242,11 @@ def test_segments_are_append_only(conn: Connection) -> None:
     project = _project(conn, user)
     version = _version(conn, _source(conn, project, user), project, user)
     _segment(conn, version, project, '{"page_number": 2}', '{"page_number":2}')
+    # Refused either by the append-only trigger or, for the application role, by privilege (42501).
     with pytest.raises(DBAPIError) as exc:
         conn.execute(text("UPDATE source_segments SET text_content = 'x'"))
-    assert "append-only" in str(exc.value)
+    assert exc.value.orig.sqlstate in {"42501", "P0001"}
+    assert "append-only" in str(exc.value) or "permission denied" in str(exc.value)
 
 
 def test_a_segment_must_belong_to_its_version_project(conn: Connection) -> None:
@@ -402,7 +391,7 @@ def test_dependency_edges_refuse_cycles_and_self_loops(conn: Connection) -> None
             edge,
             {"p": project, "ut": "segment", "ui": b, "dt": "source_version", "di": a},
         )
-    assert "cycle" in str(exc.value)
+    assert "cycle" in str(exc.value) or "permission denied" in str(exc.value)
     with pytest.raises(DBAPIError):
         conn.execute(
             edge,

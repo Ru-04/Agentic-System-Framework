@@ -102,7 +102,7 @@ def issue(
             error_class="not_eligible",
         )
         raise TokenError("invalid_request")
-    email, revision = str(user[1]), int(user[2])
+    email = str(user[1])
 
     if purpose == "reset":
         pending_change = conn.execute(
@@ -138,33 +138,18 @@ def issue(
         )
         raise TokenError("rate_limited") from exc
 
-    conn.execute(
-        text(
-            """UPDATE account_activation_tokens
-               SET revoked_at = now(), revocation_reason = 'superseded'
-               WHERE user_id = :u AND purpose = :p AND consumed_at IS NULL AND revoked_at IS NULL"""
-        ),
-        {"u": user_id, "p": purpose},
-    )
+    # Issuance and supersession are written only by the guard-owner function (H-01).
     token = secrets.token_urlsafe(32)
     token_id = uuid.UUID(
         str(
             conn.execute(
-                text(
-                    """INSERT INTO account_activation_tokens (user_id, purpose, token_hash,
-                           contact_revision, contact_destination_ref, expires_at,
-                           delivery_status, issued_by_actor_id)
-                       VALUES (:u, :p, :h, :rev, :dest, now() + CAST(:ttl AS interval),
-                           'pending', :actor)
-                       RETURNING token_id"""
-                ),
+                text("SELECT webdesk_guard.fn_issue_token(:u, :p, :h, :dest, :ttl, :actor)"),
                 {
                     "u": user_id,
                     "p": purpose,
                     "h": token_hash(token),
-                    "rev": revision,
                     "dest": subject_hash(email),
-                    "ttl": f"{int(TOKEN_TTL.total_seconds())} seconds",
+                    "ttl": int(TOKEN_TTL.total_seconds()),
                     "actor": actor,
                 },
             ).scalar_one()
@@ -175,7 +160,7 @@ def issue(
     # Raises if the transport is unavailable. The caller's transaction then rolls back.
     transport.send(to=email, subject=subject, body=body, idempotency_key=str(token_id))
     conn.execute(
-        text("UPDATE account_activation_tokens SET delivery_status = 'sent' WHERE token_id = :t"),
+        text("SELECT webdesk_guard.fn_mark_token_sent(:t)"),
         {"t": token_id},
     )
     _audit(
@@ -192,19 +177,12 @@ def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
     """Validate and consume a token. Returns the user ID. Neutral error on any refusal."""
     if purpose not in PURPOSES:
         raise TokenError("invalid_token")
+    # The guard-owner function re-checks liveness, status and contact revision, then consumes.
     row = conn.execute(
-        text(
-            """SELECT t.token_id, t.user_id, t.contact_revision, t.expires_at > now() AS live,
-                      u.status, u.contact_revision AS current_revision
-               FROM account_activation_tokens t JOIN users u ON u.user_id = t.user_id
-               WHERE t.token_hash = :h AND t.purpose = :p
-                 AND t.consumed_at IS NULL AND t.revoked_at IS NULL
-               FOR UPDATE OF t"""
-        ),
+        text("SELECT token_id, user_id FROM webdesk_guard.fn_consume_token(:h, :p)"),
         {"h": token_hash(token), "p": purpose},
     ).one_or_none()
-    expected_status = "pending_activation" if purpose == "activate" else "active"
-    if row is None or not row[3] or row[4] != expected_status or int(row[2]) != int(row[5]):
+    if row is None:
         _audit(
             conn,
             actor_type="system",
@@ -214,14 +192,6 @@ def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
             error_class="invalid",
         )
         raise TokenError("invalid_token")
-
-    conn.execute(
-        text(
-            """UPDATE account_activation_tokens SET consumed_at = now()
-               WHERE token_id = :t AND consumed_at IS NULL AND revoked_at IS NULL"""
-        ),
-        {"t": row[0]},
-    )
     user_id = uuid.UUID(str(row[1]))
     _audit(
         conn,

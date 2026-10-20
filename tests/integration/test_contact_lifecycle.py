@@ -14,10 +14,11 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
+from tests.support.people import active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.identity import contacts
@@ -98,16 +99,8 @@ def _owner(conn: Connection) -> None:
 
 
 def _plain_user(conn: Connection) -> uuid.UUID:
-    _owner(conn)
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('plain', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    _as_app(conn)
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "plain_user")
 
 
 def _audit_count(conn: Connection, event_type: str) -> int:

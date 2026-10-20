@@ -1,7 +1,7 @@
 """Phase A committed-row tests (C-2, C-5; EVAL-F11d, F11g, F12).
 
-These run on the session database from conftest.py, so each operation commits and a second
-connection can see the result. Installation runs once for this module.
+These run on an isolated database per test (conftest.py), so each operation commits and a second
+connection can see the result. Installation runs inside each test's own database.
 """
 
 from __future__ import annotations
@@ -11,11 +11,11 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from tests.support.people import committed_active_user
 from webdesk.api.transactions import run_in_transaction
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import TransportUnavailable
@@ -55,16 +55,8 @@ def admins(committed_admins: tuple[uuid.UUID, uuid.UUID]) -> tuple[uuid.UUID, uu
 
 
 def _active_user(engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]) -> uuid.UUID:
-    creator, approver = admins
-    with engine.begin() as conn:
-        conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        user, approval = contacts.request_create(conn, creator, POLICY, _email(), "Staff")
-        contacts.approve_create(conn, approver, approval, "proof-c")
-        conn.execute(text("RESET ROLE"))
-        activate_user(conn, user)
-    return user
-
-
+    """An active account committed through the services (request, approval, activation)."""
+    return committed_active_user(engine, admins[0], admins[1], "committed-active")
 def _count(engine: Engine, sql: str, params: dict[str, object]) -> int:
     with engine.connect() as conn:
         return int(conn.execute(text(sql), params).scalar_one())
@@ -262,13 +254,12 @@ def test_an_injected_failure_mid_approval_commits_nothing(
         raise RuntimeError("injected after the contact update")
 
     monkeypatch.setattr(contacts, "_audit", fail)
+    def approve_as_application(conn: Connection) -> None:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        contacts.approve_change(conn, approver, change, "proof-injected", contact_box=BOX)
+
     with pytest.raises(RuntimeError):
-        run_in_transaction(
-            committed_engine,
-            lambda conn: contacts.approve_change(
-                conn, approver, change, "proof-injected", contact_box=BOX
-            ),
-        )
+        run_in_transaction(committed_engine, approve_as_application)
     monkeypatch.undo()
     with committed_engine.connect() as conn:
         status = conn.execute(

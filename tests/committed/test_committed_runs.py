@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from tests.support.people import committed_active_user
 from webdesk.intake.ingest import ingest_source
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
@@ -32,19 +33,11 @@ def _email() -> str:
 def committed_run(
     committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID], tmp_path: Path
 ) -> uuid.UUID:
-    admin, _ = committed_admins
+    admin, second = committed_admins
     store = ContentStore(tmp_path / "root")
+    analyst = committed_active_user(committed_engine, admin, second, "analyst")
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        analyst = uuid.UUID(
-            str(
-                conn.execute(
-                    text("""INSERT INTO users (display_name, email, normalized_email, status)
-                            VALUES ('analyst', :e, :e, 'active') RETURNING user_id"""),
-                    {"e": _email()},
-                ).scalar_one()
-            )
-        )
         assign_role(conn, admin, analyst, Role.ANALYST)
         project = projects.create_project(
             conn, admin, name=f"Committed {uuid.uuid4().hex[:6]}", data_classification="internal"

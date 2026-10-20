@@ -11,17 +11,17 @@ import os
 import uuid
 import zipfile
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
+from tests.support.people import active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
-from webdesk.identity.sweep import sweep_expired
 from webdesk.intake import parse_service
 from webdesk.intake.ingest import IngestError, ingest_source
 from webdesk.intake.parsers import ParseResult
@@ -109,16 +109,8 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
 
 
 def _active_user(conn: Connection) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('staff', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "active_user")
 
 
 def _revision(conn: Connection, project: uuid.UUID) -> int:
@@ -271,49 +263,11 @@ def test_resume_is_refused_for_a_parked_run_in_gate_1(
 # --- F11f: appointment expiry by the sweep ----------------------------------------------------
 
 
-def test_the_sweep_expires_an_unconsumed_appointment_past_its_deadline(conn: Connection) -> None:
-    _setup(conn)
-    staff = _active_user(conn)
-    # A fresh, unconsumed recovery appointment for the staff member (ceremony role only).
-    conn.execute(text("RESET ROLE"))
-    conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
-    ceremony = conn.execute(
-        text(
-            """INSERT INTO setup_trust_ceremonies (kind, owner_approval_ref,
-                   signed_authorization_digest, owner_identity_ref, independent_verifier_id,
-                   deployment_operator_id, effective_admin_count_at_start, authorized_user_ids,
-                   activation_deadline, status)
-               VALUES ('recover', 'R', 'd', 'o', 'v', 'op', 1, '{}', now() + interval '1 hour',
-                   'initiated') RETURNING ceremony_id"""
-        )
-    ).scalar_one()
-    appointment = conn.execute(
-        text(
-            """INSERT INTO user_contact_approvals (user_id, request_type,
-                   requested_email_normalized, ceremony_id, status, expires_at, approved_at,
-                   administrator_appointment)
-               SELECT user_id, 'appointment', normalized_email, :c, 'approved',
-                   now() + interval '1 hour', now(), true
-               FROM users WHERE user_id = :u RETURNING approval_id"""
-        ),
-        {"c": ceremony, "u": staff},
-    ).scalar_one()
-    conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text(
-            "UPDATE user_contact_approvals SET expires_at = now() - interval '1 minute' "
-            "WHERE approval_id = :a"
-        ),
-        {"a": appointment},
-    )
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    counts = sweep_expired(conn)
-    assert counts["appointments"] >= 1
-    status = conn.execute(
-        text("SELECT status FROM user_contact_approvals WHERE approval_id = :a"),
-        {"a": appointment},
-    ).scalar_one()
-    assert status == "expired"
+class _PastClock:
+    """An injected clock two days in the past, so the installation deadline has already passed."""
+
+    def now(self) -> datetime:
+        return datetime.now(UTC) - timedelta(days=2)
 
 
 # --- F12: denial audits on the remaining services ---------------------------------------------

@@ -11,15 +11,17 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
+from tests.support.people import active_user, administrators_for
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.identity.sweep import sweep_expired
+from webdesk.projects.service import add_member, create_project
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.engine import ResourceRef, authorize
 from webdesk.rbac.matrix import MATRIX, Permission, Role, Rule
@@ -155,38 +157,6 @@ def test_sweep_keeps_the_reservation_of_an_expired_create_request(conn: Connecti
     assert still_reserved == 1
 
 
-def test_sweep_revokes_tokens_of_an_install_contact_that_missed_its_deadline(
-    conn: Connection,
-) -> None:
-    _two_admins(conn)
-    _as_owner(conn)
-    pending = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('late', :e, :e, 'pending_activation') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(
-        text(
-            """INSERT INTO account_activation_tokens (user_id, purpose, token_hash,
-                   contact_revision, contact_destination_ref, expires_at)
-               VALUES (:u, 'activate', :h, 1, 'ref', now() + interval '30 minutes')"""
-        ),
-        {"u": pending, "h": uuid.uuid4().hex},
-    )
-    counts = sweep_expired(conn)
-    assert counts["tokens_revoked"] >= 1
-    revoked_reason = conn.execute(
-        text(
-            """SELECT revocation_reason FROM account_activation_tokens
-               WHERE user_id = :u"""
-        ),
-        {"u": pending},
-    ).scalar_one()
-    assert revoked_reason == "approval_expired"
-
-
 # --- C-4: replacement create request ----------------------------------------------------------
 
 
@@ -258,16 +228,7 @@ def test_f01_matrix_holds_for_every_key_role_and_state_against_sql(conn: Connect
                 for granted in (False, True):
                     project = _owner_project(conn, admin_a, user)
                     if member:
-                        conn.execute(text("RESET ROLE"))
-                        conn.execute(
-                            text(
-                                """INSERT INTO project_memberships (project_id, user_id,
-                                       assigned_by_system)
-                                   VALUES (:p, :u, 'system:project_create')"""
-                            ),
-                            {"p": project, "u": user},
-                        )
-                        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+                        add_member(conn, admin_a, project, user)
                     if granted:
                         conn.execute(text("RESET ROLE"))
                         conn.execute(
@@ -296,26 +257,12 @@ def test_f01_matrix_holds_for_every_key_role_and_state_against_sql(conn: Connect
 
 
 def _owner_insert_user(conn: Connection) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('f01', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "f01")
 
 
 def _owner_project(conn: Connection, creator: uuid.UUID, _user: uuid.UUID) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO projects (name, data_classification, created_by_user_id)
-               VALUES ('f01 project', 'internal', :c) RETURNING project_id"""
-        ),
-        {"c": creator},
-    ).scalar_one()
+    """A project created through the creation service by an Administrator."""
+    admin, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    return create_project(conn, admin, name="f01 project", data_classification="internal")

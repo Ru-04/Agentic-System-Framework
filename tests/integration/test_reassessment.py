@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
+from tests.support.activation import activate_user
+from tests.support.people import active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.reassess import ReassessError, reassess_source_classification
@@ -93,16 +94,8 @@ def _setup(conn: Connection, project_class: str = "internal") -> dict[str, uuid.
 
 
 def _active_user(conn: Connection) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('staff', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "active_user")
 
 
 def _source(
@@ -311,7 +304,8 @@ def test_the_database_refuses_a_direct_classification_change(
             text("UPDATE sources SET access_classification = 'restricted' WHERE source_id = :s"),
             {"s": result.source_id},
         )
-    assert "audited reassessment" in str(exc.value)
+    assert exc.value.orig.sqlstate in {"42501", "P0001"}
+    assert "audited reassessment" in str(exc.value) or "permission denied" in str(exc.value)
 
 
 def test_the_database_refuses_a_direct_version_classification_change(
@@ -327,4 +321,5 @@ def test_the_database_refuses_a_direct_version_classification_change(
             ),
             {"v": result.source_version_id},
         )
-    assert "audited reassessment" in str(exc.value)
+    assert exc.value.orig.sqlstate in {"42501", "P0001"}
+    assert "audited reassessment" in str(exc.value) or "permission denied" in str(exc.value)

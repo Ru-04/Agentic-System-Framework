@@ -13,11 +13,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.people import active_user, external_loss_of_access, user_in_state
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError
 from webdesk.ceremony.install import PreparedInstall, apply_install
@@ -99,16 +99,12 @@ def _admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
 
 
 def _plain(conn: Connection, status: str = "active") -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('plain', :e, :e, :s) RETURNING user_id"""
-        ),
-        {"e": _email(), "s": status},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    """An ordinary account in the given state, built through the services."""
+    if status == "active":
+        return active_user(conn, "plain")
+    if status == "pending_activation":
+        return user_in_state(conn, "pending_activation")[0]
+    raise ValueError(f"unsupported test state: {status}")
 
 
 def _audit(conn: Connection, event: str, reason: str | None = None) -> int:
@@ -190,6 +186,7 @@ def test_a_token_for_an_ineligible_account_is_refused_and_audited(conn: Connecti
 
 
 def test_an_invalid_token_consumption_is_audited(conn: Connection) -> None:
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(tokens.TokenError):
         tokens.consume(conn, token="not-a-real-token", purpose="activate")
     assert _audit(conn, "token.consume.denied", "invalid") == 1
@@ -251,9 +248,10 @@ def test_an_administrator_grant_without_an_appointment_is_refused_and_audited(
     )
     conn.execute(text("RESET ROLE"))
     activate_user(conn, result.user_ids[0])
+    activate_user(conn, result.user_ids[1])  # the second contact is an ordinary active account
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     admin = result.user_ids[0]
-    staff = _plain(conn)
+    staff = result.user_ids[1]
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, admin, staff, Role.ADMINISTRATOR)
     assert exc.value.reason == "appointment_required"
@@ -269,25 +267,16 @@ def test_adding_oneself_to_a_project_is_refused_and_audited(conn: Connection) ->
     assert _audit(conn, "membership.denied", "self_assignment") == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=Exception,
-    reason="BLOCKED on H-14 disable_user: the zero-Administrator setup used a direct "
-    "active -> pending_activation UPDATE, which H-02 now refuses. Re-create the state "
-    "through the disable service.",
-)
 def test_recovery_with_zero_active_administrators_is_refused_and_audited(conn: Connection) -> None:
-    _admins(conn)
-    conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text(
-            "UPDATE users SET status = 'pending_activation' WHERE status = 'active' "
-            "AND display_name IN ('A', 'B') OR user_id IN (SELECT user_id FROM "
-            "role_assignments WHERE role = 'Administrator')"
-        )
-    )
+    """GD-002: with zero active Administrators, in-application recovery is refused and audited.
+
+    The zero-Administrator state is produced by external loss of access (GD-001), not by the
+    application: both Administrators lose access through the test-only external-state fixture.
+    """
+    first, second = _admins(conn)
+    external_loss_of_access(conn, first)
+    external_loss_of_access(conn, second)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    staff = _plain(conn)
     with pytest.raises(RecoveryError) as exc:
         apply_recovery(
             conn,
@@ -302,6 +291,5 @@ def test_recovery_with_zero_active_administrators_is_refused_and_audited(conn: C
             operator_id="op",
             clock=SystemClock(),
         )
-    assert exc.value.reason in ("zero_active_administrators", "appointment_target_ineligible")
-    assert _audit(conn, "ceremony.recover.denied") >= 1
-    assert staff is not None
+    assert exc.value.reason == "zero_active_administrators"
+    assert _audit(conn, "ceremony.recover.denied", "zero_active_administrators") == 1

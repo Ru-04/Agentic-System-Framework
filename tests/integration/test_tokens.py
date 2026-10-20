@@ -6,6 +6,7 @@ one transaction that is rolled back. Service calls run as webdesk_app.
 
 from __future__ import annotations
 
+import base64
 import os
 import uuid
 from collections.abc import Iterator
@@ -15,7 +16,10 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.people import POLICY, administrators_for, user_in_state
+from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import CaptureTransport, TransportUnavailable
+from webdesk.identity import contacts
 from webdesk.ratelimit.limiter import Limit
 from webdesk.tokens import service as tokens
 from webdesk.tokens.service import TokenError, TokenLimits
@@ -44,16 +48,12 @@ def conn() -> Iterator[Connection]:
     engine.dispose()
 
 
+BOX = ContactBox(base64.b64encode(b"" * 32).decode("ascii"))
+
+
 def _user(conn: Connection, status: str) -> uuid.UUID:
-    email = f"{uuid.uuid4().hex}@wds-test.example"
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('token user', :e, :e, :s) RETURNING user_id"""
-        ),
-        {"e": email, "s": status},
-    ).scalar_one()
-    return uuid.UUID(str(value))
+    """A test account in the given state, built through the services."""
+    return user_in_state(conn, status)[0]
 
 
 def _token_from(transport: CaptureTransport) -> str:
@@ -186,27 +186,28 @@ def test_expired_token_is_refused_with_the_same_neutral_error(conn: Connection) 
 
 
 def test_token_is_refused_after_a_contact_revision_change(conn: Connection) -> None:
-    user = _user(conn, "pending_activation")
+    # The contact changes through the real request and approval; contact_revision moves only in
+    # the guard-owner function, and the reset token issued before the change must be refused.
+    user, _email_value = user_in_state(conn, "active")
+    first, second = administrators_for(conn)
     _as_app(conn)
     transport = CaptureTransport()
     tokens.issue(
         conn,
         user_id=user,
-        purpose="activate",
+        purpose="reset",
         transport=transport,
         limits=LIMITS,
         client_ip="203.0.113.7",
         actor=None,
     )
     token = _token_from(transport)
-    conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text("UPDATE users SET contact_revision = contact_revision + 1 WHERE user_id = :u"),
-        {"u": user},
+    change = contacts.request_change(
+        conn, first, POLICY, user, f"{uuid.uuid4().hex}@wds-test.example"
     )
-    _as_app(conn)
+    contacts.approve_change(conn, second, change, "proof-token", contact_box=BOX)
     with pytest.raises(TokenError):
-        tokens.consume(conn, token=token, purpose="activate")
+        tokens.consume(conn, token=token, purpose="reset")
 
 
 def test_token_cannot_be_used_for_the_other_purpose(conn: Connection) -> None:

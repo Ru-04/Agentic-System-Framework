@@ -12,10 +12,10 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.idempotency.service import IdempotencyError, run_idempotent
 from webdesk.projects import service as projects

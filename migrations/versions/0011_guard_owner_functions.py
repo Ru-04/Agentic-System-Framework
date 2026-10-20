@@ -58,8 +58,10 @@ GRANT SELECT ON user_contact_approvals TO webdesk_guard_owner;
 """
 
 DOWNGRADE_SQL = """
+SET ROLE webdesk_guard_owner;
 DROP FUNCTION IF EXISTS webdesk_guard.fn_advance_contact_revision(uuid, uuid);
 DROP SCHEMA IF EXISTS webdesk_guard;
+RESET ROLE;
 """
 
 

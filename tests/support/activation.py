@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from webdesk.auth import service as auth
@@ -25,7 +26,12 @@ LIMITS = TokenLimits(
 
 
 def activate_user(conn: Connection, user_id: uuid.UUID) -> None:
-    """Issue an activation token and activate the account, inside the caller's transaction."""
+    """Issue an activation token and activate the account, inside the caller's transaction.
+
+    The service calls run as ``webdesk_app``, as in production. The caller's role is restored after.
+    """
+    previous = conn.execute(text("SELECT current_user")).scalar_one()
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
     transport = CaptureTransport()
     tokens.issue(
         conn,
@@ -38,3 +44,4 @@ def activate_user(conn: Connection, user_id: uuid.UUID) -> None:
     )
     token = transport.messages[-1][2].rsplit(": ", 1)[1]
     auth.activate(conn, token=token, password=TEST_PASSWORD)
+    conn.execute(text(f'SET LOCAL ROLE "{previous}"'))

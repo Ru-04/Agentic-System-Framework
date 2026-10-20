@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from tests.support.people import committed_active_user
 from webdesk.api.app import create_app
 from webdesk.config import Settings
 from webdesk.projects import service as projects
@@ -49,19 +50,11 @@ def http(
     committed_admins: tuple[uuid.UUID, uuid.UUID],
     tmp_path: Path,
 ) -> dict[str, object]:
-    admin, _ = committed_admins
+    admin, second = committed_admins
     store = ContentStore(tmp_path / "root")
+    analyst = committed_active_user(committed_engine, admin, second, "http analyst")
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        analyst = uuid.UUID(
-            str(
-                conn.execute(
-                    text("""INSERT INTO users (display_name, email, normalized_email, status)
-                            VALUES ('http analyst', :e, :e, 'active') RETURNING user_id"""),
-                    {"e": _email()},
-                ).scalar_one()
-            )
-        )
         assign_role(conn, admin, analyst, Role.ANALYST)
         project = projects.create_project(
             conn, admin, name=f"HTTP {uuid.uuid4().hex[:6]}", data_classification="internal"

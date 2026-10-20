@@ -71,19 +71,7 @@ def sweep_expired(conn: Connection) -> dict[str, int]:
         counts["appointments"] += 1
 
     revoked = conn.execute(
-        text(
-            """UPDATE account_activation_tokens t
-               SET revoked_at = now(), revocation_reason = 'approval_expired'
-               FROM users u
-               WHERE u.user_id = t.user_id AND u.status = 'pending_activation'
-                 AND t.consumed_at IS NULL AND t.revoked_at IS NULL
-                 AND NOT EXISTS (
-                     SELECT 1 FROM user_contact_approvals a
-                     WHERE a.user_id = u.user_id AND a.status = 'approved'
-                       AND a.expires_at > now()
-                       AND a.requested_email_normalized = u.normalized_email)
-               RETURNING t.token_id, t.user_id"""
-        )
+        text("SELECT token_id, user_id FROM webdesk_guard.fn_revoke_expired_activation_tokens()")
     ).all()
     for token_id, user_id in revoked:
         record_event(

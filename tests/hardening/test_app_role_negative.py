@@ -112,7 +112,6 @@ def _staff_with_source(
     return staff, result.source_id
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n1_pending_contact_cannot_be_activated_by_a_direct_update(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -124,7 +123,6 @@ def test_n1_pending_contact_cannot_be_activated_by_a_direct_update(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n2_approved_pending_activation_cannot_become_active_without_a_consumed_token(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -136,7 +134,6 @@ def test_n2_approved_pending_activation_cannot_become_active_without_a_consumed_
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n3_a_disabled_account_cannot_be_reactivated(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -150,7 +147,6 @@ def test_n3_a_disabled_account_cannot_be_reactivated(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n4_an_analyst_grant_cannot_be_rewritten_into_an_administrator_grant(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -173,7 +169,6 @@ def test_n4_an_analyst_grant_cannot_be_rewritten_into_an_administrator_grant(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n7_an_approval_expiry_cannot_be_extended_after_decision(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -191,7 +186,6 @@ def test_n7_an_approval_expiry_cannot_be_extended_after_decision(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n8_an_approver_cannot_be_rewritten_after_approval(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -214,7 +208,6 @@ def test_n8_an_approver_cannot_be_rewritten_after_approval(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n9_a_contact_revision_cannot_be_bumped_without_an_approved_change(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -248,7 +241,6 @@ def test_n11_source_classification_cannot_be_lowered_through_a_session_variable(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n12_quarantined_content_cannot_be_marked_clean(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -311,7 +303,6 @@ def test_n15_the_install_ceremony_kind_cannot_be_rewritten(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n16_the_system_project_create_principal_cannot_be_inserted_for_an_unrelated_user(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -406,7 +397,6 @@ def test_n6_a_consumed_appointment_cannot_be_reused(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n10_an_access_grant_cannot_be_moved_to_another_user(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -428,7 +418,6 @@ def test_n10_an_access_grant_cannot_be_moved_to_another_user(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n10_a_restricted_content_grant_cannot_be_moved_to_another_user(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -460,7 +449,6 @@ def test_n10_a_restricted_content_grant_cannot_be_moved_to_another_user(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n13_a_segment_cannot_be_inserted_for_a_quarantined_version(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
@@ -514,7 +502,6 @@ def test_n13_a_segment_cannot_be_inserted_for_a_quarantined_version(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n14_a_run_snapshot_cannot_reference_another_project(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -524,9 +511,7 @@ def test_n14_a_run_snapshot_cannot_reference_another_project(
         conn, world["admin"], name="N14A", data_classification="internal"
     )
     projects.add_member(conn, world["admin"], project_a, analyst)
-    run = start_run(
-        conn, analyst, project_a, expected_project_revision=_revision(conn, project_a)
-    )
+    run = start_run(conn, analyst, project_a, expected_project_revision=_revision(conn, project_a))
     project_b = projects.create_project(
         conn, world["admin"], name="N14B", data_classification="internal"
     )
@@ -568,7 +553,6 @@ def test_n14_a_run_snapshot_cannot_reference_another_project(
     )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=X1)
 def test_n17_an_activated_user_cannot_be_withdrawn_or_disabled(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
@@ -582,6 +566,131 @@ def test_n17_an_activated_user_cannot_be_withdrawn_or_disabled(
         conn,
         [("UPDATE users SET status = 'disabled' WHERE user_id = :u", {"u": staff})],
         ("SELECT status FROM users WHERE user_id = :u", {"u": staff}),
+    )
+
+
+def test_n20_an_account_cannot_be_inserted_directly_as_active(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """F-NEW-1: an INSERT that starts an account as active bypasses approval and activation."""
+    email = _email()
+    _refused(
+        conn,
+        [
+            (
+                "INSERT INTO users (display_name, email, normalized_email, status) "
+                "VALUES ('n20', :e, :e, 'active')",
+                {"e": email},
+            )
+        ],
+        ("SELECT count(*) FROM users WHERE normalized_email = :e", {"e": email}),
+    )
+
+
+def test_n21_activation_tokens_cannot_be_inserted_or_consumed_directly(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """F-NEW-2: token rows are written and consumed only through the guard-owner functions."""
+    user = new_pending_contact(conn, world["admin"])
+    _refused(
+        conn,
+        [
+            (
+                "INSERT INTO account_activation_tokens (user_id, purpose, token_hash, "
+                "contact_revision, contact_destination_ref, expires_at, delivery_status, "
+                "issued_by_actor_id) VALUES (:u, 'activate', :h, 1, 'ref', "
+                "now() + interval '30 minutes', 'sent', :u)",
+                {"u": user, "h": "a" * 64},
+            )
+        ],
+        (
+            "SELECT count(*) FROM account_activation_tokens WHERE user_id = :u",
+            {"u": user},
+        ),
+    )
+
+
+def test_n5_a_revoked_role_assignment_cannot_be_reactivated(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    """N5: revocation is a service action; a revoked assignment cannot be reactivated."""
+    from webdesk.rbac.revoke import revoke_role
+
+    staff = make_active_user(app_engine, world)
+    assignment = assign_role(conn, world["admin"], staff, Role.ANALYST)
+    revoke_role(conn, world["admin"], assignment)
+    _refused(
+        conn,
+        [
+            (
+                "UPDATE role_assignments SET revoked_at = NULL WHERE assignment_id = :a",
+                {"a": assignment},
+            )
+        ],
+        (
+            "SELECT revoked_at IS NOT NULL FROM role_assignments WHERE assignment_id = :a",
+            {"a": assignment},
+        ),
+    )
+
+
+def test_n22_identity_columns_are_not_updatable_by_the_application_role(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    """H-01: a column that no application flow changes is not granted to webdesk_app."""
+    staff = make_active_user(app_engine, world)
+    _refused(
+        conn,
+        [("UPDATE users SET display_name = 'renamed' WHERE user_id = :u", {"u": staff})],
+        ("SELECT display_name FROM users WHERE user_id = :u", {"u": staff}),
+    )
+
+
+def test_n23_approval_request_fields_are_not_updatable_by_the_application_role(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """H-01: the requested contact is written at request time and never by a column UPDATE."""
+    user = new_pending_contact(conn, world["admin"])
+    approval = _scalar(
+        conn,
+        ("SELECT approval_id::text FROM user_contact_approvals WHERE user_id = :u", {"u": user}),
+    )
+    _refused(
+        conn,
+        [
+            (
+                "UPDATE user_contact_approvals SET requested_email_normalized = 'x@y.test' "
+                "WHERE approval_id = :a",
+                {"a": approval},
+            )
+        ],
+        (
+            "SELECT requested_email_normalized FROM user_contact_approvals WHERE approval_id = :a",
+            {"a": approval},
+        ),
+    )
+
+
+def test_n24_idempotency_records_cannot_be_updated_by_the_application_role(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """H-01: the idempotency table has no application UPDATE, so a stored result is immutable."""
+    _refused(
+        conn,
+        [("UPDATE idempotency_keys SET request_hash = 'forged'", {})],
+        ("SELECT count(*) FROM idempotency_keys WHERE request_hash = 'forged'", {}),
+    )
+
+
+def test_n25_an_ingested_source_identity_is_not_updatable_by_the_application_role(
+    conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
+) -> None:
+    """H-01: the title and identity of an ingested source are not granted to webdesk_app."""
+    _staff, source = _staff_with_source(conn, world, app_engine, "N25")
+    _refused(
+        conn,
+        [("UPDATE sources SET title = 'renamed' WHERE source_id = :s", {"s": source})],
+        ("SELECT title FROM sources WHERE source_id = :s", {"s": source}),
     )
 
 

@@ -89,32 +89,15 @@ def create_project(
         raise ProjectServiceError(422, "data_classification_invalid")
     _authorized(conn, actor, Permission.PROJECT_CREATE, "project.create.denied")
 
-    with conn.begin_nested():
-        project = uuid.UUID(
-            str(
-                conn.execute(
-                    text(
-                        """INSERT INTO projects (name, client_reference, data_classification,
-                               created_by_user_id)
-                           VALUES (:name, :ref, :dc, :actor)
-                           RETURNING project_id"""
-                    ),
-                    {
-                        "name": name.strip(),
-                        "ref": client_reference,
-                        "dc": data_classification,
-                        "actor": actor,
-                    },
-                ).scalar_one()
-            )
+    # Project and creator membership are created together by the guard-owner function (H-07).
+    project = uuid.UUID(
+        str(
+            conn.execute(
+                text("SELECT webdesk_guard.fn_create_project(:a, :n, :dc, :ref)"),
+                {"a": actor, "n": name.strip(), "dc": data_classification, "ref": client_reference},
+            ).scalar_one()
         )
-        conn.execute(
-            text(
-                """INSERT INTO project_memberships (project_id, user_id, assigned_by_system)
-                   VALUES (:p, :u, 'system:project_create')"""
-            ),
-            {"p": project, "u": actor},
-        )
+    )
     record_event(
         conn,
         actor_type="human",

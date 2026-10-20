@@ -131,10 +131,15 @@ def apply_recovery(
     *,
     operator_id: str,
     clock: Clock,
+    activation_window: timedelta = ACTIVATION_WINDOW,
 ) -> RecoveryResult:
-    """Run the recovery ceremony on ``conn``. The caller commits or rolls back."""
+    """Run the recovery ceremony on ``conn``. The caller commits or rolls back.
+
+    ``activation_window`` is the appointment deadline. Production passes nothing and gets the
+    approved 24-hour window. Only tests pass another value (GD-003, governance register).
+    """
     now = clock.now()
-    deadline = now + ACTIVATION_WINDOW
+    deadline = now + activation_window
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         conn.execute(text("SELECT pg_advisory_xact_lock(727272)"))

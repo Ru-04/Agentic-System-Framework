@@ -59,6 +59,7 @@ class OutboxWorker:
         owner: str,
         dead_letter_threshold: int | None,
         contact_box: ContactBox | None,
+        lease_seconds: int = LEASE_SECONDS,
     ) -> None:
         if dead_letter_threshold is None or dead_letter_threshold < 1:
             raise ConfigurationError("WEBDESK_OUTBOX_DEAD_LETTER_THRESHOLD is not configured")
@@ -68,6 +69,9 @@ class OutboxWorker:
         self._transport = transport
         self._owner = owner
         self._threshold = dead_letter_threshold
+        if lease_seconds < 1:
+            raise ConfigurationError("the outbox lease must be at least one second")
+        self._lease = f"{lease_seconds} seconds"
         self._box = contact_box
 
     def claim(self, limit: int = 10) -> list[Claimed]:
@@ -88,7 +92,7 @@ class OutboxWorker:
                            FOR UPDATE SKIP LOCKED)
                        RETURNING notice_id, user_id, attempt_count"""
                 ),
-                {"owner": self._owner, "n": limit, "lease": f"{LEASE_SECONDS} seconds"},
+                {"owner": self._owner, "n": limit, "lease": self._lease},
             ).all()
         return [Claimed(uuid.UUID(str(r[0])), uuid.UUID(str(r[1])), int(r[2])) for r in rows]
 
@@ -101,7 +105,7 @@ class OutboxWorker:
                        SET lease_expires_at = now() + CAST(:lease AS interval)
                        WHERE notice_id = :n AND status = 'leased' AND lease_owner = :owner"""
                 ),
-                {"n": notice_id, "owner": self._owner, "lease": f"{LEASE_SECONDS} seconds"},
+                {"n": notice_id, "owner": self._owner, "lease": self._lease},
             )
             return result.rowcount == 1
 

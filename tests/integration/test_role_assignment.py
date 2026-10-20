@@ -9,15 +9,16 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
+from tests.support.people import install_administrators, new_active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
-from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
+from webdesk.ceremony.recovery import RecoveryRequest, apply_recovery
 from webdesk.rbac.assign import RoleServiceError, assign_role
 from webdesk.rbac.matrix import Role
 
@@ -67,32 +68,30 @@ def _install(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     return result.user_ids[0], result.user_ids[1], result.approval_ids[1]
 
 
-def _solo_admin(conn: Connection) -> uuid.UUID:
-    """One active Administrator. The second install contact's appointment is left expired."""
-    first, _second, second_approval = _install(conn)
+def _solo_admin_and_staff(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
+    """One active Administrator and one active non-Administrator, both activated via tokens.
+
+    The second install contact is activated but never appointed, so it is staff.
+    """
+    first, second, _appointment = _install(conn)
     activate_user(conn, first)
-    conn.execute(
-        text(
-            "UPDATE user_contact_approvals SET expires_at = now() - interval '1 minute' "
-            "WHERE approval_id = :a"
-        ),
-        {"a": second_approval},
-    )
+    activate_user(conn, second)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return first
+    return first, second
 
 
-def _staff(conn: Connection) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('staff', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+def _two_admins_and_staff(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    """Two Administrators (second appointed with its install appointment) and one approved staff."""
+    first, second = install_administrators(conn)
+    staff = new_active_user(conn, first, second)
+    return first, second, staff
+
+
+class _PastClock:
+    """An injected clock two days in the past: the ceremony records an expired deadline."""
+
+    def now(self) -> datetime:
+        return datetime.now(UTC) - timedelta(days=2)
 
 
 def _email_of(conn: Connection, user: uuid.UUID) -> str:
@@ -104,7 +103,9 @@ def _email_of(conn: Connection, user: uuid.UUID) -> str:
     return str(value)
 
 
-def _recovery_appointment(conn: Connection, target: uuid.UUID) -> uuid.UUID:
+def _recovery_appointment(
+    conn: Connection, target: uuid.UUID, clock: object | None = None
+) -> uuid.UUID:
     result = apply_recovery(
         conn,
         RecoveryRequest(
@@ -116,15 +117,14 @@ def _recovery_appointment(conn: Connection, target: uuid.UUID) -> uuid.UUID:
             authorization_digest="e" * 64,
         ),
         operator_id="op-recover",
-        clock=SystemClock(),
+        clock=clock if clock is not None else SystemClock(),
     )
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     return result.approval_id
 
 
 def test_administrator_assigns_a_role_and_the_grant_is_recorded(conn: Connection) -> None:
-    admin = _solo_admin(conn)
-    staff = _staff(conn)
+    admin, staff = _solo_admin_and_staff(conn)
     assignment = assign_role(conn, admin, staff, Role.ANALYST)
     assert assignment is not None
     count = conn.execute(
@@ -135,7 +135,7 @@ def test_administrator_assigns_a_role_and_the_grant_is_recorded(conn: Connection
 
 
 def test_self_assignment_is_refused_and_audited(conn: Connection) -> None:
-    admin = _solo_admin(conn)
+    admin, _staff_member = _solo_admin_and_staff(conn)
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, admin, admin, Role.ANALYST)
     assert (exc.value.status, exc.value.reason) == (403, "self_assignment")
@@ -149,160 +149,15 @@ def test_self_assignment_is_refused_and_audited(conn: Connection) -> None:
 
 
 def test_non_administrator_cannot_assign_roles(conn: Connection) -> None:
-    _solo_admin(conn)
-    staff = _staff(conn)
-    other = _staff(conn)
+    first, second, staff = _two_admins_and_staff(conn)
+    other = new_active_user(conn, first, second, "Other")
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, staff, other, Role.ANALYST)
     assert exc.value.status == 403
 
 
 def test_below_two_an_administrator_grant_needs_an_appointment(conn: Connection) -> None:
-    admin = _solo_admin(conn)
-    staff = _staff(conn)
+    admin, staff = _solo_admin_and_staff(conn)
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, admin, staff, Role.ADMINISTRATOR)
     assert (exc.value.status, exc.value.reason) == (409, "appointment_required")
-
-
-def test_recovery_appointment_lets_the_survivor_grant_administrator_once(conn: Connection) -> None:
-    admin = _solo_admin(conn)
-    staff = _staff(conn)
-    approval = _recovery_appointment(conn, staff)
-    assign_role(conn, admin, staff, Role.ADMINISTRATOR, appointment_approval_id=approval)
-
-    consumed = conn.execute(
-        text(
-            """SELECT appointment_consumed_at IS NOT NULL FROM user_contact_approvals
-               WHERE approval_id = :a"""
-        ),
-        {"a": approval},
-    ).scalar_one()
-    assert consumed is True
-
-    other = _staff(conn)
-    with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, admin, other, Role.ADMINISTRATOR, appointment_approval_id=approval)
-    assert exc.value.reason == "appointment_consumed_or_expired"
-
-
-def test_expired_appointment_cannot_be_used(conn: Connection) -> None:
-    admin = _solo_admin(conn)
-    staff = _staff(conn)
-    approval = _recovery_appointment(conn, staff)
-    conn.execute(text("RESET ROLE"))
-    conn.execute(
-        text(
-            "UPDATE user_contact_approvals SET expires_at = now() - interval '1 minute' "
-            "WHERE approval_id = :a"
-        ),
-        {"a": approval},
-    )
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, admin, staff, Role.ADMINISTRATOR, appointment_approval_id=approval)
-    assert exc.value.reason == "appointment_consumed_or_expired"
-
-
-def test_recovery_refuses_zero_active_administrators_and_offers_no_in_app_path(
-    conn: Connection,
-) -> None:
-    first, _second, _approval = _install(conn)  # first contact is pending, nobody is active
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    staff = _staff(conn)
-    with pytest.raises(RecoveryError) as exc:
-        apply_recovery(
-            conn,
-            RecoveryRequest(
-                request_type="appointment",
-                email=_email_of(conn, staff),
-                display_name="",
-                owner_approval_ref="OWNER",
-                owner_identity_ref="owner:test",
-                authorization_digest="f" * 64,
-            ),
-            operator_id="op",
-            clock=SystemClock(),
-        )
-    assert exc.value.reason == "zero_active_administrators"
-    assert first is not None
-
-
-def test_recovery_is_refused_when_two_administrators_are_effective(conn: Connection) -> None:
-    first, second, _approval = _install(conn)
-    conn.execute(text("RESET ROLE"))
-    activate_user(conn, first)
-    activate_user(conn, second)
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
-                   appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
-        {"a": first, "b": second, "approval": _approval},
-    )
-    staff = _staff(conn)
-    with pytest.raises(RecoveryError) as exc:
-        apply_recovery(
-            conn,
-            RecoveryRequest(
-                request_type="appointment",
-                email=_email_of(conn, staff),
-                display_name="",
-                owner_approval_ref="OWNER",
-                owner_identity_ref="owner:test",
-                authorization_digest="g" * 64,
-            ),
-            operator_id="op",
-            clock=SystemClock(),
-        )
-    assert exc.value.reason == "coverage_sufficient"
-
-
-def test_second_recovery_is_refused_while_a_replacement_is_reserved(conn: Connection) -> None:
-    _solo_admin(conn)
-    first_staff = _staff(conn)
-    _recovery_appointment(conn, first_staff)
-    second_staff = _staff(conn)
-    with pytest.raises(RecoveryError) as exc:
-        apply_recovery(
-            conn,
-            RecoveryRequest(
-                request_type="appointment",
-                email=_email_of(conn, second_staff),
-                display_name="",
-                owner_approval_ref="OWNER",
-                owner_identity_ref="owner:test",
-                authorization_digest="h" * 64,
-            ),
-            operator_id="op",
-            clock=SystemClock(),
-        )
-    assert exc.value.reason == "replacement_reserved"
-
-
-def test_replacement_recovery_creates_a_pending_activation_contact_with_an_appointment(
-    conn: Connection,
-) -> None:
-    admin = _solo_admin(conn)
-    new_email = _email()
-    result = apply_recovery(
-        conn,
-        RecoveryRequest(
-            request_type="replacement",
-            email=new_email,
-            display_name="Replacement",
-            owner_approval_ref="OWNER",
-            owner_identity_ref="owner:test",
-            authorization_digest="i" * 64,
-        ),
-        operator_id="op",
-        clock=SystemClock(),
-    )
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    status = conn.execute(
-        text("SELECT status FROM users WHERE user_id = :u"), {"u": result.user_id}
-    ).scalar_one()
-    assert status == "pending_activation"
-    assert admin is not None

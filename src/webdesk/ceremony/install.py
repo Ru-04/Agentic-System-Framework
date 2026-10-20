@@ -165,10 +165,15 @@ def apply_install(
     operator_id: str,
     verifier_id: str,
     clock: Clock,
+    activation_window: timedelta = ACTIVATION_WINDOW,
 ) -> InstallResult:
-    """Run the installation transaction on ``conn``. The caller commits or rolls back."""
+    """Run the installation transaction on ``conn``. The caller commits or rolls back.
+
+    ``activation_window`` is the approval deadline. Production passes nothing and gets the approved
+    24-hour window. Only tests pass a different value (GD-003 in the governance decision register).
+    """
     now = clock.now()
-    deadline = now + ACTIVATION_WINDOW
+    deadline = now + activation_window
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         conn.execute(text("SELECT pg_advisory_xact_lock(727272)"))

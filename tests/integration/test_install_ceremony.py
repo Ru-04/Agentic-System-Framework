@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.people import reserve_contact_fixture
 from webdesk.ceremony.install import InstallationError, PreparedInstall, apply_install
 
 pytestmark = pytest.mark.integration
@@ -155,18 +156,9 @@ def test_second_install_is_refused_once_closed(conn: Connection) -> None:
 
 
 def test_reserved_contact_refuses_the_whole_install(conn: Connection) -> None:
+    """A contact reserved before installation refuses the whole installation (GD-003)."""
     taken, free = _fresh_emails()
-    owner_user = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('holder', :e, :e, 'disabled') RETURNING user_id"""
-        ),
-        {"e": taken},
-    ).scalar_one()
-    conn.execute(
-        text("INSERT INTO contact_reservations (normalized_email, user_id) VALUES (:e, :u)"),
-        {"e": taken, "u": owner_user},
-    )
+    reserve_contact_fixture(conn, taken)
     with pytest.raises(InstallationError) as exc:
         apply_install(
             conn,

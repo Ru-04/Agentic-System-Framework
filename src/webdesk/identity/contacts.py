@@ -399,11 +399,7 @@ def approve_change(
                 {"u": user_id, "old": old_email, "a": approval_id},
             )
             conn.execute(
-                text(
-                    """UPDATE account_activation_tokens
-                       SET revoked_at = now(), revocation_reason = 'contact_change'
-                       WHERE user_id = :u AND consumed_at IS NULL AND revoked_at IS NULL"""
-                ),
+                text("SELECT webdesk_guard.fn_revoke_tokens(:u, 'contact_change')"),
                 {"u": user_id},
             )
             conn.execute(

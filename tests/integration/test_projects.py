@@ -12,10 +12,11 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from tests.support.activation import activate_user
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activate_user
+from tests.support.people import active_user
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.projects import service as projects
 from webdesk.projects.service import ProjectServiceError
@@ -81,16 +82,8 @@ def _two_admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
 
 
 def _active_user(conn: Connection) -> uuid.UUID:
-    conn.execute(text("RESET ROLE"))
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('staff', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": _email()},
-    ).scalar_one()
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "active_user")
 
 
 def _analyst(conn: Connection, admin: uuid.UUID) -> uuid.UUID:

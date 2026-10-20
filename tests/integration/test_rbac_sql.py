@@ -9,11 +9,14 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.people import active_user, administrators_for
+from webdesk.projects.service import add_member, create_project, grant_restricted, revoke_member
 from webdesk.rbac.engine import ResourceRef
 from webdesk.rbac.sql_store import SqlAuthorizationStore
 
@@ -37,25 +40,17 @@ def conn() -> Iterator[Connection]:
 
 
 def _user(conn: Connection) -> uuid.UUID:
-    value = conn.execute(
-        text(
-            """INSERT INTO users (display_name, email, normalized_email, status)
-               VALUES ('rbac', :e, :e, 'active') RETURNING user_id"""
-        ),
-        {"e": f"{uuid.uuid4().hex}@wds-test.example"},
-    ).scalar_one()
-    return uuid.UUID(str(value))
+    """An active staff account built through the services."""
+    return active_user(conn, "user")
 
 
 def _project(conn: Connection, creator: uuid.UUID) -> uuid.UUID:
-    value = conn.execute(
-        text(
-            """INSERT INTO projects (name, data_classification, created_by_user_id)
-               VALUES ('rbac project', 'confidential_client', :c) RETURNING project_id"""
-        ),
-        {"c": creator},
-    ).scalar_one()
-    return uuid.UUID(str(value))
+    """A project created through the creation service by an Administrator."""
+    admin, _second = administrators_for(conn)
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    return create_project(
+        conn, admin, name="rbac project", data_classification="confidential_client"
+    )
 
 
 def test_membership_is_read_live_and_revocation_takes_effect(conn: Connection) -> None:
@@ -64,19 +59,12 @@ def test_membership_is_read_live_and_revocation_takes_effect(conn: Connection) -
     project = _project(conn, creator)
     store = SqlAuthorizationStore(conn)
 
+    admin, _second = administrators_for(conn)
     assert not store.has_active_membership(member, project)
-    conn.execute(
-        text(
-            """INSERT INTO project_memberships (project_id, user_id, assigned_by_system)
-               VALUES (:p, :u, 'system:project_create')"""
-        ),
-        {"p": project, "u": member},
-    )
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    add_member(conn, admin, project, member)
     assert store.has_active_membership(member, project)
-    conn.execute(
-        text("UPDATE project_memberships SET revoked_at = now() WHERE project_id = :p"),
-        {"p": project},
-    )
+    revoke_member(conn, admin, project, member)
     assert not store.has_active_membership(member, project)
 
 
@@ -101,22 +89,28 @@ def test_restricted_grant_expiry_is_enforced(conn: Connection) -> None:
     creator = _user(conn)
     reader = _user(conn)
     project = _project(conn, creator)
+    admin, _second = administrators_for(conn)
     store = SqlAuthorizationStore(conn)
     resource = ResourceRef(project_id=project, data_class="restricted")
-    conn.execute(
-        text(
-            """INSERT INTO restricted_content_grants (resource_type, resource_id, user_id,
-                   granted_by, reason, expires_at)
-               VALUES ('project', :p, :u, :g, 'review', now() - interval '1 minute')"""
-        ),
-        {"p": project, "u": reader, "g": creator},
+    # An already-expired grant is created through the service and does not authorize access.
+    grant_restricted(
+        conn,
+        admin,
+        resource_type="project",
+        resource_id=project,
+        user=reader,
+        reason="review",
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
     assert not store.has_restricted_grant(reader, resource)
-    conn.execute(
-        text(
-            "UPDATE restricted_content_grants SET expires_at = now() + interval '1 day' "
-            "WHERE user_id = :u"
-        ),
-        {"u": reader},
+    # A live grant, created through the service, authorizes access.
+    grant_restricted(
+        conn,
+        admin,
+        resource_type="project",
+        resource_id=project,
+        user=reader,
+        reason="review",
+        expires_at=datetime.now(UTC) + timedelta(days=1),
     )
     assert store.has_restricted_grant(reader, resource)

@@ -96,24 +96,19 @@ def reassess_source_classification(
         if not_pending is not None:
             _deny(conn, actor, "restricted_requires_pending_versions", 409)
 
-    # The database trigger accepts the change only inside this transaction for this source.
-    conn.execute(text("SELECT set_config('webdesk.reassess', :s, true)"), {"s": str(source)})
+    # Only the guard-owner function applies the change. It re-checks the Administrator role,
+    # the justification, the revision, the project floor and the restricted rule (H-03).
     conn.execute(
         text(
-            """UPDATE sources SET access_classification = :c, revision = revision + 1
-               WHERE source_id = :s"""
+            "SELECT webdesk_guard.fn_reassess_classification(:a, :s, :c, :j, :rev)"
         ),
-        {"c": new_class, "s": source},
-    )
-    conn.execute(
-        text(
-            """UPDATE source_versions
-               SET access_classification = :c, revision = revision + 1,
-                   scan_status = CASE WHEN :c = 'restricted' AND scan_status <> 'clean'
-                                      THEN 'quarantined' ELSE scan_status END
-               WHERE source_id = :s"""
-        ),
-        {"c": new_class, "s": source},
+        {
+            "a": actor,
+            "s": source,
+            "c": new_class,
+            "j": justification.strip(),
+            "rev": expected_source_revision,
+        },
     )
     record_event(
         conn,

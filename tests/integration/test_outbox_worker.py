@@ -1,21 +1,24 @@
 """T14 integration tests: outbox leases, fencing, backoff, dead-letter, alerts, sealed addresses.
 
-Requires WEBDESK_TEST_DATABASE_URL (owner role). The worker commits its own transactions, so this
-module creates committed rows and removes them in teardown. Each test uses fresh users and notices.
+Each test runs on its own isolated committed database (tests/committed/conftest.py), with its own
+installation and administrators built through the services. The worker commits its own transactions,
+so the rows are real commits. Expired leases are produced by a one-second lease and a real wait, not
+by writing the lease columns.
 """
 
 from __future__ import annotations
 
 import base64
-import os
+import time
 import uuid
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
+from tests.support.people import committed_active_user
 from webdesk.config import ConfigurationError
 from webdesk.crypto.contact_box import ContactBox, outbox_aad
 from webdesk.delivery.transport import CaptureTransport, TransportUnavailable
@@ -23,9 +26,6 @@ from webdesk.outbox.worker import OutboxWorker, backoff_seconds
 
 pytestmark = pytest.mark.integration
 
-_URL = os.environ.get("WEBDESK_TEST_DATABASE_URL")
-if _URL is None:
-    pytest.skip("WEBDESK_TEST_DATABASE_URL is not set", allow_module_level=True)
 
 BOX = ContactBox(base64.b64encode(b"\x05" * 32).decode("ascii"))
 OLD_EMAIL = "former-contact@wds-test.example"
@@ -37,21 +37,16 @@ class _Failing:
 
 
 @pytest.fixture
-def engine() -> Iterator[Engine]:
-    eng = create_engine(_URL)
-    yield eng
-    eng.dispose()
+def engine(committed_engine: Engine) -> Engine:
+    return committed_engine
 
 
 @pytest.fixture
-def made(engine: Engine) -> Iterator[dict[str, list[uuid.UUID]]]:
-    created: dict[str, list[uuid.UUID]] = {"users": [], "notices": []}
-    yield created
-    with engine.begin() as conn:
-        for notice in created["notices"]:
-            conn.execute(text("DELETE FROM outbox_notices WHERE notice_id = :n"), {"n": notice})
-        for user in created["users"]:
-            conn.execute(text("DELETE FROM users WHERE user_id = :u"), {"u": user})
+def made(
+    committed_admins: tuple[uuid.UUID, uuid.UUID],
+) -> Iterator[dict[str, list[uuid.UUID]]]:
+    # The database is dropped after the test, so nothing needs deleting here.
+    yield {"admins": list(committed_admins), "users": [], "notices": []}
 
 
 def _notice(
@@ -61,18 +56,8 @@ def _notice(
     address: str | None = OLD_EMAIL,
     garbage: bytes | None = None,
 ) -> tuple[uuid.UUID, uuid.UUID]:
+    user = committed_active_user(engine, made["admins"][0], made["admins"][1], "outbox")
     with engine.begin() as conn:
-        user = uuid.UUID(
-            str(
-                conn.execute(
-                    text(
-                        """INSERT INTO users (display_name, email, normalized_email, status)
-                           VALUES ('outbox', :e, :e, 'active') RETURNING user_id"""
-                    ),
-                    {"e": f"{uuid.uuid4().hex}@wds-test.example"},
-                ).scalar_one()
-            )
-        )
         if garbage is not None:
             sealed: bytes | None = garbage
         elif address is not None:
@@ -107,13 +92,16 @@ def _status(engine: Engine, notice: uuid.UUID) -> tuple[str, int]:
     return str(row[0]), int(row[1])
 
 
-def _worker(engine: Engine, transport: object, owner: str, threshold: int = 5) -> OutboxWorker:
+def _worker(
+    engine: Engine, transport: object, owner: str, threshold: int = 5, lease: int = 120
+) -> OutboxWorker:
     return OutboxWorker(
         engine,
         transport,  # type: ignore[arg-type]
         owner=owner,
         dead_letter_threshold=threshold,
         contact_box=BOX,
+        lease_seconds=lease,
     )
 
 
@@ -135,16 +123,9 @@ def test_expired_lease_is_reclaimed_and_the_message_is_not_duplicated(
 ) -> None:
     notice, _ = _notice(engine, made)
     transport = CaptureTransport()
-    crashed = _worker(engine, transport, "worker-crashed")
+    crashed = _worker(engine, transport, "worker-crashed", lease=1)
     assert any(c.notice_id == notice for c in crashed.claim(limit=50))
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "UPDATE outbox_notices SET lease_expires_at = now() - interval '1 second' "
-                "WHERE notice_id = :n"
-            ),
-            {"n": notice},
-        )
+    time.sleep(1.5)  # the one-second lease expires for real
     _worker(engine, transport, "worker-b").run_once(limit=50)
     assert _status(engine, notice)[0] == "sent"
     assert len([m for m in transport.messages if m[0] == OLD_EMAIL]) == 1
@@ -154,16 +135,14 @@ def test_a_worker_whose_lease_was_reclaimed_cannot_mark_the_notice_sent(
     engine: Engine, made: dict[str, list[uuid.UUID]]
 ) -> None:
     notice, _ = _notice(engine, made)
-    stale = _worker(engine, CaptureTransport(), "worker-stale")
+    stale = _worker(engine, CaptureTransport(), "worker-stale", lease=1)
     claimed = next(c for c in stale.claim(limit=50) if c.notice_id == notice)
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "UPDATE outbox_notices SET lease_owner = 'worker-new', "
-                "lease_expires_at = now() + interval '120 seconds' WHERE notice_id = :n"
-            ),
-            {"n": notice},
-        )
+    time.sleep(1.5)  # the stale lease expires for real
+    # A second worker reclaims the expired lease through the worker's own claim.
+    assert any(
+        c.notice_id == notice
+        for c in _worker(engine, CaptureTransport(), "worker-new").claim(limit=50)
+    )
     assert stale.deliver(claimed) == "lease_lost"
     assert _status(engine, notice)[0] == "leased"
 
