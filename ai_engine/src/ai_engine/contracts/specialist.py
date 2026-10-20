@@ -8,7 +8,7 @@ approved (AGENT_REGISTRY.yaml C-05).
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
@@ -17,6 +17,7 @@ from ai_engine.contracts.common import (
     AI_REVIEW_STATE,
     CapabilityId,
     ContractModel,
+    EvidenceId,
     EvidenceStatus,
     FeasibilityStatus,
     ProjectId,
@@ -44,6 +45,35 @@ class ApproachType(StrEnum):
     AI_ML = "ai_ml"
     MANUAL_PROCESS = "manual_process"
     OTHER = "other"
+
+
+class SpecialistAssumption(ContractModel):
+    """A premise the specialist relies on, kept apart from dependencies. Never adopted."""
+
+    proposal_key: ProposalKey
+    statement: str = Field(min_length=1, max_length=500)
+    rationale: str = Field(min_length=1, max_length=500)
+    impact_if_false: str = Field(min_length=1, max_length=500)
+    owner_to_confirm: str | None = Field(default=None, max_length=120)
+    related_requirement_ids: list[RequirementId] = Field(min_length=1)
+    status: Literal["proposed"] = "proposed"
+
+
+class SpecialistConflict(ContractModel):
+    """An explicit conflict between claims, with both evidence records cited."""
+
+    proposal_key: ProposalKey
+    description: str = Field(min_length=1, max_length=500)
+    related_requirement_ids: list[RequirementId] = Field(min_length=1)
+    claim_proposal_keys: list[ProposalKey] = Field(min_length=1)
+    evidence_ids: list[EvidenceId] = Field(min_length=2)
+    status: Literal["open"] = "open"
+
+    @model_validator(mode="after")
+    def _check_distinct_evidence(self) -> Self:
+        if len(set(self.evidence_ids)) != len(self.evidence_ids):
+            raise ValueError("a conflict must cite distinct evidence records")
+        return self
 
 
 class SpecialistOutputStatus(StrEnum):
@@ -157,6 +187,8 @@ class SpecialistInvestigationResult(ContractModel):
     claims: list[Claim] = Field(default_factory=list)
     risks: list[RiskProposal] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list, max_length=50)
+    assumptions: list[SpecialistAssumption] = Field(default_factory=list)
+    conflicts: list[SpecialistConflict] = Field(default_factory=list)
     clarification_questions: list[ClarificationQuestion] = Field(default_factory=list)
     evidence: list[EvidenceReference] = Field(default_factory=list)
     status: SpecialistOutputStatus
@@ -165,10 +197,42 @@ class SpecialistInvestigationResult(ContractModel):
     catalog_version: VersionStr
     review_state: str = AI_REVIEW_STATE
 
+    def _check_assumptions_and_conflicts(self) -> None:
+        """Explicit cross-references: conflicts bind claims, claims bind conflicts, all in scope."""
+        assumption_keys = [a.proposal_key for a in self.assumptions]
+        conflict_keys = [c.proposal_key for c in self.conflicts]
+        if len(set(assumption_keys)) != len(assumption_keys):
+            raise ValueError("duplicate assumption proposal keys")
+        if len(set(conflict_keys)) != len(conflict_keys):
+            raise ValueError("duplicate conflict proposal keys")
+        requirement_ids = set(self.requirement_ids)
+        for assumption in self.assumptions:
+            if not set(assumption.related_requirement_ids) <= requirement_ids:
+                raise ValueError("an assumption cites requirements outside the result")
+        claims = {c.proposal_key: c for c in self.claims if c.proposal_key}
+        for conflict in self.conflicts:
+            if not set(conflict.related_requirement_ids) <= requirement_ids:
+                raise ValueError("a conflict cites requirements outside the result")
+            for key in conflict.claim_proposal_keys:
+                claim = claims.get(key)
+                if claim is None:
+                    raise ValueError(f"conflict {conflict.proposal_key} cites unknown claim {key}")
+                if conflict.proposal_key not in claim.conflict_refs:
+                    raise ValueError(
+                        f"claim {key} does not reference conflict {conflict.proposal_key}"
+                    )
+        for claim in self.claims:
+            for ref in claim.conflict_refs:
+                if ref not in conflict_keys:
+                    raise ValueError(
+                        f"claim {claim.proposal_key} references unknown conflict {ref}"
+                    )
+
     @model_validator(mode="after")
     def _check_result(self) -> Self:
         if self.review_state != AI_REVIEW_STATE:
             raise ValueError("specialist outputs are always pending human review")
+        self._check_assumptions_and_conflicts()
         if any(c.claim_id is not None for c in self.claims) or any(
             s.solution_id is not None for s in self.candidate_solutions
         ):

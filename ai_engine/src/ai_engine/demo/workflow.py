@@ -1,9 +1,14 @@
-"""Synthetic end-to-end investigation workflow (AI-4).
+"""Synthetic end-to-end investigation workflow (AI-4, amended in AI-4.1).
 
-Chain: synthetic brief -> Requirement Analysis Agent -> mock ID boundary -> explicit selection ->
-AI-2 task builder -> AI-2 execution wrapper -> Shopify Specialist -> traceable, human-review-only
-report. Nothing here writes to Foundation, calls an LLM, retrieves vendor documentation, or approves
-anything. Failures and gaps are recorded as unresolved items instead of being dropped.
+Chain: synthetic brief -> Requirement Analysis Agent -> mock ID boundary -> explicit operator
+decisions -> AI-2 task builder -> AI-2 execution wrapper -> Shopify Specialist -> traceable,
+human-review-only report. Nothing here writes to Foundation, calls an LLM, retrieves vendor
+documentation, or approves anything. Failures and gaps are recorded as unresolved items instead of
+being dropped.
+
+AI-4.1: investigation requires an explicit operator confirmation for each proposal. Keyword
+classification is no longer used to choose requirements. Rejected and omitted proposals are kept in
+the output with their reasons.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ import yaml
 from ai_engine.adapters.foundation import MockFoundationAdapter, ProjectBoundaryError
 from ai_engine.contracts.analysis import RequirementAnalysisResult, StatementKind
 from ai_engine.contracts.common import DataClass, EvidenceStatus, RequirementOrigin
-from ai_engine.contracts.evidence import Claim, PlatformContext
+from ai_engine.contracts.evidence import PlatformContext
 from ai_engine.contracts.execution import AgentExecutionResult, AgentExecutionStatus
 from ai_engine.contracts.project import ProjectContext
 from ai_engine.contracts.requirement import AtomicRequirement
@@ -45,6 +50,13 @@ from ai_engine.demo.model import (
 from ai_engine.evidence.lookup import CollectedEvidence, MockEvidenceLookup
 from ai_engine.requirement_analysis.agent import RequirementAnalysisAgent
 from ai_engine.routing.explicit import ExplicitSelection, RoutingError, build_routing_record
+from ai_engine.selection.operator import (
+    OperatorDecisionKind,
+    OperatorSelection,
+    SelectionError,
+    build_operator_selection,
+    verify_selection,
+)
 from ai_engine.shopify.agent import ShopifySpecialist
 from ai_engine.shopify.synthetic_evidence import (
     SHOPIFY_EVIDENCE_COLLECTION,
@@ -68,10 +80,10 @@ TASK_ID = "SPT-DEMO-0001"
 EXECUTION_ID = "EXEC-DEMO-0001"
 MOCK_ID_PREFIX = "REQ-MOCK"
 DEMO_TIMESTAMP = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
-SHOPIFY_PROPOSAL = "shopify_specialist"
+DEFAULT_RATIONALE = "Operator decision recorded for this demonstration run."
 SELECTION_BASIS = (
-    "demonstration default: requirements whose non-authoritative category proposal names "
-    "shopify_specialist; operator confirmation of this list is not modelled (D-OP)"
+    "explicit operator decisions (confirm or reject per proposal) recorded in operator_selection; "
+    "keyword classification is not used to choose requirements; automatic routing is disabled"
 )
 SELECTION = ExplicitSelection(
     capability_id="CAP-ECOMMERCE",
@@ -124,7 +136,12 @@ def run_demo(
     service_catalog_path: Path = SERVICE_CATALOG_PATH,
     collections: Sequence[str] = (SHOPIFY_EVIDENCE_COLLECTION,),
     agent: SpecialistAgent | None = None,
+    confirm: Sequence[str] = (),
+    reject: Sequence[str] = (),
+    operator_label: str | None = None,
+    rationale: str = DEFAULT_RATIONALE,
 ) -> DemonstrationReport:
+    """Run the demonstration. Nothing is investigated unless an operator confirms it."""
     registry = AgentRegistry.from_yaml(registry_path)
     catalog_version = load_catalog_version(service_catalog_path)
     adapter = MockFoundationAdapter.from_file(fixture_path)
@@ -134,6 +151,7 @@ def run_demo(
     analysis = RequirementAnalysisAgent(
         registry_version=registry.registry_version, catalog_version=catalog_version
     ).analyze(project, segments)
+    selection = _record_selection(analysis, confirm, reject, operator_label, rationale)
     return run_investigation(
         fixture_id=_fixture_id(fixture_path),
         project=project,
@@ -145,6 +163,27 @@ def run_demo(
         evidence_records=synthetic_shopify_evidence(project.project_id),
         allowed_collections=collections,
         boundary=boundary,
+        selection=selection,
+    )
+
+
+def _record_selection(
+    analysis: RequirementAnalysisResult,
+    confirm: Sequence[str],
+    reject: Sequence[str],
+    operator_label: str | None,
+    rationale: str,
+) -> OperatorSelection | None:
+    if not confirm and not reject:
+        return None
+    if not operator_label or not operator_label.strip():
+        raise SelectionError("an operator label is required when decisions are recorded")
+    return build_operator_selection(
+        operator_label=operator_label,
+        analysis=analysis,
+        confirm=confirm,
+        reject=reject,
+        rationale=rationale,
     )
 
 
@@ -165,9 +204,13 @@ def run_investigation(
     evidence_records: Sequence[CollectedEvidence],
     allowed_collections: Sequence[str],
     boundary: BoundaryRecord,
+    selection: OperatorSelection | None,
 ) -> DemonstrationReport:
     assigned, id_records = assign_mock_ids(analysis.requirements)
-    candidates = [r for r in assigned if SHOPIFY_PROPOSAL in r.specialist_category_ids]
+    if selection is not None:
+        verify_selection(selection, analysis)
+    confirmed = set(selection.confirmed_keys()) if selection is not None else set()
+    candidates = [r for r in assigned if r.proposal_key in confirmed]
     unresolved: list[UnresolvedItem] = []
     task: SpecialistTask | None = None
     execution: AgentExecutionResult | None = None
@@ -222,15 +265,16 @@ def run_investigation(
             output = execution.output
 
     collection_of = {item.record.evidence_id: item.collection for item in evidence_records}
-    traces = _requirement_traces(assigned, analysis, task, execution, output)
+    traces = _requirement_traces(assigned, analysis, task, execution, output, selection)
     evidence = _evidence_traces(output, collection_of)
-    unresolved.extend(_unresolved(analysis, assigned, task, execution, output))
+    unresolved.extend(_unresolved(analysis, assigned, task, execution, output, selection))
 
     return DemonstrationReport(
         demo_id=DEMO_ID,
         fixture_id=fixture_id,
         status=_status(task, execution, unresolved),
         selection_basis=SELECTION_BASIS,
+        operator_selection=selection,
         boundary=boundary,
         analysis=analysis,
         id_assignments=id_records,
@@ -267,21 +311,32 @@ def _specialist_ref(key: str) -> str:
     return f"{TASK_ID}/{key}"
 
 
+def _decision_text(selection: OperatorSelection | None, key: str) -> str:
+    decision = selection.decision_for(key) if selection is not None else None
+    if decision is OperatorDecisionKind.REJECT:
+        return "Rejected by the operator for investigation."
+    return "Not confirmed by an operator; not investigated."
+
+
 def _requirement_traces(
     assigned: Sequence[AtomicRequirement],
     analysis: RequirementAnalysisResult,
     task: SpecialistTask | None,
     execution: AgentExecutionResult | None,
     output: SpecialistInvestigationResult | None,
+    selection: OperatorSelection | None,
 ) -> list[RequirementTrace]:
     in_task = set(task.requirement_ids) if task else set()
     traces: list[RequirementTrace] = []
     for requirement in assigned:
         rid = requirement.requirement_id or ""
-        investigation = _investigation(rid in in_task, task, execution)
+        decision = selection.decision_for(requirement.proposal_key) if selection else None
+        investigation = _investigation(rid in in_task, task, execution, decision)
         options: list[str] = []
-        claims: list[Claim] = []
+        claims = []
         questions: list[str] = []
+        assumption_keys: list[str] = []
+        conflict_keys: list[str] = []
         if output is not None:
             options = [
                 _specialist_ref(s.proposal_key or "")
@@ -295,6 +350,16 @@ def _requirement_traces(
                 _specialist_ref(q.proposal_key or "")
                 for q in output.clarification_questions
                 if rid in q.related_requirement_ids
+            ]
+            assumption_keys = [
+                _specialist_ref(a.proposal_key)
+                for a in output.assumptions
+                if rid in a.related_requirement_ids
+            ]
+            conflict_keys = [
+                _specialist_ref(c.proposal_key)
+                for c in output.conflicts
+                if rid in c.related_requirement_ids
             ]
         questions += [
             _analysis_ref(q.proposal_key or "")
@@ -313,6 +378,7 @@ def _requirement_traces(
                 requirement_id=rid,
                 origin=requirement.origin.value,
                 analysis_status=requirement.status.value,
+                operator_decision=decision.value if decision is not None else None,
                 provenance=provenance,
                 source_segment_ids=[ref.segment_id for ref in requirement.source_refs],
                 investigation=investigation,
@@ -320,6 +386,8 @@ def _requirement_traces(
                 claim_keys=[_specialist_ref(c.proposal_key or "") for c in claims],
                 evidence_ids=evidence_ids,
                 question_keys=questions,
+                assumption_keys=assumption_keys,
+                conflict_keys=conflict_keys,
             )
         )
     return traces
@@ -329,8 +397,11 @@ def _investigation(
     selected: bool,
     task: SpecialistTask | None,
     execution: AgentExecutionResult | None,
+    decision: OperatorDecisionKind | None,
 ) -> Investigation:
     if not selected:
+        if decision is OperatorDecisionKind.REJECT:
+            return "rejected_by_operator"
         return "not_selected"
     if task is None:
         return "not_built"
@@ -374,6 +445,7 @@ def _unresolved(
     task: SpecialistTask | None,
     execution: AgentExecutionResult | None,
     output: SpecialistInvestigationResult | None,
+    selection: OperatorSelection | None,
 ) -> list[UnresolvedItem]:
     items: list[UnresolvedItem] = []
     for question in analysis.clarification_questions:
@@ -422,10 +494,7 @@ def _unresolved(
                 UnresolvedItem(
                     kind=UnresolvedKind.NOT_SELECTED,
                     reference=_analysis_ref(requirement.proposal_key),
-                    text=(
-                        "No explicit selection covers this requirement; "
-                        "automatic routing is disabled."
-                    ),
+                    text=_decision_text(selection, requirement.proposal_key),
                 )
             )
     if execution is not None and execution.status is not AgentExecutionStatus.SUCCEEDED:
@@ -459,15 +528,22 @@ def _specialist_unresolved(output: SpecialistInvestigationResult) -> list[Unreso
                 text=risk.description,
             )
         )
-    for claim in output.claims:
-        if claim.evidence_status is EvidenceStatus.CONFLICTING:
-            items.append(
-                UnresolvedItem(
-                    kind=UnresolvedKind.CONFLICT,
-                    reference=_specialist_ref(claim.proposal_key or ""),
-                    text=claim.claim_text,
-                )
+    for conflict in output.conflicts:
+        items.append(
+            UnresolvedItem(
+                kind=UnresolvedKind.CONFLICT,
+                reference=_specialist_ref(conflict.proposal_key),
+                text=conflict.description,
             )
+        )
+    for assumption in output.assumptions:
+        items.append(
+            UnresolvedItem(
+                kind=UnresolvedKind.ASSUMPTION,
+                reference=_specialist_ref(assumption.proposal_key),
+                text=f"{assumption.statement} (unconfirmed; owner: {assumption.owner_to_confirm})",
+            )
+        )
     for dependency in output.dependencies:
         items.append(
             UnresolvedItem(
@@ -509,6 +585,8 @@ def _provenance_counts(
         "analysis_conflicts": len(analysis.conflicts),
         "mock_identifiers_assigned": len(id_records),
         "specialist_candidate_options": len(output.candidate_solutions) if output else 0,
+        "specialist_assumptions": len(output.assumptions) if output else 0,
+        "specialist_conflicts": len(output.conflicts) if output else 0,
         "specialist_claims_unverified": sum(
             1 for c in claims if c.evidence_status is not EvidenceStatus.CONFLICTING
         ),

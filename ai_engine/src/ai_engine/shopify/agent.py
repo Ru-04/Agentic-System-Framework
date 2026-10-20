@@ -1,4 +1,4 @@
-"""Shopify Specialist Agent (AI-3).
+"""Shopify Specialist Agent (AI-3, amended in AI-4.1).
 
 The agent runs only when an operator explicitly selects it through AI-2 (automatic routing is
 disabled, C-05). It produces structured, unverified implementation options for Shopify-specific
@@ -8,6 +8,10 @@ verifies a claim, and never accepts scope.
 Keyword checks below decide whether a requirement describes Shopify-specific behaviour so the agent
 can refuse unrelated work. They are the agent's own relevance test. They do not route, and they do
 not read the requirement's specialist-category proposal.
+
+AI-4.1 changes: premises are reported as assumptions rather than dependencies; contradictions are
+explicit conflict records that cite both evidence items and link to their claims; contradiction
+groups come from lookup metadata rather than tags inside evidence text.
 """
 
 from __future__ import annotations
@@ -30,11 +34,13 @@ from ai_engine.contracts.specialist import (
     ApproachType,
     CandidateSolution,
     RiskProposal,
+    SpecialistAssumption,
+    SpecialistConflict,
     SpecialistInvestigationResult,
     SpecialistOutputStatus,
     SpecialistTask,
 )
-from ai_engine.shopify.synthetic_evidence import SHOPIFY_EVIDENCE_COLLECTION, stance_of
+from ai_engine.shopify.synthetic_evidence import SHOPIFY_EVIDENCE_COLLECTION
 from ai_engine.specialists.base import SpecialistContext, UnsupportedRequestError
 
 CAPABILITY_ID = "CAP-ECOMMERCE"
@@ -124,6 +130,8 @@ class _Builder:
         self.keys = _Keys()
         self.solutions: list[CandidateSolution] = []
         self.claims: list[Claim] = []
+        self.conflicts: list[SpecialistConflict] = []
+        self.assumptions: list[SpecialistAssumption] = []
         self.risks: list[RiskProposal] = []
         self.dependencies: list[str] = []
         self.questions: list[ClarificationQuestion] = []
@@ -143,8 +151,7 @@ class _Builder:
         for item in found:
             self.served[item.evidence_id] = item
         evidence_ids = [item.evidence_id for item in found]
-        stances = {stance_of(item) for item in found}
-        conflict = {"supports", "contradicts"} <= stances
+        conflict_ids = self._contested_ids(found)
         integration = requirement.requirement_type is RequirementType.INTEGRATION or bool(
             keywords & _INTEGRATION_KEYWORDS
         )
@@ -157,17 +164,75 @@ class _Builder:
         ]
 
         self._options(rid, phrase, keywords, integration)
-        self._claims(rid, phrase, subject, evidence_ids, conflict, integration)
-        self._risks(rid, phrase, found, conflict)
-        self.dependencies.append(
-            f"Client confirms the Shopify plan, staff permissions and API version for {rid}."
-        )
+        self._assumptions(rid, integration)
+        conflict_key = self.keys.next("CONF") if conflict_ids else None
+        hypothesis_key = self._claims(rid, phrase, subject, evidence_ids, conflict_key, integration)
+        if conflict_key is not None:
+            self.conflicts.append(
+                SpecialistConflict(
+                    proposal_key=conflict_key,
+                    description=(
+                        f"Synthetic records in one contradiction group disagree on availability "
+                        f"for {phrase}; both records are cited."
+                    ),
+                    related_requirement_ids=[rid],
+                    claim_proposal_keys=[hypothesis_key],
+                    evidence_ids=conflict_ids,
+                )
+            )
+        self._risks(rid, phrase, found, conflict_key is not None)
         if integration:
             self.dependencies.append(
                 f"External system access for {rid} is not provided; "
                 "no credentials are used in this prototype."
             )
-        self._questions(rid, phrase, keywords, integration, conflict, bool(found))
+        self._questions(rid, phrase, keywords, integration, conflict_key is not None, bool(found))
+
+    def _contested_ids(self, found: list[EvidenceReference]) -> list[str]:
+        """Evidence IDs from the first contradiction group that has two or more served records."""
+        groups: dict[str, list[str]] = {}
+        for item in found:
+            group = self.context.evidence.conflict_group_of(item.evidence_id)
+            if group is not None:
+                groups.setdefault(group, []).append(item.evidence_id)
+        for ids in groups.values():
+            if len(ids) >= 2:
+                return sorted(ids)
+        return []
+
+    def _assumptions(self, rid: str, integration: bool) -> None:
+        self.assumptions.append(
+            SpecialistAssumption(
+                proposal_key=self.keys.next("SASM"),
+                statement=(
+                    f"The Shopify plan, staff permissions and API version are sufficient for {rid}."
+                ),
+                rationale=(
+                    "Native and app options only apply on a plan that supports them; "
+                    "not verified."
+                ),
+                impact_if_false="Options may be unavailable; scope and approach would change.",
+                owner_to_confirm="client",
+                related_requirement_ids=[rid],
+            )
+        )
+        if integration:
+            self.assumptions.append(
+                SpecialistAssumption(
+                    proposal_key=self.keys.next("SASM"),
+                    statement=(
+                        f"The external system named in {rid} exposes an API for the data "
+                        "exchanged."
+                    ),
+                    rationale=(
+                        "Integration feasibility depends on an interface that has not been "
+                        "verified."
+                    ),
+                    impact_if_false="The integration approach and estimate would change.",
+                    owner_to_confirm="client",
+                    related_requirement_ids=[rid],
+                )
+            )
 
     def _options(self, rid: str, phrase: str, keywords: set[str], integration: bool) -> None:
         shapes: list[tuple[ApproachType, str]] = [
@@ -204,28 +269,33 @@ class _Builder:
         phrase: str,
         subject: list[SubjectRef],
         evidence_ids: list[str],
-        conflict: bool,
+        conflict_key: str | None,
         integration: bool,
-    ) -> None:
-        status = EvidenceStatus.CONFLICTING if conflict else EvidenceStatus.UNVERIFIED
+    ) -> str:
+        """Append the claims for one requirement and return the hypothesis claim's key."""
+        conflict = conflict_key is not None
+        hypothesis_key = self.keys.next("CLM")
         self.claims.append(
             Claim(
-                proposal_key=self.keys.next("CLM"),
+                proposal_key=hypothesis_key,
                 project_id=self.task.project_id,
                 claim_text=(
                     f"Native Shopify functionality may cover {phrase}; "
                     "this is an unverified hypothesis."
                 ),
                 claim_type=ClaimType.PLATFORM_CAPABILITY,
-                evidence_status=status,
-                feasibility_status=FeasibilityStatus.CONFLICTING
+                evidence_status=EvidenceStatus.CONFLICTING
                 if conflict
-                else FeasibilityStatus.UNKNOWN,
+                else EvidenceStatus.UNVERIFIED,
+                feasibility_status=(
+                    FeasibilityStatus.CONFLICTING if conflict else FeasibilityStatus.UNKNOWN
+                ),
                 subject_refs=subject,
                 evidence_ids=evidence_ids,
                 platform_context=self.task.platform_context,
+                conflict_refs=[conflict_key] if conflict_key is not None else [],
                 verification_task=(
-                    "Resolve the opposing synthetic placeholders, then confirm against official "
+                    "Resolve the opposing synthetic records, then confirm against official "
                     "documentation."
                     if conflict
                     else "Confirm against official Shopify documentation (not accessed in this "
@@ -262,11 +332,11 @@ class _Builder:
                     platform_context=self.task.platform_context,
                     verification_task=(
                         "Check current official Admin API documentation, rate limits and webhook "
-                        "behaviour "
-                        "(not accessed in this prototype)."
+                        "behaviour (not accessed in this prototype)."
                     ),
                 )
             )
+        return hypothesis_key
 
     def _risks(self, rid: str, phrase: str, found: list[EvidenceReference], conflict: bool) -> None:
         risks = [
@@ -325,7 +395,7 @@ class _Builder:
             asks.append(
                 (
                     f"Which availability of {phrase} is correct for this store?",
-                    "Synthetic evidence gives opposing placeholders.",
+                    "Synthetic records in one contradiction group disagree.",
                 )
             )
         if not has_evidence:
@@ -364,6 +434,8 @@ class _Builder:
             claims=self.claims,
             risks=self.risks,
             dependencies=self.dependencies,
+            assumptions=self.assumptions,
+            conflicts=self.conflicts,
             clarification_questions=self.questions,
             evidence=list(cited.values()),
             status=status,

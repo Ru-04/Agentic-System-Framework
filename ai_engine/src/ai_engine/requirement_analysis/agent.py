@@ -114,6 +114,15 @@ class _Candidate:
     timing: str | None
     specialist_ids: tuple[str, ...]
     questions: list[ClarificationQuestion] = field(default_factory=list)
+    in_conflict: bool = False
+
+
+def _status_for(candidate: _Candidate, needs_clarification: bool) -> RequirementStatus:
+    if candidate.in_conflict:
+        return RequirementStatus.BLOCKED
+    if needs_clarification:
+        return RequirementStatus.NEEDS_CLARIFICATION
+    return RequirementStatus.CAPTURED
 
 
 class _KeySequence:
@@ -187,6 +196,9 @@ class RequirementAnalysisAgent:
         *,
         run_id: str | None = None,
     ) -> RequirementAnalysisResult:
+        if project.status != "active":
+            # Archived projects reject new analysis runs (REQUIREMENT_SCHEMA 4.1; AI-4.1 item 12).
+            raise ValueError(f"project is {project.status}; analysis runs are denied")
         for segment in segments:
             if segment.project_id != project.project_id:
                 raise ValueError(
@@ -251,6 +263,7 @@ class RequirementAnalysisAgent:
         requirements: list[AtomicRequirement] = []
         questions: list[ClarificationQuestion] = []
         for candidate in candidates:
+            candidate.in_conflict = candidate.key in conflicting_keys
             self._add_questions(candidate, project, keys, questions, conflicting_keys)
             requirements.append(self._requirement(candidate, project))
             if candidate.requirement_type is RequirementType.INTEGRATION:
@@ -423,10 +436,9 @@ class RequirementAnalysisAgent:
             original_wording=candidate.sentence.text,
             normalized_statement=_normalize(candidate.sentence.text),
             requirement_type=candidate.requirement_type,
-            # Deterministic extraction only captures; semantic normalization is not performed.
-            status=RequirementStatus.NEEDS_CLARIFICATION
-            if needs_clarification
-            else RequirementStatus.CAPTURED,
+            # Deterministic extraction only captures. Unresolved material conflicts are blocked
+            # (GOVERNANCE 6); clarification need stays visible as attached question keys.
+            status=_status_for(candidate, needs_clarification),
             confidence=ConfidenceBand.LOW if needs_clarification else ConfidenceBand.MEDIUM,
             source_refs=[_reference(candidate.sentence)],
             specialist_category_ids=list(candidate.specialist_ids),

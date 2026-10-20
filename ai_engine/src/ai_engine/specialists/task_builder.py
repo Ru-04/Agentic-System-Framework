@@ -48,6 +48,8 @@ def build_specialist_task(
     catalog_version: str,
     created_at: datetime,
 ) -> SpecialistTask:
+    if project.status != "active":
+        raise TaskBuildError(f"project is {project.status}; specialist tasks are denied")
     if not requirements:
         raise TaskBuildError("a specialist task needs at least one requirement")
     if len(requirements) > MAX_REQUIREMENTS_PER_TASK:

@@ -74,5 +74,19 @@ def validate_specialist_result(
         elif item.project_id != task.project_id:
             errors.append(f"evidence {item.evidence_id} belongs to another project")
 
+    for assumption in result.assumptions:
+        if not set(assumption.related_requirement_ids) <= task_requirements:
+            errors.append(
+                f"assumption {assumption.proposal_key} cites requirements outside the task"
+            )
+    for conflict in result.conflicts:
+        if not set(conflict.related_requirement_ids) <= task_requirements:
+            errors.append(f"conflict {conflict.proposal_key} cites requirements outside the task")
+        for evidence_id in conflict.evidence_ids:
+            if evidence_id not in served_evidence:
+                errors.append(
+                    f"conflict {conflict.proposal_key} cites evidence not served to this run"
+                )
+
     errors.extend(unsupported_claim_reasons(result.claims, served_evidence))
     return errors

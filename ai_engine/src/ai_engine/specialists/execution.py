@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import datetime
 
+from pydantic import ValidationError
+
 from ai_engine.contracts.evidence import EvidenceReference
 from ai_engine.contracts.execution import AgentExecutionResult, AgentExecutionStatus
 from ai_engine.contracts.requirement import AtomicRequirement
@@ -50,6 +52,9 @@ class _RecordingLookup:
         for record in records:
             self.served[record.evidence_id] = record
         return records
+
+    def conflict_group_of(self, evidence_id: str) -> str | None:
+        return self._inner.conflict_group_of(evidence_id)
 
 
 def _result(
@@ -107,6 +112,15 @@ def run_specialist(
             finished_at=clock(),
         )
 
+    if context.project.status != "active":
+        # No approved Foundation contract permits specialist execution on an archived project
+        # (issue AI-4.1 item 12). Denial is recorded, not raised.
+        return finish(
+            AgentExecutionStatus.PERMISSION_DENIED,
+            None,
+            [f"project is {context.project.status}; specialist execution is denied"],
+        )
+
     binding_errors: list[str] = []
     if (
         agent.capability_id != task.capability_id
@@ -146,6 +160,14 @@ def run_specialist(
         return finish(AgentExecutionStatus.PERMISSION_DENIED, None, [str(exc)])
     except TransientSpecialistError as exc:
         return finish(AgentExecutionStatus.FAILED_TRANSIENT, None, [str(exc)])
+    except ValidationError as exc:
+        # An agent that builds an invalid record is a validation failure, not a crash (AI-4.1).
+        first = exc.errors()[0]["msg"]
+        return finish(
+            AgentExecutionStatus.FAILED_VALIDATION,
+            None,
+            [f"agent output failed contract validation: {first}"],
+        )
 
     if output.status is SpecialistOutputStatus.UNSUPPORTED_REQUEST:
         return finish(

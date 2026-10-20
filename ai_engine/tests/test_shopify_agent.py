@@ -38,7 +38,7 @@ from ai_engine.routing.explicit import ExplicitSelection
 from ai_engine.shopify.agent import ShopifySpecialist, is_shopify_relevant
 from ai_engine.shopify.synthetic_evidence import (
     SHOPIFY_EVIDENCE_COLLECTION,
-    stance_of,
+    WISHLIST_CONFLICT_GROUP,
     synthetic_shopify_evidence,
 )
 from ai_engine.specialists.base import SpecialistContext, UnsupportedRequestError
@@ -229,13 +229,12 @@ def test_contradictory_placeholders_produce_a_conflicting_claim_not_a_verified_o
     assert all(c.evidence_status is not EvidenceStatus.VERIFIED for c in result.claims)
 
 
-def test_stance_tags_are_read_from_the_synthetic_records() -> None:
-    stances = {
-        item.record.evidence_id: stance_of(item.record)
-        for item in synthetic_shopify_evidence(PROJECT_ID)
-    }
-    assert stances["EVD-SHP-SYN-0001"] == "supports"
-    assert stances["EVD-SHP-SYN-0002"] == "contradicts"
+def test_contradictions_are_declared_beside_records_not_inside_them() -> None:
+    items = {item.record.evidence_id: item for item in synthetic_shopify_evidence(PROJECT_ID)}
+    assert items["EVD-SHP-SYN-0001"].conflict_group == WISHLIST_CONFLICT_GROUP
+    assert items["EVD-SHP-SYN-0002"].conflict_group == WISHLIST_CONFLICT_GROUP
+    assert items["EVD-SHP-SYN-0003"].conflict_group is None
+    assert all("[stance" not in item.record.relevance_summary for item in items.values())
 
 
 # --- Scenario: missing information ----------------------------------------------------------------

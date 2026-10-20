@@ -167,6 +167,7 @@ class Claim(ContractModel):
     evidence_ids: list[EvidenceId] = Field(default_factory=list)
     platform_context: PlatformContext | None = None
     verification_task: str | None = Field(default=None, max_length=500)
+    conflict_refs: list[ProposalKey] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check_claim(self) -> Self:
@@ -174,6 +175,10 @@ class Claim(ContractModel):
             raise ValueError("set exactly one of claim_id or proposal_key")
         if any(ref.project_id != self.project_id for ref in self.subject_refs):
             raise ValueError("claim subjects must stay within the claim's project")
+        if self.evidence_status is EvidenceStatus.CONFLICTING and not self.conflict_refs:
+            raise ValueError("a conflicting claim must reference its conflict record")
+        if self.conflict_refs and self.evidence_status is not EvidenceStatus.CONFLICTING:
+            raise ValueError("conflict references are only valid on conflicting claims")
         if self.evidence_status is EvidenceStatus.UNVERIFIED and not self.verification_task:
             raise ValueError("an unverified claim must state its verification task")
         if self.claim_type in _PLATFORM_CLAIM_TYPES and self.platform_context is None:

@@ -321,3 +321,44 @@ Ready for an isolated review of the workflow and its outputs. Not ready for Foun
 - Needs a decision on routing (C-05) before any automatic selection is considered.
 
 Nothing has been pushed or merged. Push or merge requires explicit WDS approval.
+
+## 11. AI-4.1: known issue resolution and contract stabilization (implemented, not committed)
+
+The full issue register, with per-issue status, files, tests and remaining approvals, is in
+`docs/AI_ENGINE_ISSUE_RESOLUTION.md`. This section summarises what changed in the AI engine.
+
+### 11.1 What changed
+
+| Area | Change | Status |
+|---|---|---|
+| Operator confirmation | `selection/operator.py`: explicit per-proposal decisions (confirm or reject), bound to the analysis by fingerprint. The demo investigates only confirmed proposals. CLI flags `--confirm`, `--reject`, `--operator`. Nothing is selected by default | Implemented |
+| Non-selected requirements | Omitted proposals are `not_selected`; rejected are `rejected_by_operator`. Both keep a trace and an unresolved item with the reason | Implemented |
+| Assumptions | `SpecialistAssumption` is a separate structure. The Shopify plan and permissions premise is no longer a dependency | Implemented, pending amendment A-3 |
+| Conflict references | `SpecialistConflict` cites two distinct evidence records and links to claims both ways. `Claim.conflict_refs` links back | Implemented, pending amendments A-2 and A-3 |
+| Blocked status | Unresolved material conflicts are `blocked`. Clarification need is kept through attached question keys | Implemented. Spec conflict recorded as A-4 (blocked) |
+| Stance tags | Removed from evidence text. Contradiction groups are held beside records in the lookup, never serialised into evidence | Implemented |
+| Archived projects | `ProjectContext.status` (additive, default `active`). Analysis and task building refuse; execution returns `permission_denied` | Implemented, pending amendment A-1 |
+| Agent output errors | A contract error inside an agent maps to `failed_validation` instead of crashing the wrapper | Implemented |
+| EvidenceKind | Kept as an AI-local extension | Resolved (AI-local) |
+| Synthetic evidence | Remains `unverified`; no publisher; no promotion path | Verified by tests |
+| Platform versions | Unknown stays unknown | Verified by tests |
+| Service catalog | References stay empty | Verified by tests |
+| Identifiers | AI output carries no Foundation IDs; proposal keys avoid Foundation prefixes | Verified by tests |
+| Foundation | No Foundation-owned model or persistence was changed | Verified by inspection |
+
+### 11.2 Verification
+
+| Check | Result |
+|---|---|
+| `pytest` (full suite) | 326 passed (AI-4 baseline 266, plus 60 new tests) |
+| `ruff check src tests` | clean |
+| `mypy` (strict, `src/ai_engine`) | clean |
+| Demonstration CLI determinism | byte-identical across runs |
+
+Three existing expectations changed on purpose: conflicts are now `blocked`, demo runs require operator
+confirmation, and the stance-tag test became a conflict-group test. Each is documented in the register.
+
+### 11.3 Readiness
+
+Ready for AI-5 review as an isolated prototype. Not ready for Foundation integration until the approvals
+listed in `docs/AI_ENGINE_ISSUE_RESOLUTION.md` section 7 are given. AI-5 has not been started.

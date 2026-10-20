@@ -18,13 +18,20 @@ from ai_engine.contracts.common import ContractModel
 from ai_engine.contracts.execution import AgentExecutionResult
 from ai_engine.contracts.specialist import SpecialistTask
 from ai_engine.routing.explicit import RoutingRecord
+from ai_engine.selection.operator import OperatorSelection
 
 DemoStatus = Literal[
     "completed", "completed_with_unresolved_items", "specialist_not_completed", "not_executed"
 ]
 Investigation = Literal[
-    "investigated", "not_selected", "unsupported", "execution_failed", "not_built"
+    "investigated",
+    "not_selected",
+    "rejected_by_operator",
+    "unsupported",
+    "execution_failed",
+    "not_built",
 ]
+GapStatus = Literal["open", "addressed_pending_amendment", "closed"]
 
 
 class ProvenanceLabel(StrEnum):
@@ -76,6 +83,7 @@ class RequirementTrace(ContractModel):
     requirement_id: str
     origin: str
     analysis_status: str
+    operator_decision: str | None = None
     provenance: list[ProvenanceLabel]
     source_segment_ids: list[str]
     investigation: Investigation
@@ -83,6 +91,8 @@ class RequirementTrace(ContractModel):
     claim_keys: list[str] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
     question_keys: list[str] = Field(default_factory=list)
+    assumption_keys: list[str] = Field(default_factory=list)
+    conflict_keys: list[str] = Field(default_factory=list)
 
 
 class EvidenceTrace(ContractModel):
@@ -104,7 +114,7 @@ class UnresolvedItem(ContractModel):
 class TrackedGap(ContractModel):
     gap_id: str
     title: str
-    status: Literal["open"] = "open"
+    status: GapStatus = "open"
     source: str
 
 
@@ -128,6 +138,7 @@ class DemonstrationReport(ContractModel):
     boundary: BoundaryRecord
     analysis: RequirementAnalysisResult
     id_assignments: list[IdAssignment]
+    operator_selection: OperatorSelection | None = None
     routing_record: RoutingRecord | None = None
     task: SpecialistTask | None = None
     execution: AgentExecutionResult | None = None

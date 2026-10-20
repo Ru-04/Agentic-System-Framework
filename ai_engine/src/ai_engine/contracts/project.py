@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from ai_engine.contracts.common import ContractModel, DataClass, ProjectId, Slug
@@ -19,5 +21,6 @@ class ProjectContext(ContractModel):
     name: str = Field(min_length=1, max_length=200)
     data_classification: DataClass
     access_boundary_id: str = Field(min_length=1, max_length=120)
+    status: Literal["active", "archived", "deleted_pending_retention"] = "active"
     platforms: list[Slug] = Field(default_factory=list)
     application_types: list[Slug] = Field(default_factory=list)

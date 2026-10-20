@@ -113,9 +113,13 @@ def test_timing_contradiction_is_preserved_as_a_conflict(run) -> None:  # type: 
     assert len({ref.segment_id for ref in conflict.source_refs}) == 2
 
 
-def test_conflicting_requirements_need_clarification(run) -> None:  # type: ignore[no-untyped-def]
-    assert by_wording(run, "immediately").status is RequirementStatus.NEEDS_CLARIFICATION
-    assert by_wording(run, "once per hour").status is RequirementStatus.NEEDS_CLARIFICATION
+def test_unresolved_conflicts_are_blocked_and_keep_their_clarification_links(run) -> None:  # type: ignore[no-untyped-def]
+    # AI-4.1: an unresolved material conflict blocks the requirement (GOVERNANCE 6). The
+    # clarification need stays visible through the attached question keys.
+    for fragment in ("immediately", "once per hour"):
+        requirement = by_wording(run, fragment)
+        assert requirement.status is RequirementStatus.BLOCKED
+        assert requirement.clarification_proposal_keys
 
 
 def test_integrations_produce_inferred_follow_up_requirements(run) -> None:  # type: ignore[no-untyped-def]
