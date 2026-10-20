@@ -800,6 +800,38 @@ def test_n30_the_runtime_login_has_no_superuser_role_or_database_creation_rights
     assert exc.value.orig.sqlstate == "42501"
 
 
+def test_n31_the_application_role_cannot_write_operation_proofs(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """R4 stage 1: operation proofs are created only by the authentication authority."""
+    with pytest.raises(DBAPIError) as exc:
+        with conn.begin_nested():
+            conn.execute(
+                text(
+                    "INSERT INTO operation_proofs (actor_user_id, session_id, operation, "
+                    "resource_id, expires_at) SELECT :a, gen_random_uuid(), 'user.disable', "
+                    "gen_random_uuid(), now() + interval '30 seconds'"
+                ),
+                {"a": world["admin"]},
+            )
+    assert exc.value.orig.sqlstate == "42501"
+
+
+def test_n32_the_application_role_cannot_issue_operation_proofs(
+    conn: Connection, world: dict[str, uuid.UUID]
+) -> None:
+    """R4 stage 1: the issuing routine is executable only by the authentication authority."""
+    with pytest.raises(DBAPIError) as exc:
+        with conn.begin_nested():
+            conn.execute(
+                text(
+                    "SELECT webdesk_authority.fn_issue_operation_proof("
+                    "'0' || repeat('a', 63), 'user.disable', gen_random_uuid())"
+                )
+            )
+    assert exc.value.orig.sqlstate == "42501"
+
+
 def _revision(conn: Connection, project: uuid.UUID) -> int:
     return int(
         conn.execute(

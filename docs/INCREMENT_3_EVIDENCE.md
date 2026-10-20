@@ -484,3 +484,45 @@ Verification (fresh databases, final):
 - Ruff (src, tests, migrations): passed. mypy --strict src/webdesk: passed (49 files).
 
 Phase 1 is NOT complete: R4 and EVAL-F11j remain open. The verified changes are committed separately.
+
+## R4 verified-session actor binding: stage 1 of 3 (2026-10-20)
+
+Status: PARTIAL. R4 is NOT complete. N26 remains a strict xfail. EVAL-F11j is NOT implemented.
+
+Stage 1 (migration 0021_r4_authority_proofs, committed separately) provides the database boundary only:
+- Role webdesk_authority (NOLOGIN), schema webdesk_authority owned by it. The separate authority process will
+  connect through a restricted login that is a member of webdesk_authority only.
+- Table operation_proofs: one row per authority-issued proof, bound to actor, session, operation (one of
+  user.disable, role.revoke, project.create, classification.reassess), resource and expiry (at most 60 seconds
+  after issue). Immutable except consumed_at; the trigger refuses any delete and any restoration of a spent proof.
+- webdesk_authority.fn_issue_operation_proof(session_token_hash, operation, resource): validates the session
+  (not revoked, unexpired, active user, current session epoch) and records a 30-second proof. EXECUTE is granted
+  to webdesk_authority only.
+- webdesk_guard.fn_consume_operation_proof(proof, actor, operation, resource): refuses missing, spent, expired,
+  wrong-actor, wrong-operation, wrong-resource and not-live-session proofs; otherwise marks the proof consumed in
+  the caller's transaction. Not yet called by any privileged mutation (stage 2).
+- The application and ceremony roles have no privilege on operation_proofs.
+
+Transaction behaviour (stage 1 contract): consumption is part of the mutation's transaction. A refused or failed
+mutation rolls back its consumption, so the proof is not spent by a failed attempt and is never reused after a
+successful one. Denial audit rows must be written after the savepoint is rolled back so they survive; this is
+implemented with the privileged mutations in stage 2.
+
+Restricted-login tests (webdesk_app_login, fresh database): N31 application role cannot write operation_proofs
+(42501, PASS); N32 application role cannot execute fn_issue_operation_proof (42501, PASS).
+
+Verification (fresh databases):
+- Full regression, fresh webdesk_integration: 389 passed, 33 skipped (hardening runs separately), 0 failed.
+- Restricted-login hardening, fresh webdesk_negative: 32 passed, 1 xfailed (N26).
+- Alembic: upgrade head; downgrade 0020_r1_r2_n1_hardening; upgrade head: passed.
+- Ruff (src, tests, migrations) and mypy --strict src/webdesk (49 files): passed.
+
+Remaining for R4 (stage 2 and 3):
+- Stage 2: the application login loses SELECT and all writes on sessions and credentials; the sessions path moves
+  to the authority (login, activation, reset, logout, session validation); privileged mutations (disable, revoke,
+  project creation, reassessment, role assignment, approval decisions, withdrawal) consume a proof with the verified
+  actor; caller-supplied actor identifiers are removed from those mutation paths; N26 becomes an ordinary test.
+- Stage 3: EVAL-F11j release-blocking suite (credential and session DML refused, forged actor refused, other-user
+  and other-operation proofs refused, expired and revoked sessions refused, epoch change invalidates authority,
+  replay and concurrent reuse refused, two-approver impersonation refused, authorized flows succeed), and the
+  authority process itself.
