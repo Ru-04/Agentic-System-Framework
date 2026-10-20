@@ -21,7 +21,8 @@ from starlette.datastructures import UploadFile
 
 from webdesk.api.errors import DOMAIN_ERRORS
 from webdesk.api.transactions import run_in_transaction
-from webdesk.auth.service import AuthError, validate_session
+from webdesk.auth.service import AuthError
+from webdesk.authority.client import AuthorityClient, AuthorityUnavailable
 from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
 from webdesk.intake.reparse import reparse_source_version
 from webdesk.runs import service as runs
@@ -70,8 +71,13 @@ def current_actor(request: Request) -> uuid.UUID:
     if not header.startswith("Bearer ") or len(header) <= len("Bearer "):
         raise AuthError("missing_session")
     token = header[len("Bearer ") :]
-    engine = request.app.state.engine
-    return run_in_transaction(engine, lambda conn: validate_session(conn, token))
+    authority: AuthorityClient | None = request.app.state.authority
+    if authority is None:
+        raise AuthError("authority_unconfigured")
+    try:
+        return authority.validate_session(token)
+    except AuthorityUnavailable as exc:
+        raise AuthError("authority_unavailable") from exc
 
 
 Actor = Annotated[uuid.UUID, Depends(current_actor)]

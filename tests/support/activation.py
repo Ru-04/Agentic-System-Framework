@@ -28,7 +28,9 @@ LIMITS = TokenLimits(
 def activate_user(conn: Connection, user_id: uuid.UUID) -> None:
     """Issue an activation token and activate the account, inside the caller's transaction.
 
-    The service calls run as ``webdesk_app``, as in production. The caller's role is restored after.
+    The token is issued as ``webdesk_app``. Activation itself (the credential write and the status
+    change) runs as ``webdesk_authority``, the only role that may write credentials (0023).
+    The caller's role is restored afterwards.
     """
     previous = conn.execute(text("SELECT current_user")).scalar_one()
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
@@ -43,5 +45,6 @@ def activate_user(conn: Connection, user_id: uuid.UUID) -> None:
         actor=None,
     )
     token = transport.messages[-1][2].rsplit(": ", 1)[1]
+    conn.execute(text("SET LOCAL ROLE webdesk_authority"))
     auth.activate(conn, token=token, password=TEST_PASSWORD)
     conn.execute(text(f'SET LOCAL ROLE "{previous}"'))

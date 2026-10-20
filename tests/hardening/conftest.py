@@ -1,5 +1,4 @@
 """Hardening harness (Increment 3, H-00, H-09).
-
 Negative tests run as the restricted login role ``webdesk_app_login`` (a non-superuser member of
 ``webdesk_app``). They must not use a superuser session or ``SET ROLE``.
 
@@ -9,12 +8,14 @@ Environment (never committed; see ``.env.hardening.local``, which is git-ignored
   and to perform the one-time installation through membership of ``webdesk_ceremony``.
 
 The world fixture installs the system once and activates two Administrators through the real token
-flow. Protected actions in the tests are then taken only through the login role.
-"""
+flow. Protected actions in the tests are then taken only through the login role."""
 
 from __future__ import annotations
 
 import os
+import socket
+import subprocess
+import sys
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -23,7 +24,9 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 
-from webdesk.auth import service as auth
+from tests.support.authority import SECRET as AUTHORITY_SECRET
+from tests.support.authority import authority_database_url, provision_login_password
+from webdesk.authority.client import AuthorityClient
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.delivery.transport import CaptureTransport
 from webdesk.identity import contacts
@@ -69,8 +72,61 @@ def app_engine() -> Iterator[Engine]:
     engine.dispose()
 
 
+_authority: AuthorityClient | None = None
+
+
 @pytest.fixture(scope="session")
-def world(app_engine: Engine) -> dict[str, uuid.UUID]:
+def authority_client() -> Iterator[AuthorityClient]:
+    """The authentication authority as a separate operating-system process on its own login role.
+    Activation, login and session validation in these tests go through this process. The application
+    login cannot write credentials or sessions (migration 0023), so no test can reach those writes
+    directly."""
+    global _authority
+    app_url, _ = _require_urls()
+    provisioning_url = os.environ.get("WEBDESK_INTEGRATION_OWNER_URL")
+    if not provisioning_url:
+        pytest.skip(
+            "WEBDESK_INTEGRATION_OWNER_URL is not set (needed to provision the authority login)"
+        )
+    password = provision_login_password(provisioning_url)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    env = {
+        **os.environ,
+        "WEBDESK_ENV": "test",
+        "WEBDESK_AUTHORITY_DATABASE_URL": authority_database_url(app_url, password),
+        "WEBDESK_AUTHORITY_SECRET": AUTHORITY_SECRET,
+        "WEBDESK_AUTHORITY_BIND": f"127.0.0.1:{port}",
+        "WEBDESK_EMAIL_DOMAIN_ALLOWLIST": "wds-test.example",
+    }
+    process = subprocess.Popen(  # noqa: S603 - fixed argument list: interpreter and module name
+        [sys.executable, "-m", "webdesk.authority.server"],
+        env=env,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout is not None
+        line = process.stdout.readline()
+        if "authority listening" not in line:
+            raise RuntimeError(f"the authority process did not start: {line!r}")
+        _authority = AuthorityClient(f"http://127.0.0.1:{port}", AUTHORITY_SECRET)
+        yield _authority
+    finally:
+        _authority = None
+        process.terminate()
+        process.wait(timeout=10)
+
+
+def _require_authority() -> AuthorityClient:
+    if _authority is None:
+        raise RuntimeError("the authority_client fixture is not active")
+    return _authority
+
+
+@pytest.fixture(scope="session")
+def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uuid.UUID]:
     """Installs once, activates both install contacts through tokens, and grants the second
     Administrator with its install appointment. Protected steps run as the login role."""
     _, owner_url = _require_urls()
@@ -108,16 +164,15 @@ def world(app_engine: Engine) -> dict[str, uuid.UUID]:
             second = conn.execute(
                 text(
                     """SELECT a.user_id FROM user_contact_approvals a
-                       WHERE a.administrator_appointment AND a.ceremony_id IS NOT NULL
-                         AND a.user_id <> :first ORDER BY a.created_at LIMIT 1"""
+                    WHERE a.administrator_appointment AND a.ceremony_id IS NOT NULL AND a.user_id <>
+                    :first ORDER BY a.created_at LIMIT 1"""
                 ),
                 {"first": first},
             ).scalar_one()
             appointment = conn.execute(
                 text(
                     """SELECT approval_id FROM user_contact_approvals
-                       WHERE user_id = :u AND administrator_appointment
-                         AND ceremony_id IS NOT NULL"""
+                    WHERE user_id = :u AND administrator_appointment AND ceremony_id IS NOT NULL"""
                 ),
                 {"u": second},
             ).scalar_one()
@@ -131,8 +186,8 @@ def world(app_engine: Engine) -> dict[str, uuid.UUID]:
         already = conn.execute(
             text(
                 """SELECT 1 FROM role_assignments
-                   WHERE user_id = :u AND role = 'Administrator' AND revoked_at IS NULL
-                     AND assigned_by_system IS NULL"""
+                WHERE user_id = :u AND role = 'Administrator' AND revoked_at IS NULL AND
+                assigned_by_system IS NULL"""
             ),
             {"u": second},
         ).first()
@@ -141,8 +196,7 @@ def world(app_engine: Engine) -> dict[str, uuid.UUID]:
             conn.execute(
                 text(
                     """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
-                           appointment_approval_id)
-                       VALUES (:b, 'Administrator', :a, :approval)"""
+                    appointment_approval_id) VALUES (:b, 'Administrator', :a, :approval)"""
                 ),
                 {"b": second, "a": first, "approval": appointment},
             )
@@ -162,8 +216,7 @@ def _activate_by_token(engine: Engine, user: uuid.UUID) -> None:
             actor=None,
         )
     token = transport.messages[-1][2].rsplit(": ", 1)[1]
-    with engine.begin() as conn:
-        auth.activate(conn, token=token, password=PASSWORD)
+    _require_authority().activate(token, PASSWORD)
 
 
 @pytest.fixture
@@ -193,5 +246,3 @@ def make_active_user(engine: Engine, world: dict[str, uuid.UUID]) -> uuid.UUID:
         contacts.approve_create(conn, second, approval, "proof-hardening")
     _activate_by_token(engine, user)
     return user
-
-

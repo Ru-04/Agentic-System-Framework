@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.authority import authority_call
 from tests.support.people import user_in_state
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError, LoginLimits
@@ -89,7 +90,7 @@ def _activated_user(conn: Connection, password: str = GOOD_PASSWORD) -> tuple[uu
     user, email = _user(conn, "pending_activation")
     _as_app(conn)
     token = _activation_token(conn, user)
-    auth.activate(conn, token=token, password=password)
+    authority_call(conn, auth.activate, conn, token=token, password=password)
     return user, email
 
 
@@ -97,14 +98,18 @@ def test_activation_sets_an_argon2id_hash_and_activates_the_account(conn: Connec
     user, email = _user(conn, "pending_activation")
     _as_app(conn)
     token = _activation_token(conn, user)
-    assert auth.activate(conn, token=token, password=GOOD_PASSWORD) == user
+    assert authority_call(conn, auth.activate, conn, token=token, password=GOOD_PASSWORD) == user
 
     status = conn.execute(
         text("SELECT status FROM users WHERE user_id = :u"), {"u": user}
     ).scalar_one()
-    stored = conn.execute(
-        text("SELECT password_hash FROM credentials WHERE user_id = :u"), {"u": user}
-    ).scalar_one()
+    # Credentials are readable only by the authority role (migration 0023).
+    stored = authority_call(
+        conn,
+        lambda: conn.execute(
+            text("SELECT password_hash FROM credentials WHERE user_id = :u"), {"u": user}
+        ).scalar_one(),
+    )
     assert status == "active"
     assert str(stored).startswith("$argon2id$")
     assert GOOD_PASSWORD not in str(stored)
@@ -115,14 +120,16 @@ def test_weak_password_is_refused_and_the_token_survives_for_a_retry(conn: Conne
     _as_app(conn)
     token = _activation_token(conn, user)
     with pytest.raises(AuthError) as exc:
-        auth.activate(conn, token=token, password="short")
+        authority_call(conn, auth.activate, conn, token=token, password="short")
     assert exc.value.reason == "weak_password"
-    assert auth.activate(conn, token=token, password=GOOD_PASSWORD) == user
+    assert authority_call(conn, auth.activate, conn, token=token, password=GOOD_PASSWORD) == user
 
 
 def test_login_returns_a_session_that_validates_until_logout(conn: Connection) -> None:
     user, email = _activated_user(conn)
-    session = auth.login(
+    session = authority_call(
+        conn,
+        auth.login,
         conn,
         email=email.upper(),
         password=GOOD_PASSWORD,
@@ -130,10 +137,10 @@ def test_login_returns_a_session_that_validates_until_logout(conn: Connection) -
         policy=POLICY,
         limits=LOGIN_LIMITS,
     )
-    assert auth.validate_session(conn, session) == user
-    auth.logout(conn, session)
+    assert authority_call(conn, auth.validate_session, conn, session) == user
+    authority_call(conn, auth.logout, conn, session)
     with pytest.raises(AuthError) as exc:
-        auth.validate_session(conn, session)
+        authority_call(conn, auth.validate_session, conn, session)
     assert exc.value.reason == "invalid_session"
 
 
@@ -149,7 +156,9 @@ def test_wrong_password_unknown_account_and_inactive_accounts_share_one_neutral_
         (pending_email, GOOD_PASSWORD),
     ]:
         with pytest.raises(AuthError) as exc:
-            auth.login(
+            authority_call(
+                conn,
+                auth.login,
                 conn,
                 email=candidate,
                 password=password,
@@ -168,7 +177,9 @@ def test_five_failures_lock_the_account_from_that_ip_even_for_the_right_password
     _, email = _activated_user(conn)
     for _ in range(5):
         with pytest.raises(AuthError):
-            auth.login(
+            authority_call(
+                conn,
+                auth.login,
                 conn,
                 email=email,
                 password="wrong password entirely",
@@ -177,7 +188,9 @@ def test_five_failures_lock_the_account_from_that_ip_even_for_the_right_password
                 limits=LOGIN_LIMITS,
             )
     with pytest.raises(AuthError) as exc:
-        auth.login(
+        authority_call(
+            conn,
+            auth.login,
             conn,
             email=email,
             password=GOOD_PASSWORD,
@@ -195,7 +208,9 @@ def test_failures_on_one_account_do_not_block_another_account_on_the_same_ip(
     _, second_email = _activated_user(conn, password=NEW_PASSWORD)
     for _ in range(5):
         with pytest.raises(AuthError):
-            auth.login(
+            authority_call(
+                conn,
+                auth.login,
                 conn,
                 email=first_email,
                 password="wrong password entirely",
@@ -203,7 +218,9 @@ def test_failures_on_one_account_do_not_block_another_account_on_the_same_ip(
                 policy=POLICY,
                 limits=LOGIN_LIMITS,
             )
-    session = auth.login(
+    session = authority_call(
+        conn,
+        auth.login,
         conn,
         email=second_email,
         password=NEW_PASSWORD,
@@ -216,7 +233,9 @@ def test_failures_on_one_account_do_not_block_another_account_on_the_same_ip(
 
 def test_reset_sets_a_new_password_and_revokes_existing_sessions(conn: Connection) -> None:
     user, email = _activated_user(conn)
-    session = auth.login(
+    session = authority_call(
+        conn,
+        auth.login,
         conn,
         email=email,
         password=GOOD_PASSWORD,
@@ -235,12 +254,14 @@ def test_reset_sets_a_new_password_and_revokes_existing_sessions(conn: Connectio
         actor=None,
     )
     reset_token = transport.messages[-1][2].rsplit(": ", 1)[1]
-    auth.reset_password(conn, token=reset_token, password=NEW_PASSWORD)
+    authority_call(conn, auth.reset_password, conn, token=reset_token, password=NEW_PASSWORD)
 
     with pytest.raises(AuthError):
-        auth.validate_session(conn, session)
+        authority_call(conn, auth.validate_session, conn, session)
     with pytest.raises(AuthError):
-        auth.login(
+        authority_call(
+            conn,
+            auth.login,
             conn,
             email=email,
             password=GOOD_PASSWORD,
@@ -248,7 +269,9 @@ def test_reset_sets_a_new_password_and_revokes_existing_sessions(conn: Connectio
             policy=POLICY,
             limits=LOGIN_LIMITS,
         )
-    fresh = auth.login(
+    fresh = authority_call(
+        conn,
+        auth.login,
         conn,
         email=email,
         password=NEW_PASSWORD,
@@ -256,12 +279,14 @@ def test_reset_sets_a_new_password_and_revokes_existing_sessions(conn: Connectio
         policy=POLICY,
         limits=LOGIN_LIMITS,
     )
-    assert auth.validate_session(conn, fresh) == user
+    assert authority_call(conn, auth.validate_session, conn, fresh) == user
 
 
 def test_a_session_is_refused_after_a_session_epoch_change(conn: Connection) -> None:
     user, email = _activated_user(conn)
-    session = auth.login(
+    session = authority_call(
+        conn,
+        auth.login,
         conn,
         email=email,
         password=GOOD_PASSWORD,
@@ -276,5 +301,5 @@ def test_a_session_is_refused_after_a_session_epoch_change(conn: Connection) -> 
     )
     _as_app(conn)
     with pytest.raises(AuthError) as exc:
-        auth.validate_session(conn, session)
+        authority_call(conn, auth.validate_session, conn, session)
     assert exc.value.reason == "invalid_session"

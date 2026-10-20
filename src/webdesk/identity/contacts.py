@@ -383,11 +383,7 @@ def approve_change(
                 {"a": approval_id, "u": user_id},
             )
             conn.execute(
-                text(
-                    """UPDATE users SET session_epoch = session_epoch + 1,
-                           revision = revision + 1
-                       WHERE user_id = :u"""
-                ),
+                text("UPDATE users SET revision = revision + 1 WHERE user_id = :u"),
                 {"u": user_id},
             )
             conn.execute(
@@ -402,11 +398,8 @@ def approve_change(
                 {"u": user_id},
             )
             conn.execute(
-                text(
-                    """UPDATE sessions SET revoked_at = now()
-                       WHERE user_id = :u AND revoked_at IS NULL"""
-                ),
-                {"u": user_id},
+                text("SELECT webdesk_guard.fn_revoke_user_sessions(:u, :a)"),
+                {"u": user_id, "a": approval_id},
             )
             sealed = contact_box.seal(
                 str(old_email), aad=outbox_aad("prior_contact_change", user_id)

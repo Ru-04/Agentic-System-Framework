@@ -7,6 +7,7 @@ The token itself is never stored; only its SHA-256 hash is (subject_hash).
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from tests.support.authority import start_in_process_authority
 from tests.support.people import committed_active_user
 from webdesk.api.app import create_app
 from webdesk.config import Settings
@@ -47,9 +49,10 @@ def _session(engine: Engine, user: uuid.UUID) -> str:
 @pytest.fixture
 def http(
     committed_engine: Engine,
+    committed_url: str,
     committed_admins: tuple[uuid.UUID, uuid.UUID],
     tmp_path: Path,
-) -> dict[str, object]:
+) -> Iterator[dict[str, object]]:
     admin, second = committed_admins
     store = ContentStore(tmp_path / "root")
     analyst = committed_active_user(committed_engine, admin, second, "http analyst")
@@ -60,18 +63,21 @@ def http(
             conn, admin, name=f"HTTP {uuid.uuid4().hex[:6]}", data_classification="internal"
         )
         projects.add_member(conn, admin, project, analyst)
+    authority = start_in_process_authority(committed_url)
     app = create_app(
         Settings(_env_file=None, env="test", storage_root=tmp_path / "root"),
         committed_engine,
         store=store,
+        authority=authority.client,
     )
-    return {
+    yield {
         "client": TestClient(app, raise_server_exceptions=False),
         "analyst_token": _session(committed_engine, analyst),
         "admin_token": _session(committed_engine, admin),
         "project": str(project),
         "engine": committed_engine,
     }
+    authority.close()
 
 
 def _revision(engine: Engine, project: str) -> int:
@@ -225,17 +231,29 @@ def test_run_controls_and_reparse_follow_the_role_rules_over_http(
 
 
 def test_intake_is_refused_when_no_storage_root_is_configured(
-    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID], tmp_path: Path
+    committed_engine: Engine,
+    committed_url: str,
+    committed_admins: tuple[uuid.UUID, uuid.UUID],
+    tmp_path: Path,
 ) -> None:
-    app = create_app(Settings(_env_file=None, env="test"), committed_engine, store=None)
-    client = TestClient(app, raise_server_exceptions=False)
-    admin, _ = committed_admins
-    response = client.post(
-        f"/projects/{uuid.uuid4()}/sources",
-        headers=_auth(_session(committed_engine, admin)),
-        data={"expected_project_revision": "1"},
-        files={"file": ("n.txt", b"x\n", "text/plain")},
-    )
+    authority = start_in_process_authority(committed_url)
+    try:
+        app = create_app(
+            Settings(_env_file=None, env="test"),
+            committed_engine,
+            store=None,
+            authority=authority.client,
+        )
+        client = TestClient(app, raise_server_exceptions=False)
+        admin, _ = committed_admins
+        response = client.post(
+            f"/projects/{uuid.uuid4()}/sources",
+            headers=_auth(_session(committed_engine, admin)),
+            data={"expected_project_revision": "1"},
+            files={"file": ("n.txt", b"x\n", "text/plain")},
+        )
+    finally:
+        authority.close()
     assert response.status_code == 503
     assert response.json() == {"error": "intake_not_configured"}
     assert subject_hash("x") != ""

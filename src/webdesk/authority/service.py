@@ -1,13 +1,12 @@
 """Authority entry points: the authentication operations, run on the authority's own connection.
+The authority process connects with the restricted login role that is a member of
+``webdesk_authority`` only. Every credential, session and token write made by the operations below
+is therefore performed under that role, which is the only role granted those writes (migrations 0021
+and 0022). The application login has no such grant, so an application connection cannot reproduce
+these writes.
 
-The authority process connects with the restricted login role that is a member of ``webdesk_authority``
-only. Every credential, session and token write made by the operations below is therefore performed under
-that role, which is the only role granted those writes (migrations 0021 and 0022). The application login
-has no such grant, so an application connection cannot reproduce these writes.
-
-The authentication logic itself lives in ``webdesk.auth.service``; this module fixes the authority's public
-surface and adds the operation-proof issuance that only the authority may perform.
-"""
+The authentication logic itself lives in ``webdesk.auth.service``; this module fixes the authority's
+public surface and adds the operation-proof issuance that only the authority may perform."""
 
 from __future__ import annotations
 
@@ -39,10 +38,9 @@ def issue_operation_proof(
     resource: uuid.UUID | None,
 ) -> uuid.UUID:
     """Issue a short-lived, single-use proof for one operation on one resource.
-
-    The proof is bound to the session's account, the operation and the resource. The database refuses
-    issuance unless the session is live (see ``webdesk_authority.fn_issue_operation_proof``).
-    """
+    The proof is bound to the session's account, the operation and the resource. The database
+    refuses issuance unless the session is live (see
+    ``webdesk_authority.fn_issue_operation_proof``)."""
     value = conn.execute(
         text("SELECT webdesk_authority.fn_issue_operation_proof(:h, :op, :res)"),
         {"h": subject_hash(session_token), "op": operation, "res": resource},

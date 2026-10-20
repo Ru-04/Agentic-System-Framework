@@ -1,14 +1,12 @@
 """Negative tests as the restricted login role ``webdesk_app_login`` (Increment 3, H-09).
-
 Each test attempts a protected write directly as the login role and asserts that the database
 refuses it with an expected SQLSTATE and that the protected row is unchanged afterwards.
 
-Tests the database still allows are ``xfail(strict=True, raises=AssertionError)``. They record
-an open finding (X1). An allowed write raises AssertionError, which is the expected failure.
-An unexpected SQLSTATE raises RuntimeError and is reported as an error, never as an xfail.
-When the matching hardening task lands the test passes; strict xfail then reports XPASS as a
-failure, and the marker is removed in the same change.
-"""
+Tests the database still allows are ``xfail(strict=True, raises=AssertionError)``. They record an
+open finding (X1). An allowed write raises AssertionError, which is the expected failure. An
+unexpected SQLSTATE raises RuntimeError and is reported as an error, never as an xfail. When the
+matching hardening task lands the test passes; strict xfail then reports XPASS as a failure, and the
+marker is removed in the same change."""
 
 from __future__ import annotations
 
@@ -22,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import DBAPIError
 
+from webdesk.authority.client import AuthorityClient
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.intake.ingest import ingest_source
@@ -53,10 +52,8 @@ def _refused(
     message: str | None = None,
 ) -> str:
     """Run the statements as the login role and require a refusal with an expected SQLSTATE.
-
-    ``probe`` is a scalar query over the protected row, read before and after the attempt.
-    Returns the SQLSTATE. A write that succeeds raises AssertionError (the xfail outcome).
-    """
+    ``probe`` is a scalar query over the protected row, read before and after the attempt. Returns
+    the SQLSTATE. A write that succeeds raises AssertionError (the xfail outcome)."""
     before = _scalar(conn, probe)
     try:
         with conn.begin_nested():
@@ -694,39 +691,30 @@ def test_n25_an_ingested_source_identity_is_not_updatable_by_the_application_rol
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "OPEN R4 (release-blocking): webdesk_app holds INSERT on sessions, so a compromised "
-        "application role can write a session row for an active user and validate_session accepts "
-        "it. Blocked on the verified-session actor-binding design (decision "
-        "P-INC3-ACTOR-SESSION-06, Amendment A2). Remove this marker only when the forged row is "
-        "refused."
-    ),
-)
 def test_n26_a_forged_session_row_is_not_accepted_as_authentication(
-    conn: Connection, world: dict[str, uuid.UUID]
+    conn: Connection, world: dict[str, uuid.UUID], authority_client: AuthorityClient
 ) -> None:
-    """R4: a session row written by the application role must not authenticate an actor."""
-    from webdesk.auth.service import AuthError, validate_session
+    """R4: the application role cannot write a session row, and the authority refuses any token it
+    did not issue. A forged row therefore authenticates no actor."""
+    from webdesk.auth.service import AuthError
     from webdesk.ratelimit.limiter import subject_hash
 
     token = uuid.uuid4().hex
-    conn.execute(
-        text(
-            """INSERT INTO sessions (session_token_hash, user_id, session_epoch_at_issue,
-                   issued_at, expires_at)
-               VALUES (:h, :u, (SELECT session_epoch FROM users WHERE user_id = :u),
-                   now(), now() + interval '1 hour')"""
-        ),
-        {"h": subject_hash(token), "u": world["admin"]},
+    state = _refused(
+        conn,
+        [
+            (
+                """INSERT INTO sessions (session_token_hash, user_id, session_epoch_at_issue,
+                issued_at, expires_at) VALUES (:h, :u, (SELECT session_epoch FROM users WHERE
+                user_id = :u), now(), now() + interval '1 hour')""",
+                {"h": subject_hash(token), "u": world["admin"]},
+            )
+        ],
+        ("SELECT session_epoch FROM users WHERE user_id = :u", {"u": world["admin"]}),
     )
-    try:
-        validate_session(conn, token)
-    except AuthError:
-        return
-    raise AssertionError("a forged session row authenticated an actor")
+    assert state == "42501"
+    with pytest.raises(AuthError):
+        authority_client.validate_session(token)
 
 
 def test_n27_an_arbitrary_contact_reservation_cannot_be_released_by_the_application_role(
