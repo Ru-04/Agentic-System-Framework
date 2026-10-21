@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -41,13 +42,14 @@ def _deny(conn: Connection, actor: uuid.UUID, reason: str, status: int) -> NoRet
 
 def disable_user(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     target: uuid.UUID,
     *,
     reason: str,
     expected_revision: int,
 ) -> None:
-    """Disable one active account. Raises DisableError on any refusal."""
+    """Disable one active account. The actor is the account the operation proof was issued to."""
+    actor = actor_for(conn, proof, "user.disable", target)
     decision = authorize(SqlAuthorizationStore(conn), actor, Permission.USER_MANAGE.value)
     if not decision.allowed:
         _deny(conn, actor, decision.reason, 403)
@@ -83,9 +85,11 @@ def disable_user(
         if int(others) < 1:
             _deny(conn, actor, "last_administrator", 409)
 
-    conn.execute(
-        text("SELECT webdesk_guard.fn_disable_user(:a, :u, :r, :rev)"),
-        {"a": actor, "u": target, "r": reason.strip(), "rev": expected_revision},
+    consume_with(
+        conn,
+        "user.disable",
+        "SELECT webdesk_guard.fn_disable_user_with_proof(:p, :u, :r, :rev)",
+        {"p": proof, "u": target, "r": reason.strip(), "rev": expected_revision},
     )
     record_event(
         conn,

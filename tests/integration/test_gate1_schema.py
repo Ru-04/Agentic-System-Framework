@@ -43,6 +43,7 @@ from tests.support.people import (
     install_two_contacts,
     user_in_state,
 )
+from tests.support.proofs import prove
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.identity import contacts
 from webdesk.projects.service import create_project
@@ -133,7 +134,10 @@ def new_project(conn: Connection, creator: uuid.UUID) -> uuid.UUID:
     admin, _second = administrators_for(conn)
     conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
     return create_project(
-        conn, admin, name="Test project", data_classification="confidential_client"
+        conn,
+        prove(conn, admin, "project.create"),
+        name="Test project",
+        data_classification="confidential_client",
     )
 
 
@@ -172,7 +176,7 @@ def test_self_membership_and_self_grants_are_rejected_by_check(conn: Connection)
             """INSERT INTO project_memberships (project_id, user_id, assigned_by_user_id)
                VALUES (%s, %s, %s)""",
             (project, user, user),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
     with pytest.raises(CheckViolation):
         x(
@@ -181,7 +185,7 @@ def test_self_membership_and_self_grants_are_rejected_by_check(conn: Connection)
                    granted_by)
                VALUES (%s, %s, '{project.view}', %s)""",
             (project, user, user),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
     with pytest.raises(CheckViolation):
         x(
@@ -190,7 +194,7 @@ def test_self_membership_and_self_grants_are_rejected_by_check(conn: Connection)
                    granted_by, reason)
                VALUES ('project', %s, %s, %s, 'self')""",
             (project, user, user),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -349,7 +353,11 @@ def test_ordinary_approval_refused_with_a_single_active_administrator(conn: Conn
         role="webdesk_app",
     )
     conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
-    revoke_role(conn, first, uuid.UUID(str(second_role)))
+    revoke_role(
+        conn,
+        prove(conn, first, "role.revoke", uuid.UUID(str(second_role))),
+        uuid.UUID(str(second_role)),
+    )
     with pytest.raises(CheckViolation, match="two active Administrators"):
         x(
             conn,
@@ -508,7 +516,7 @@ def test_below_two_administrators_a_grant_requires_a_consumable_appointment(
                    appointment_approval_id)
                VALUES (%s, 'Administrator', %s, NULL)""",
             (second, first),
-            role="webdesk_app",
+            role="webdesk_ceremony",
         )
 
 
@@ -531,7 +539,7 @@ def test_appointment_is_consumed_once(conn: Connection) -> None:
                    appointment_approval_id)
                VALUES (%s, 'Administrator', %s, %s)""",
             (third, first, uuid.UUID(str(reused))),
-            role="webdesk_app",
+            role="webdesk_ceremony",
         )
 
 

@@ -16,6 +16,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from tests.support.people import active_user, administrators_for
+from tests.support.proofs import prove
 from webdesk.projects.service import create_project
 
 pytestmark = pytest.mark.integration
@@ -48,7 +49,12 @@ def _project(conn: Connection, user: uuid.UUID, classification: str = "internal"
     """A project created through the project-creation service by an Administrator."""
     admin, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return create_project(conn, admin, name="intake project", data_classification=classification)
+    return create_project(
+        conn,
+        prove(conn, admin, "project.create"),
+        name="intake project",
+        data_classification=classification,
+    )
 
 
 def _source(

@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission, Role
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -59,13 +59,17 @@ def _map_trigger_refusal(message: str) -> tuple[int, str]:
 
 def assign_role(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     target: uuid.UUID,
     role: Role,
     *,
     appointment_approval_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
-    """Grant ``role`` to ``target``. Self-assignment is refused (R2)."""
+    """Grant ``role`` to ``target``. Self-assignment is refused (R2).
+
+    The actor is the account the operation proof was issued to.
+    """
+    actor = actor_for(conn, proof, "role.assign", target)
     if actor == target:
         _denied(conn, actor, "self_assignment")
         raise RoleServiceError(403, "self_assignment")
@@ -76,25 +80,21 @@ def assign_role(
         raise RoleServiceError(403, decision.reason)
 
     try:
-        with conn.begin_nested():
-            assignment_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
-                                   appointment_approval_id)
-                               VALUES (:target, :role, :actor, :approval)
-                               RETURNING assignment_id"""
-                        ),
-                        {
-                            "target": target,
-                            "role": role.value,
-                            "actor": actor,
-                            "approval": appointment_approval_id,
-                        },
-                    ).scalar_one()
+        assignment_id = uuid.UUID(
+            str(
+                consume_with(
+                    conn,
+                    "role.assign",
+                    "SELECT webdesk_guard.fn_assign_role_with_proof(:p, :target, :role, :approval)",
+                    {
+                        "p": proof,
+                        "target": target,
+                        "role": role.value,
+                        "approval": appointment_approval_id,
+                    },
                 )
             )
+        )
     except SQLAlchemyError as exc:
         original = getattr(exc, "orig", None)
         status, reason = _map_trigger_refusal(str(original or exc))

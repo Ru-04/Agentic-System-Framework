@@ -18,6 +18,8 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user, external_loss_of_access, user_in_state
+from tests.support.privileged import ceremony_insert
+from tests.support.proofs import prove
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError
 from webdesk.ceremony.install import PreparedInstall, apply_install
@@ -87,12 +89,11 @@ def _admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     return result.user_ids[0], result.user_ids[1]
@@ -253,16 +254,20 @@ def test_an_administrator_grant_without_an_appointment_is_refused_and_audited(
     admin = result.user_ids[0]
     staff = result.user_ids[1]
     with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, admin, staff, Role.ADMINISTRATOR)
+        assign_role(conn, prove(conn, admin, "role.assign", staff), staff, Role.ADMINISTRATOR)
     assert exc.value.reason == "appointment_required"
     assert _audit(conn, "role.assign.denied", "appointment_required") == 1
 
 
 def test_adding_oneself_to_a_project_is_refused_and_audited(conn: Connection) -> None:
     admin, _ = _admins(conn)
-    project = projects.create_project(conn, admin, name="F12", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="F12", data_classification="internal"
+    )
     with pytest.raises(projects.ProjectServiceError) as exc:
-        projects.add_member(conn, admin, project, admin)
+        projects.add_member(
+            conn, prove(conn, admin, "project.membership.add", project), project, admin
+        )
     assert exc.value.reason == "self_assignment"
     assert _audit(conn, "membership.denied", "self_assignment") == 1
 

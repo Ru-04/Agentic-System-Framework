@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity import contacts
 from webdesk.identity.email import ContactEmailPolicy
@@ -64,7 +65,13 @@ def install_administrators(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
     activate_user(conn, first)
     activate_user(conn, second)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    assign_role(conn, first, second, Role.ADMINISTRATOR, appointment_approval_id=appointment)
+    assign_role(
+        conn,
+        prove(conn, first, "role.assign", second),
+        second,
+        Role.ADMINISTRATOR,
+        appointment_approval_id=appointment,
+    )
     return first, second
 
 

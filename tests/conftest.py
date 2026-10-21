@@ -32,6 +32,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 
 from tests.support.activation import activate_user
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
@@ -137,7 +138,7 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         assign_role(
             conn,
-            result.user_ids[0],
+            prove(conn, result.user_ids[0], "role.assign", result.user_ids[1]),
             result.user_ids[1],
             Role.ADMINISTRATOR,
             appointment_approval_id=result.approval_ids[1],

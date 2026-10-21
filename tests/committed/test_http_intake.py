@@ -17,6 +17,7 @@ from sqlalchemy.engine import Engine
 
 from tests.support.authority import start_in_process_authority
 from tests.support.people import committed_active_user
+from tests.support.proofs import prove
 from webdesk.api.app import create_app
 from webdesk.config import Settings
 from webdesk.projects import service as projects
@@ -58,11 +59,16 @@ def http(
     analyst = committed_active_user(committed_engine, admin, second, "http analyst")
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        assign_role(conn, admin, analyst, Role.ANALYST)
+        assign_role(conn, prove(conn, admin, "role.assign", analyst), analyst, Role.ANALYST)
         project = projects.create_project(
-            conn, admin, name=f"HTTP {uuid.uuid4().hex[:6]}", data_classification="internal"
+            conn,
+            prove(conn, admin, "project.create"),
+            name=f"HTTP {uuid.uuid4().hex[:6]}",
+            data_classification="internal",
         )
-        projects.add_member(conn, admin, project, analyst)
+        projects.add_member(
+            conn, prove(conn, admin, "project.membership.add", project), project, analyst
+        )
     authority = start_in_process_authority(committed_url)
     app = create_app(
         Settings(_env_file=None, env="test", storage_root=tmp_path / "root"),

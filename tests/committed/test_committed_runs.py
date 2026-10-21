@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from tests.support.people import committed_active_user
+from tests.support.proofs import prove
 from webdesk.intake.ingest import ingest_source
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
@@ -38,11 +39,16 @@ def committed_run(
     analyst = committed_active_user(committed_engine, admin, second, "analyst")
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        assign_role(conn, admin, analyst, Role.ANALYST)
+        assign_role(conn, prove(conn, admin, "role.assign", analyst), analyst, Role.ANALYST)
         project = projects.create_project(
-            conn, admin, name=f"Committed {uuid.uuid4().hex[:6]}", data_classification="internal"
+            conn,
+            prove(conn, admin, "project.create"),
+            name=f"Committed {uuid.uuid4().hex[:6]}",
+            data_classification="internal",
         )
-        projects.add_member(conn, admin, project, analyst)
+        projects.add_member(
+            conn, prove(conn, admin, "project.membership.add", project), project, analyst
+        )
         revision = conn.execute(
             text("SELECT revision FROM projects WHERE project_id = :p"), {"p": project}
         ).scalar_one()

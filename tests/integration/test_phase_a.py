@@ -16,6 +16,8 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user, administrators_for
+from tests.support.privileged import ceremony_insert, guard_insert
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
@@ -78,12 +80,11 @@ def _two_admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     return result.user_ids[0], result.user_ids[1], result.approval_ids[1]
@@ -216,7 +217,7 @@ def test_f01_matrix_holds_for_every_key_role_and_state_against_sql(conn: Connect
     users: dict[Role | None, uuid.UUID] = {}
     for role in _ROLE_ORDER:
         staff = _owner_insert_user(conn)
-        assign_role(conn, admin_a, staff, role)
+        assign_role(conn, prove(conn, admin_a, "role.assign", staff), staff, role)
         users[role] = staff
     users[Role.ADMINISTRATOR] = admin_b
     users[None] = _owner_insert_user(conn)
@@ -228,15 +229,19 @@ def test_f01_matrix_holds_for_every_key_role_and_state_against_sql(conn: Connect
                 for granted in (False, True):
                     project = _owner_project(conn, admin_a, user)
                     if member:
-                        add_member(conn, admin_a, project, user)
+                        add_member(
+                            conn,
+                            prove(conn, admin_a, "project.membership.add", project),
+                            project,
+                            user,
+                        )
                     if granted:
                         conn.execute(text("RESET ROLE"))
-                        conn.execute(
-                            text(
-                                """INSERT INTO project_access_grants (project_id, user_id,
+                        guard_insert(
+                            conn,
+                            """INSERT INTO project_access_grants (project_id, user_id,
                                        permitted_actions, granted_by)
-                                   VALUES (:p, :u, CAST(:a AS text[]), :g)"""
-                            ),
+                                   VALUES (:p, :u, CAST(:a AS text[]), :g)""",
                             {"p": project, "u": user, "a": [permission.value], "g": admin_a},
                         )
                         conn.execute(text("SET LOCAL ROLE webdesk_app"))
@@ -265,4 +270,9 @@ def _owner_project(conn: Connection, creator: uuid.UUID, _user: uuid.UUID) -> uu
     """A project created through the creation service by an Administrator."""
     admin, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return create_project(conn, admin, name="f01 project", data_classification="internal")
+    return create_project(
+        conn,
+        prove(conn, admin, "project.create"),
+        name="f01 project",
+        data_classification="internal",
+    )

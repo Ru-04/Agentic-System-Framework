@@ -17,6 +17,8 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
+from tests.support.privileged import ceremony_insert
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.projects import service as projects
 from webdesk.projects.service import ProjectServiceError
@@ -70,12 +72,11 @@ def _two_admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     return result.user_ids[0], result.user_ids[1]
@@ -88,7 +89,7 @@ def _active_user(conn: Connection) -> uuid.UUID:
 
 def _analyst(conn: Connection, admin: uuid.UUID) -> uuid.UUID:
     user = _active_user(conn)
-    assign_role(conn, admin, user, Role.ANALYST)
+    assign_role(conn, prove(conn, admin, "role.assign", user), user, Role.ANALYST)
     return user
 
 
@@ -105,7 +106,10 @@ def test_analyst_creates_a_project_with_exactly_one_system_created_membership(
     admin, _ = _two_admins(conn)
     analyst = _analyst(conn, admin)
     project = projects.create_project(
-        conn, analyst, name="Client A", data_classification="confidential_client"
+        conn,
+        prove(conn, analyst, "project.create"),
+        name="Client A",
+        data_classification="confidential_client",
     )
     membership = conn.execute(
         text(
@@ -123,17 +127,23 @@ def test_user_without_a_creating_role_cannot_create_a_project(conn: Connection) 
     _two_admins(conn)
     plain = _active_user(conn)
     with pytest.raises(ProjectServiceError) as exc:
-        projects.create_project(conn, plain, name="Nope", data_classification="internal")
+        projects.create_project(
+            conn, prove(conn, plain, "project.create"), name="Nope", data_classification="internal"
+        )
     assert (exc.value.status, exc.value.reason) == (403, "role_missing")
 
 
 def test_project_input_is_validated(conn: Connection) -> None:
     admin, _ = _two_admins(conn)
     with pytest.raises(ProjectServiceError) as exc:
-        projects.create_project(conn, admin, name="x", data_classification="public")
+        projects.create_project(
+            conn, prove(conn, admin, "project.create"), name="x", data_classification="public"
+        )
     assert exc.value.reason == "data_classification_invalid"
     with pytest.raises(ProjectServiceError) as exc:
-        projects.create_project(conn, admin, name="   ", data_classification="internal")
+        projects.create_project(
+            conn, prove(conn, admin, "project.create"), name="   ", data_classification="internal"
+        )
     assert exc.value.reason == "name_invalid"
 
 
@@ -141,9 +151,11 @@ def test_administrator_adds_and_revokes_membership_with_rbac_taking_effect(
     conn: Connection,
 ) -> None:
     admin, _ = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="P", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="P", data_classification="internal"
+    )
     staff = _active_user(conn)
-    projects.add_member(conn, admin, project, staff)
+    projects.add_member(conn, prove(conn, admin, "project.membership.add", project), project, staff)
     resource = ResourceRef(project_id=project, data_class="internal")
     assert (
         authorize(
@@ -151,7 +163,9 @@ def test_administrator_adds_and_revokes_membership_with_rbac_taking_effect(
         ).reason
         != "membership_missing"
     )
-    projects.revoke_member(conn, admin, project, staff)
+    projects.revoke_member(
+        conn, prove(conn, admin, "project.membership.revoke", project), project, staff
+    )
     decision = authorize(
         SqlAuthorizationStore(conn), staff, Permission.PROJECT_VIEW.value, resource
     )
@@ -160,29 +174,45 @@ def test_administrator_adds_and_revokes_membership_with_rbac_taking_effect(
 
 def test_self_membership_is_refused(conn: Connection) -> None:
     admin, _ = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="P", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="P", data_classification="internal"
+    )
     with pytest.raises(ProjectServiceError) as exc:
-        projects.add_member(conn, admin, project, admin)
+        projects.add_member(
+            conn, prove(conn, admin, "project.membership.add", project), project, admin
+        )
     assert (exc.value.status, exc.value.reason) == (403, "self_assignment")
 
 
 def test_self_grant_is_refused_and_another_administrator_may_grant(conn: Connection) -> None:
     first, second = _two_admins(conn)
-    project = projects.create_project(conn, first, name="P", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="P", data_classification="internal"
+    )
     with pytest.raises(ProjectServiceError) as exc:
-        projects.grant_project_access(conn, first, project, first, ["source.read"])
+        projects.grant_project_access(
+            conn,
+            prove(conn, first, "project.access.grant", project),
+            project,
+            first,
+            ["source.read"],
+        )
     assert (exc.value.status, exc.value.reason) == (403, "self_grant")
-    grant = projects.grant_project_access(conn, first, project, second, ["source.read"])
+    grant = projects.grant_project_access(
+        conn, prove(conn, first, "project.access.grant", project), project, second, ["source.read"]
+    )
     assert grant is not None
 
 
 def test_restricted_grant_refuses_self_and_empty_reason(conn: Connection) -> None:
     first, second = _two_admins(conn)
-    project = projects.create_project(conn, first, name="P", data_classification="restricted")
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="P", data_classification="restricted"
+    )
     with pytest.raises(ProjectServiceError) as exc:
         projects.grant_restricted(
             conn,
-            first,
+            prove(conn, first, "restricted.grant", project),
             resource_type="project",
             resource_id=project,
             user=first,
@@ -192,7 +222,7 @@ def test_restricted_grant_refuses_self_and_empty_reason(conn: Connection) -> Non
     with pytest.raises(ProjectServiceError) as exc:
         projects.grant_restricted(
             conn,
-            first,
+            prove(conn, first, "restricted.grant", project),
             resource_type="project",
             resource_id=project,
             user=second,
@@ -201,7 +231,7 @@ def test_restricted_grant_refuses_self_and_empty_reason(conn: Connection) -> Non
     assert exc.value.reason == "reason_required"
     grant = projects.grant_restricted(
         conn,
-        first,
+        prove(conn, first, "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=second,
@@ -213,26 +243,38 @@ def test_restricted_grant_refuses_self_and_empty_reason(conn: Connection) -> Non
 
 def test_archive_makes_the_project_read_only_for_membership_and_grants(conn: Connection) -> None:
     admin, second = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="P", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="P", data_classification="internal"
+    )
     staff = _active_user(conn)
-    projects.archive_project(conn, admin, project)
+    projects.archive_project(conn, prove(conn, admin, "project.archive", project), project)
     with pytest.raises(ProjectServiceError) as exc:
-        projects.add_member(conn, admin, project, staff)
+        projects.add_member(
+            conn, prove(conn, admin, "project.membership.add", project), project, staff
+        )
     assert (exc.value.status, exc.value.reason) == (409, "project_archived")
     with pytest.raises(ProjectServiceError) as exc:
-        projects.grant_project_access(conn, admin, project, second, ["source.read"])
+        projects.grant_project_access(
+            conn,
+            prove(conn, admin, "project.access.grant", project),
+            project,
+            second,
+            ["source.read"],
+        )
     assert exc.value.status == 409
     with pytest.raises(ProjectServiceError) as exc:
-        projects.archive_project(conn, admin, project)
+        projects.archive_project(conn, prove(conn, admin, "project.archive", project), project)
     assert exc.value.status == 409
 
 
 def test_only_an_administrator_may_archive(conn: Connection) -> None:
     admin, _ = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="P", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="P", data_classification="internal"
+    )
     analyst = _analyst(conn, admin)
     with pytest.raises(ProjectServiceError) as exc:
-        projects.archive_project(conn, analyst, project)
+        projects.archive_project(conn, prove(conn, analyst, "project.archive", project), project)
     assert exc.value.status == 403
     denied = _count(
         conn,

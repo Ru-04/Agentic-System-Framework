@@ -19,6 +19,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
+from tests.support.privileged import ceremony_insert
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.identity import contacts
@@ -79,12 +80,11 @@ def admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     return result.user_ids[0], result.user_ids[1]

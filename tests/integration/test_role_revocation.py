@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.people import active_user, administrators_for
+from tests.support.proofs import prove
 from webdesk.rbac.assign import RoleServiceError, assign_role
 from webdesk.rbac.matrix import Role
 from webdesk.rbac.revoke import revoke_role
@@ -54,7 +55,7 @@ def test_an_administrator_cannot_revoke_their_own_role_and_the_refusal_is_audite
     ).scalar_one()
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(RoleServiceError) as exc:
-        revoke_role(conn, first, own)
+        revoke_role(conn, prove(conn, first, "role.revoke", own), own)
     assert (exc.value.status, exc.value.reason) == (403, "self_revocation")
     assert _audit(conn, "role.revoke.denied", "self_revocation") == 1
 
@@ -65,8 +66,8 @@ def test_an_analyst_grant_is_revoked_once_and_the_revocation_is_audited(
     first, _second = administrators_for(conn)
     staff = active_user(conn, "Revocable")
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    assignment = assign_role(conn, first, staff, Role.ANALYST)
-    revoke_role(conn, first, assignment)
+    assignment = assign_role(conn, prove(conn, first, "role.assign", staff), staff, Role.ANALYST)
+    revoke_role(conn, prove(conn, first, "role.revoke", assignment), assignment)
     revoked = conn.execute(
         text("SELECT revoked_at IS NOT NULL FROM role_assignments WHERE assignment_id = :a"),
         {"a": assignment},
@@ -74,6 +75,6 @@ def test_an_analyst_grant_is_revoked_once_and_the_revocation_is_audited(
     assert revoked is True
     assert _audit(conn, "role.revoked") == 1
     with pytest.raises(RoleServiceError) as exc:
-        revoke_role(conn, first, assignment)
+        revoke_role(conn, prove(conn, first, "role.revoke", assignment), assignment)
     assert exc.value.reason == "assignment_not_active"
     assert _audit(conn, "role.revoke.denied", "assignment_not_active") == 1

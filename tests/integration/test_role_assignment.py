@@ -17,6 +17,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import install_administrators, new_active_user
+from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
 from webdesk.rbac.assign import RoleServiceError, assign_role
@@ -125,7 +126,7 @@ def _recovery_appointment(
 
 def test_administrator_assigns_a_role_and_the_grant_is_recorded(conn: Connection) -> None:
     admin, staff = _solo_admin_and_staff(conn)
-    assignment = assign_role(conn, admin, staff, Role.ANALYST)
+    assignment = assign_role(conn, prove(conn, admin, "role.assign", staff), staff, Role.ANALYST)
     assert assignment is not None
     count = conn.execute(
         text("SELECT count(*) FROM role_assignments WHERE user_id = :u AND role = 'Analyst'"),
@@ -137,7 +138,7 @@ def test_administrator_assigns_a_role_and_the_grant_is_recorded(conn: Connection
 def test_self_assignment_is_refused_and_audited(conn: Connection) -> None:
     admin, _staff_member = _solo_admin_and_staff(conn)
     with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, admin, admin, Role.ANALYST)
+        assign_role(conn, prove(conn, admin, "role.assign", admin), admin, Role.ANALYST)
     assert (exc.value.status, exc.value.reason) == (403, "self_assignment")
     denied = conn.execute(
         text(
@@ -151,15 +152,27 @@ def test_self_assignment_is_refused_and_audited(conn: Connection) -> None:
 def test_non_administrator_cannot_assign_roles(conn: Connection) -> None:
     first, second, staff = _two_admins_and_staff(conn)
     other = new_active_user(conn, first, second, "Other")
-    with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, staff, other, Role.ANALYST)
-    assert exc.value.status == 403
+    # The authority issues no role.assign proof to a non-Administrator, and it audits the refusal.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, staff, "role.assign", other)
+    assert (
+        conn.execute(
+            text(
+                "SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused' "
+                "AND error_class = 'operation_not_permitted'"
+            )
+        ).scalar_one()
+        >= 1
+    )
+    assert not conn.execute(
+        text("SELECT 1 FROM role_assignments WHERE user_id = :u"), {"u": other}
+    ).first()
 
 
 def test_below_two_an_administrator_grant_needs_an_appointment(conn: Connection) -> None:
     admin, staff = _solo_admin_and_staff(conn)
     with pytest.raises(RoleServiceError) as exc:
-        assign_role(conn, admin, staff, Role.ADMINISTRATOR)
+        assign_role(conn, prove(conn, admin, "role.assign", staff), staff, Role.ADMINISTRATOR)
     assert (exc.value.status, exc.value.reason) == (409, "appointment_required")
 
 

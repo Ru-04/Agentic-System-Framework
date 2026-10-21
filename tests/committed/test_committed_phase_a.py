@@ -1,8 +1,6 @@
 """Phase A committed-row tests (C-2, C-5; EVAL-F11d, F11g, F12).
-
 These run on an isolated database per test (conftest.py), so each operation commits and a second
-connection can see the result. Installation runs inside each test's own database.
-"""
+connection can see the result. Installation runs inside each test's own database."""
 
 from __future__ import annotations
 
@@ -16,6 +14,7 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from tests.support.people import committed_active_user
+from tests.support.proofs import prove
 from webdesk.api.transactions import run_in_transaction
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import TransportUnavailable
@@ -57,6 +56,8 @@ def admins(committed_admins: tuple[uuid.UUID, uuid.UUID]) -> tuple[uuid.UUID, uu
 def _active_user(engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]) -> uuid.UUID:
     """An active account committed through the services (request, approval, activation)."""
     return committed_active_user(engine, admins[0], admins[1], "committed-active")
+
+
 def _count(engine: Engine, sql: str, params: dict[str, object]) -> int:
     with engine.connect() as conn:
         return int(conn.execute(text(sql), params).scalar_one())
@@ -68,18 +69,22 @@ def _count(engine: Engine, sql: str, params: dict[str, object]) -> int:
 def test_a_refused_operation_keeps_its_denial_audit(
     committed_engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
-    unknown = uuid.uuid4()
+    # An active account without any role: the authority issues it a proof (project creation is
+    # not an
+    # Administrator-only operation), and the service refuses it and audits the denial.
+    admin, second = admins
+    plain = committed_active_user(committed_engine, admin, second, "plain account")
     with pytest.raises(ProjectServiceError) as exc:
         run_in_transaction(
             committed_engine,
-            lambda conn: projects_create(conn, unknown),
+            lambda conn: projects_create(conn, plain),
         )
     assert exc.value.status == 403
     denials = _count(
         committed_engine,
         """SELECT count(*) FROM audit_events
            WHERE actor_id_or_service = :a AND outcome = 'denied'""",
-        {"a": str(unknown)},
+        {"a": str(plain)},
     )
     assert denials == 1
 
@@ -87,7 +92,9 @@ def test_a_refused_operation_keeps_its_denial_audit(
 def projects_create(conn: Connection, actor: uuid.UUID) -> None:
     from webdesk.projects import service as projects
 
-    projects.create_project(conn, actor, name="Refused", data_classification="internal")
+    proof = prove(conn, actor, "project.create")
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    projects.create_project(conn, proof, name="Refused", data_classification="internal")
 
 
 def test_an_unexpected_error_rolls_back_every_write(committed_engine: Engine) -> None:
@@ -254,6 +261,7 @@ def test_an_injected_failure_mid_approval_commits_nothing(
         raise RuntimeError("injected after the contact update")
 
     monkeypatch.setattr(contacts, "_audit", fail)
+
     def approve_as_application(conn: Connection) -> None:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         contacts.approve_change(conn, approver, change, "proof-injected", contact_box=BOX)

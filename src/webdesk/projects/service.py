@@ -21,6 +21,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -75,7 +76,7 @@ def _active_project(conn: Connection, project: uuid.UUID) -> None:
 
 def create_project(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     *,
     name: str,
     data_classification: str,
@@ -87,15 +88,18 @@ def create_project(
         raise ProjectServiceError(422, "client_reference_too_long")
     if data_classification not in DATA_CLASSES:
         raise ProjectServiceError(422, "data_classification_invalid")
+    actor = actor_for(conn, proof, "project.create", None)
     _authorized(conn, actor, Permission.PROJECT_CREATE, "project.create.denied")
 
     # Project and creator membership are created together by the guard-owner function (H-07).
     project = uuid.UUID(
         str(
-            conn.execute(
-                text("SELECT webdesk_guard.fn_create_project(:a, :n, :dc, :ref)"),
-                {"a": actor, "n": name.strip(), "dc": data_classification, "ref": client_reference},
-            ).scalar_one()
+            consume_with(
+                conn,
+                "project.create",
+                "SELECT webdesk_guard.fn_create_project_with_proof(:p, :n, :dc, :ref)",
+                {"p": proof, "n": name.strip(), "dc": data_classification, "ref": client_reference},
+            )
         )
     )
     record_event(
@@ -110,7 +114,8 @@ def create_project(
     return project
 
 
-def add_member(conn: Connection, actor: uuid.UUID, project: uuid.UUID, user: uuid.UUID) -> None:
+def add_member(conn: Connection, proof: uuid.UUID, project: uuid.UUID, user: uuid.UUID) -> None:
+    actor = actor_for(conn, proof, "project.membership.add", project)
     if actor == user:
         _deny(conn, actor, "membership.denied", "self_assignment", 403)
     _authorized(conn, actor, Permission.MEMBERSHIP_MANAGE, "membership.denied")
@@ -121,14 +126,12 @@ def add_member(conn: Connection, actor: uuid.UUID, project: uuid.UUID, user: uui
     if not active:
         raise ProjectServiceError(409, "user_not_active")
     try:
-        with conn.begin_nested():
-            conn.execute(
-                text(
-                    """INSERT INTO project_memberships (project_id, user_id, assigned_by_user_id)
-                       VALUES (:p, :u, :actor)"""
-                ),
-                {"p": project, "u": user, "actor": actor},
-            )
+        consume_with(
+            conn,
+            "project.membership.add",
+            "SELECT webdesk_guard.fn_add_membership_with_proof(:p, :project, :u)",
+            {"p": proof, "project": project, "u": user},
+        )
     except SQLAlchemyError as exc:
         raise ProjectServiceError(409, "membership_exists") from exc
     record_event(
@@ -141,17 +144,17 @@ def add_member(conn: Connection, actor: uuid.UUID, project: uuid.UUID, user: uui
     )
 
 
-def revoke_member(conn: Connection, actor: uuid.UUID, project: uuid.UUID, user: uuid.UUID) -> None:
+def revoke_member(conn: Connection, proof: uuid.UUID, project: uuid.UUID, user: uuid.UUID) -> None:
+    actor = actor_for(conn, proof, "project.membership.revoke", project)
     _authorized(conn, actor, Permission.MEMBERSHIP_MANAGE, "membership.denied")
     _active_project(conn, project)
-    result = conn.execute(
-        text(
-            """UPDATE project_memberships SET revoked_at = now()
-               WHERE project_id = :p AND user_id = :u AND revoked_at IS NULL"""
-        ),
-        {"p": project, "u": user},
+    changed = consume_with(
+        conn,
+        "project.membership.revoke",
+        "SELECT webdesk_guard.fn_revoke_membership_with_proof(:p, :project, :u)",
+        {"p": proof, "project": project, "u": user},
     )
-    if result.rowcount != 1:
+    if changed != 1:
         raise ProjectServiceError(404, "membership_not_found")
     record_event(
         conn,
@@ -165,7 +168,7 @@ def revoke_member(conn: Connection, actor: uuid.UUID, project: uuid.UUID, user: 
 
 def grant_project_access(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     project: uuid.UUID,
     user: uuid.UUID,
     actions: Sequence[str],
@@ -173,21 +176,19 @@ def grant_project_access(
     valid = {permission.value for permission in Permission}
     if not actions or any(action not in valid for action in actions):
         raise ProjectServiceError(422, "action_invalid")
+    actor = actor_for(conn, proof, "project.access.grant", project)
     if actor == user:
         _deny(conn, actor, "grant.denied", "self_grant", 403)
     _authorized(conn, actor, Permission.PROJECT_GRANT_MANAGE, "grant.denied")
     _active_project(conn, project)
     grant = uuid.UUID(
         str(
-            conn.execute(
-                text(
-                    """INSERT INTO project_access_grants (project_id, user_id, permitted_actions,
-                           granted_by)
-                       VALUES (:p, :u, CAST(:actions AS text[]), :actor)
-                       RETURNING grant_id"""
-                ),
-                {"p": project, "u": user, "actions": list(actions), "actor": actor},
-            ).scalar_one()
+            consume_with(
+                conn,
+                "project.access.grant",
+                "SELECT webdesk_guard.fn_grant_access_with_proof(:p, :project, :u, :actions)",
+                {"p": proof, "project": project, "u": user, "actions": list(actions)},
+            )
         )
     )
     record_event(
@@ -204,7 +205,7 @@ def grant_project_access(
 
 def grant_restricted(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     *,
     resource_type: str,
     resource_id: uuid.UUID,
@@ -216,27 +217,26 @@ def grant_restricted(
         raise ProjectServiceError(422, "resource_type_invalid")
     if not reason.strip():
         raise ProjectServiceError(422, "reason_required")
+    actor = actor_for(conn, proof, "restricted.grant", resource_id)
     if actor == user:
         _deny(conn, actor, "grant.denied", "self_grant", 403)
     _authorized(conn, actor, Permission.RESTRICTED_GRANT_MANAGE, "grant.denied")
     grant = uuid.UUID(
         str(
-            conn.execute(
-                text(
-                    """INSERT INTO restricted_content_grants (resource_type, resource_id, user_id,
-                           granted_by, reason, expires_at)
-                       VALUES (:rt, :rid, :u, :actor, :reason, :expires)
-                       RETURNING grant_id"""
-                ),
+            consume_with(
+                conn,
+                "restricted.grant",
+                "SELECT webdesk_guard.fn_grant_restricted_with_proof("
+                ":p, :rt, :rid, :u, :reason, :expires)",
                 {
+                    "p": proof,
                     "rt": resource_type,
                     "rid": resource_id,
                     "u": user,
-                    "actor": actor,
                     "reason": reason.strip(),
                     "expires": expires_at,
                 },
-            ).scalar_one()
+            )
         )
     )
     record_event(
@@ -252,11 +252,12 @@ def grant_restricted(
 
 def archive_project(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     project: uuid.UUID,
     *,
     expected_revision: int | None = None,
 ) -> None:
+    actor = actor_for(conn, proof, "project.archive", project)
     _authorized(conn, actor, Permission.PROJECT_ARCHIVE, "project.archive.denied")
     if expected_revision is not None:
         current = conn.execute(
@@ -286,14 +287,13 @@ def archive_project(
             error_class="active_run_exists",
         )
         raise ProjectServiceError(409, "active_run_exists")
-    result = conn.execute(
-        text(
-            """UPDATE projects SET status = 'archived', revision = revision + 1, updated_at = now()
-               WHERE project_id = :p AND status = 'active'"""
-        ),
-        {"p": project},
+    changed = consume_with(
+        conn,
+        "project.archive",
+        "SELECT webdesk_guard.fn_archive_project_with_proof(:p, :project)",
+        {"p": proof, "project": project},
     )
-    if result.rowcount != 1:
+    if changed != 1:
         raise ProjectServiceError(409, "project_not_active")
     record_event(
         conn,

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with
 from webdesk.rbac.assign import RoleServiceError
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
@@ -33,8 +34,9 @@ def _deny(conn: Connection, actor: uuid.UUID, reason: str, status: int) -> NoRet
     raise RoleServiceError(status, reason)
 
 
-def revoke_role(conn: Connection, actor: uuid.UUID, assignment: uuid.UUID) -> None:
-    """Revoke one active role assignment. Raises RoleServiceError on any refusal."""
+def revoke_role(conn: Connection, proof: uuid.UUID, assignment: uuid.UUID) -> None:
+    """Revoke one active role assignment. The actor is the account the proof was issued to."""
+    actor = actor_for(conn, proof, "role.revoke", assignment)
     decision = authorize(SqlAuthorizationStore(conn), actor, Permission.ROLE_ASSIGN.value)
     if not decision.allowed:
         _deny(conn, actor, decision.reason, 403)
@@ -64,9 +66,11 @@ def revoke_role(conn: Connection, actor: uuid.UUID, assignment: uuid.UUID) -> No
         if int(others) < 1:
             _deny(conn, actor, "last_administrator", 409)
 
-    conn.execute(
-        text("SELECT webdesk_guard.fn_revoke_role(:a, :s)"),
-        {"a": actor, "s": assignment},
+    consume_with(
+        conn,
+        "role.revoke",
+        "SELECT webdesk_guard.fn_revoke_role_with_proof(:p, :s)",
+        {"p": proof, "s": assignment},
     )
     record_event(
         conn,

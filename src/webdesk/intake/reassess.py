@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with
 from webdesk.intake.ingest import CLASS_RANK
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
@@ -44,13 +45,14 @@ def _deny(conn: Connection, actor: uuid.UUID, reason: str, status: int) -> None:
 
 def reassess_source_classification(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     source: uuid.UUID,
     *,
     new_class: str,
     justification: str,
     expected_source_revision: int,
 ) -> None:
+    actor = actor_for(conn, proof, "classification.reassess", source)
     decision = authorize(
         SqlAuthorizationStore(conn), actor, Permission.CLASSIFICATION_REASSESS.value
     )
@@ -98,12 +100,12 @@ def reassess_source_classification(
 
     # Only the guard-owner function applies the change. It re-checks the Administrator role,
     # the justification, the revision, the project floor and the restricted rule (H-03).
-    conn.execute(
-        text(
-            "SELECT webdesk_guard.fn_reassess_classification(:a, :s, :c, :j, :rev)"
-        ),
+    consume_with(
+        conn,
+        "classification.reassess",
+        "SELECT webdesk_guard.fn_reassess_classification_with_proof(:p, :s, :c, :j, :rev)",
         {
-            "a": actor,
+            "p": proof,
             "s": source,
             "c": new_class,
             "j": justification.strip(),

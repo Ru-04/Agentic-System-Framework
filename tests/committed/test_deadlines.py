@@ -18,6 +18,7 @@ from sqlalchemy.engine import Engine
 
 from tests.support.activation import LIMITS, activate_user
 from tests.support.people import _email, install_two_contacts_with_window
+from tests.support.proofs import prove
 from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
 from webdesk.delivery.transport import CaptureTransport
 from webdesk.identity.sweep import sweep_expired
@@ -121,7 +122,13 @@ def test_recovery_appointment_lets_the_survivor_grant_administrator_once(
     approval = _recover(committed_engine, second, timedelta(hours=24))
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        assign_role(conn, first, second, Role.ADMINISTRATOR, appointment_approval_id=approval)
+        assign_role(
+            conn,
+            prove(conn, first, "role.assign", second),
+            second,
+            Role.ADMINISTRATOR,
+            appointment_approval_id=approval,
+        )
         consumed = conn.execute(
             text(
                 """SELECT appointment_consumed_at IS NOT NULL FROM user_contact_approvals
@@ -133,7 +140,13 @@ def test_recovery_appointment_lets_the_survivor_grant_administrator_once(
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         with pytest.raises(RoleServiceError) as exc:
-            assign_role(conn, first, second, Role.ADMINISTRATOR, appointment_approval_id=approval)
+            assign_role(
+                conn,
+                prove(conn, first, "role.assign", second),
+                second,
+                Role.ADMINISTRATOR,
+                appointment_approval_id=approval,
+            )
     assert exc.value.reason == "appointment_consumed_or_expired"
 
 
@@ -148,7 +161,13 @@ def test_expired_appointment_cannot_be_used(committed_engine: Engine) -> None:
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         with pytest.raises(RoleServiceError) as exc:
-            assign_role(conn, first, second, Role.ADMINISTRATOR, appointment_approval_id=approval)
+            assign_role(
+                conn,
+                prove(conn, first, "role.assign", second),
+                second,
+                Role.ADMINISTRATOR,
+                appointment_approval_id=approval,
+            )
     assert exc.value.reason == "appointment_consumed_or_expired"
 
 

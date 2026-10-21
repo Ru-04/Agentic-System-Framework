@@ -19,6 +19,8 @@ from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
+from tests.support.privileged import ceremony_insert
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.reassess import ReassessError, reassess_source_classification
@@ -77,19 +79,22 @@ def _setup(conn: Connection, project_class: str = "internal") -> dict[str, uuid.
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     admin = result.user_ids[0]
     analyst = _active_user(conn)
-    assign_role(conn, admin, analyst, Role.ANALYST)
-    project = projects.create_project(conn, admin, name="F02", data_classification=project_class)
-    projects.add_member(conn, admin, project, analyst)
+    assign_role(conn, prove(conn, admin, "role.assign", analyst), analyst, Role.ANALYST)
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="F02", data_classification=project_class
+    )
+    projects.add_member(
+        conn, prove(conn, admin, "project.membership.add", project), project, analyst
+    )
     return {"admin": admin, "analyst": analyst, "project": project}
 
 
@@ -143,7 +148,7 @@ def test_an_administrator_raises_a_source_classification_with_an_audit_record(
     result = _source(conn, store, ids)
     reassess_source_classification(
         conn,
-        ids["admin"],
+        prove(conn, ids["admin"], "classification.reassess", result.source_id),
         result.source_id,
         new_class="confidential_client",
         justification="client brief contains pricing",
@@ -173,7 +178,7 @@ def test_an_analyst_cannot_reassess_and_the_refusal_is_audited(
     with pytest.raises(ReassessError) as exc:
         reassess_source_classification(
             conn,
-            ids["analyst"],
+            prove(conn, ids["analyst"], "classification.reassess", result.source_id),
             result.source_id,
             new_class="confidential_client",
             justification="try",
@@ -194,7 +199,7 @@ def test_a_justification_is_required(conn: Connection, store: ContentStore) -> N
     with pytest.raises(ReassessError) as exc:
         reassess_source_classification(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "classification.reassess", result.source_id),
             result.source_id,
             new_class="confidential_client",
             justification="   ",
@@ -209,7 +214,7 @@ def test_a_stale_source_revision_is_refused(conn: Connection, store: ContentStor
     with pytest.raises(ReassessError) as exc:
         reassess_source_classification(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "classification.reassess", result.source_id),
             result.source_id,
             new_class="confidential_client",
             justification="reason",
@@ -226,7 +231,7 @@ def test_no_classification_below_the_project_floor_is_allowed(
     with pytest.raises(ReassessError) as exc:
         reassess_source_classification(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "classification.reassess", result.source_id),
             result.source_id,
             new_class="internal",
             justification="lower it",
@@ -242,7 +247,7 @@ def test_a_restricted_source_can_be_lowered_with_an_audit_record(
     result = _source(conn, store, ids)
     reassess_source_classification(
         conn,
-        ids["admin"],
+        prove(conn, ids["admin"], "classification.reassess", result.source_id),
         result.source_id,
         new_class="restricted",
         justification="contains a secret",
@@ -255,7 +260,7 @@ def test_a_restricted_source_can_be_lowered_with_an_audit_record(
     assert scan == "quarantined"
     reassess_source_classification(
         conn,
-        ids["admin"],
+        prove(conn, ids["admin"], "classification.reassess", result.source_id),
         result.source_id,
         new_class="internal",
         justification="secret removed",
@@ -285,7 +290,7 @@ def test_raising_to_restricted_is_refused_once_a_version_has_been_parsed(
     with pytest.raises(ReassessError) as exc:
         reassess_source_classification(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "classification.reassess", result.source_id),
             result.source_id,
             new_class="restricted",
             justification="late",

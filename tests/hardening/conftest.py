@@ -78,9 +78,9 @@ _authority: AuthorityClient | None = None
 @pytest.fixture(scope="session")
 def authority_client() -> Iterator[AuthorityClient]:
     """The authentication authority as a separate operating-system process on its own login role.
-    Activation, login and session validation in these tests go through this process. The application
-    login cannot write credentials or sessions (migration 0023), so no test can reach those writes
-    directly."""
+    Activation, login and session validation in these tests go through this process. The
+    application login cannot write credentials or sessions (migration 0023), so no test can
+    reach those writes directly."""
     global _authority
     app_url, _ = _require_urls()
     provisioning_url = os.environ.get("WEBDESK_INTEGRATION_OWNER_URL")
@@ -164,8 +164,8 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
             second = conn.execute(
                 text(
                     """SELECT a.user_id FROM user_contact_approvals a
-                    WHERE a.administrator_appointment AND a.ceremony_id IS NOT NULL AND a.user_id <>
-                    :first ORDER BY a.created_at LIMIT 1"""
+                    WHERE a.administrator_appointment AND a.ceremony_id IS NOT
+                    NULL AND a.user_id <> :first ORDER BY a.created_at LIMIT 1"""
                 ),
                 {"first": first},
             ).scalar_one()
@@ -186,13 +186,17 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
         already = conn.execute(
             text(
                 """SELECT 1 FROM role_assignments
-                WHERE user_id = :u AND role = 'Administrator' AND revoked_at IS NULL AND
-                assigned_by_system IS NULL"""
+                WHERE user_id = :u AND role = 'Administrator' AND revoked_at IS NULL
+                AND assigned_by_system IS NULL"""
             ),
             {"u": second},
         ).first()
     if already is None:
-        with app_engine.begin() as conn:
+        # The appointment is the install-time bootstrap (ceremony role), not an application write.
+        _, owner_url = _require_urls()
+        appointing = create_engine(owner_url)
+        with appointing.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
             conn.execute(
                 text(
                     """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
@@ -200,6 +204,7 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
                 ),
                 {"b": second, "a": first, "approval": appointment},
             )
+        appointing.dispose()
     return {"admin": first, "second": second}
 
 
@@ -246,3 +251,12 @@ def make_active_user(engine: Engine, world: dict[str, uuid.UUID]) -> uuid.UUID:
         contacts.approve_create(conn, second, approval, "proof-hardening")
     _activate_by_token(engine, user)
     return user
+
+
+def remote_prove(
+    conn: Connection, user: uuid.UUID, operation: str, resource: uuid.UUID | None = None
+) -> uuid.UUID:
+    """An operation proof from the running authority process (see tests/support/proofs.py)."""
+    from tests.support.proofs import prove_over_http
+
+    return prove_over_http(conn, _require_authority(), PASSWORD, user, operation, resource)

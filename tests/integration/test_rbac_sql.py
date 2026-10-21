@@ -16,6 +16,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.people import active_user, administrators_for
+from tests.support.privileged import guard_insert
+from tests.support.proofs import prove
 from webdesk.projects.service import add_member, create_project, grant_restricted, revoke_member
 from webdesk.rbac.engine import ResourceRef
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -49,7 +51,10 @@ def _project(conn: Connection, creator: uuid.UUID) -> uuid.UUID:
     admin, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     return create_project(
-        conn, admin, name="rbac project", data_classification="confidential_client"
+        conn,
+        prove(conn, admin, "project.create"),
+        name="rbac project",
+        data_classification="confidential_client",
     )
 
 
@@ -62,9 +67,9 @@ def test_membership_is_read_live_and_revocation_takes_effect(conn: Connection) -
     admin, _second = administrators_for(conn)
     assert not store.has_active_membership(member, project)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    add_member(conn, admin, project, member)
+    add_member(conn, prove(conn, admin, "project.membership.add", project), project, member)
     assert store.has_active_membership(member, project)
-    revoke_member(conn, admin, project, member)
+    revoke_member(conn, prove(conn, admin, "project.membership.revoke", project), project, member)
     assert not store.has_active_membership(member, project)
 
 
@@ -72,12 +77,11 @@ def test_project_grant_is_matched_by_exact_action(conn: Connection) -> None:
     creator = _user(conn)
     reviewer = _user(conn)
     project = _project(conn, creator)
-    conn.execute(
-        text(
-            """INSERT INTO project_access_grants (project_id, user_id, permitted_actions,
+    guard_insert(
+        conn,
+        """INSERT INTO project_access_grants (project_id, user_id, permitted_actions,
                    granted_by)
-               VALUES (:p, :u, '{requirement.view}', :g)"""
-        ),
+               VALUES (:p, :u, '{requirement.view}', :g)""",
         {"p": project, "u": reviewer, "g": creator},
     )
     store = SqlAuthorizationStore(conn)
@@ -95,7 +99,7 @@ def test_restricted_grant_expiry_is_enforced(conn: Connection) -> None:
     # An already-expired grant is created through the service and does not authorize access.
     grant_restricted(
         conn,
-        admin,
+        prove(conn, admin, "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=reader,
@@ -106,7 +110,7 @@ def test_restricted_grant_expiry_is_enforced(conn: Connection) -> None:
     # A live grant, created through the service, authorizes access.
     grant_restricted(
         conn,
-        admin,
+        prove(conn, admin, "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=reader,

@@ -19,6 +19,8 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
+from tests.support.privileged import ceremony_insert
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.intake import parse_service
@@ -87,21 +89,25 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     admin = result.user_ids[0]
     analyst = _active_user(conn)
-    assign_role(conn, admin, analyst, Role.ANALYST)
+    assign_role(conn, prove(conn, admin, "role.assign", analyst), analyst, Role.ANALYST)
     project = projects.create_project(
-        conn, admin, name="Intake project", data_classification="internal"
+        conn,
+        prove(conn, admin, "project.create"),
+        name="Intake project",
+        data_classification="internal",
     )
-    projects.add_member(conn, admin, project, analyst)
+    projects.add_member(
+        conn, prove(conn, admin, "project.membership.add", project), project, analyst
+    )
     return {"admin": admin, "analyst": analyst, "project": project}
 
 
@@ -175,7 +181,7 @@ def test_an_assigned_analyst_admits_a_source_and_the_project_revision_moves(
 def test_a_user_without_membership_cannot_upload(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
     stranger = _active_user(conn)
-    assign_role(conn, ids["admin"], stranger, Role.ANALYST)
+    assign_role(conn, prove(conn, ids["admin"], "role.assign", stranger), stranger, Role.ANALYST)
     with pytest.raises(IngestError) as exc:
         _ingest(conn, store, stranger, ids["project"])
     assert (exc.value.status, exc.value.reason) == (403, "membership_missing")
@@ -196,7 +202,9 @@ def test_a_stale_project_revision_is_refused_without_a_row(
 
 def test_an_archived_project_refuses_uploads(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
-    projects.archive_project(conn, ids["admin"], ids["project"])
+    projects.archive_project(
+        conn, prove(conn, ids["admin"], "project.archive", ids["project"]), ids["project"]
+    )
     with pytest.raises(IngestError) as exc:
         _ingest(conn, store, ids["analyst"], ids["project"])
     assert (exc.value.status, exc.value.reason) == (409, "project_archived")
@@ -262,7 +270,7 @@ def test_restricted_upload_is_quarantined_and_its_bytes_cannot_be_read(
 
     grant_restricted(
         conn,
-        ids["admin"],
+        prove(conn, ids["admin"], "restricted.grant", ids["project"]),
         resource_type="project",
         resource_id=ids["project"],
         user=ids["analyst"],

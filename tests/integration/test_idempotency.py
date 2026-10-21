@@ -16,6 +16,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.privileged import ceremony_insert
+from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.idempotency.service import IdempotencyError, run_idempotent
 from webdesk.projects import service as projects
@@ -66,12 +68,11 @@ def _two_admins(conn: Connection) -> tuple[uuid.UUID, uuid.UUID]:
     activate_user(conn, result.user_ids[0])
     activate_user(conn, result.user_ids[1])
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    conn.execute(
-        text(
-            """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+    ceremony_insert(
+        conn,
+        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
                    appointment_approval_id)
-               VALUES (:b, 'Administrator', :a, :approval)"""
-        ),
+               VALUES (:b, 'Administrator', :a, :approval)""",
         {"a": result.user_ids[0], "b": result.user_ids[1], "approval": result.approval_ids[1]},
     )
     return result.user_ids[0], result.user_ids[1]
@@ -98,7 +99,12 @@ def _create(
         payload=payload,
         operation=lambda: {
             "project_id": str(
-                projects.create_project(conn, actor, name=name, data_classification="internal")
+                projects.create_project(
+                    conn,
+                    prove(conn, actor, "project.create"),
+                    name=name,
+                    data_classification="internal",
+                )
             )
         },
     )
@@ -171,9 +177,13 @@ def test_a_failed_operation_stores_nothing_so_the_retry_can_succeed(conn: Connec
 
 def test_archive_with_a_stale_expected_revision_changes_nothing(conn: Connection) -> None:
     admin, _ = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="Rev", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="Rev", data_classification="internal"
+    )
     with pytest.raises(ProjectServiceError) as exc:
-        projects.archive_project(conn, admin, project, expected_revision=99)
+        projects.archive_project(
+            conn, prove(conn, admin, "project.archive", project), project, expected_revision=99
+        )
     assert (exc.value.status, exc.value.reason) == (409, "revision_conflict")
     status = conn.execute(
         text("SELECT status FROM projects WHERE project_id = :p"), {"p": project}
@@ -183,11 +193,18 @@ def test_archive_with_a_stale_expected_revision_changes_nothing(conn: Connection
 
 def test_archive_with_the_current_expected_revision_succeeds(conn: Connection) -> None:
     admin, _ = _two_admins(conn)
-    project = projects.create_project(conn, admin, name="Rev2", data_classification="internal")
+    project = projects.create_project(
+        conn, prove(conn, admin, "project.create"), name="Rev2", data_classification="internal"
+    )
     current = conn.execute(
         text("SELECT revision FROM projects WHERE project_id = :p"), {"p": project}
     ).scalar_one()
-    projects.archive_project(conn, admin, project, expected_revision=int(current))
+    projects.archive_project(
+        conn,
+        prove(conn, admin, "project.archive", project),
+        project,
+        expected_revision=int(current),
+    )
     status = conn.execute(
         text("SELECT status FROM projects WHERE project_id = :p"), {"p": project}
     ).scalar_one()

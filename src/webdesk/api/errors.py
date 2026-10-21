@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from webdesk.auth.service import AuthError
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import InstallationError
 from webdesk.ceremony.recovery import RecoveryError
 from webdesk.idempotency.service import IdempotencyError
@@ -20,7 +21,7 @@ from webdesk.rbac.assign import RoleServiceError
 from webdesk.runs.errors import RunError
 from webdesk.tokens.service import TokenError
 
-NEUTRAL_REASONS = (AuthError, TokenError)
+NEUTRAL_REASONS = (AuthError, TokenError, ProofRefused)
 DOMAIN_ERRORS: tuple[type[Exception], ...] = (
     ContactServiceError,
     ProjectServiceError,
@@ -29,6 +30,7 @@ DOMAIN_ERRORS: tuple[type[Exception], ...] = (
     RecoveryError,
     AuthError,
     TokenError,
+    ProofRefused,
     InstallationError,
     IngestError,
     RunError,
@@ -47,4 +49,6 @@ def status_for(exc: Any) -> int:
         return 401
     if isinstance(exc, TokenError):
         return 400
+    if isinstance(exc, ProofRefused):
+        return 403
     return int(getattr(exc, "status", 409))

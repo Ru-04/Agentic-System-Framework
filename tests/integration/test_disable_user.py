@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.people import active_user, administrators_for
+from tests.support.proofs import ProofNotIssued, prove
 from webdesk.identity.disable import DisableError, disable_user
 
 pytestmark = pytest.mark.integration
@@ -51,7 +52,13 @@ def test_an_administrator_cannot_disable_their_own_account(conn: Connection) -> 
     first, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(DisableError) as exc:
-        disable_user(conn, first, first, reason="self", expected_revision=_revision(conn, first))
+        disable_user(
+            conn,
+            prove(conn, first, "user.disable", first),
+            first,
+            reason="self",
+            expected_revision=_revision(conn, first),
+        )
     assert (exc.value.status, exc.value.reason) == (403, "self_disable")
     assert _audit(conn, "user.disable.denied", "self_disable") == 1
 
@@ -60,11 +67,15 @@ def test_a_staff_member_cannot_disable_an_account(conn: Connection) -> None:
     _first, _second = administrators_for(conn)
     staff = active_user(conn, "Staff")
     other = active_user(conn, "Other")
-    conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    with pytest.raises(DisableError) as exc:
-        disable_user(conn, staff, other, reason="x", expected_revision=_revision(conn, other))
-    assert exc.value.status == 403
-    assert _audit(conn, "user.disable.denied") == 1
+    # The authority does not issue a user.disable proof to a non-Administrator, and it audits
+    # the refusal.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, staff, "user.disable", other)
+    assert _audit(conn, "authority.proof.refused", "operation_not_permitted") == 1
+    assert (
+        conn.execute(text("SELECT status FROM users WHERE user_id = :u"), {"u": other}).scalar_one()
+        == "active"
+    )
 
 
 def test_an_administrator_disables_a_staff_member_and_the_sessions_end(conn: Connection) -> None:
@@ -72,7 +83,11 @@ def test_an_administrator_disables_a_staff_member_and_the_sessions_end(conn: Con
     staff = active_user(conn, "Leaver")
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     disable_user(
-        conn, first, staff, reason="left the firm", expected_revision=_revision(conn, staff)
+        conn,
+        prove(conn, first, "user.disable", staff),
+        staff,
+        reason="left the firm",
+        expected_revision=_revision(conn, staff),
     )
     status = conn.execute(
         text("SELECT status FROM users WHERE user_id = :u"), {"u": staff}
@@ -86,6 +101,12 @@ def test_a_disable_with_a_stale_revision_is_refused_and_audited(conn: Connection
     staff = active_user(conn, "Stale")
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(DisableError) as exc:
-        disable_user(conn, first, staff, reason="x", expected_revision=_revision(conn, staff) + 99)
+        disable_user(
+            conn,
+            prove(conn, first, "user.disable", staff),
+            staff,
+            reason="x",
+            expected_revision=_revision(conn, staff) + 99,
+        )
     assert exc.value.reason == "revision_conflict"
     assert _audit(conn, "user.disable.denied", "revision_conflict") == 1

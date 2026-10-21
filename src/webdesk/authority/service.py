@@ -44,5 +44,9 @@ def issue_operation_proof(
     value = conn.execute(
         text("SELECT webdesk_authority.fn_issue_operation_proof(:h, :op, :res)"),
         {"h": subject_hash(session_token), "op": operation, "res": resource},
-    ).scalar_one()
+    ).scalar()
+    if value is None:
+        # The database refused the operation and audited the refusal; the caller's commit
+        # keeps the audit.
+        raise AuthorityError("operation_not_permitted")
     return uuid.UUID(str(value))

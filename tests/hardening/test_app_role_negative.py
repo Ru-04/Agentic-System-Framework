@@ -31,7 +31,7 @@ from webdesk.rbac.matrix import Role
 from webdesk.runs.service import start_run
 from webdesk.storage.content_store import ContentStore
 
-from .conftest import POLICY, _email, make_active_user, new_pending_contact
+from .conftest import POLICY, _email, make_active_user, new_pending_contact, remote_prove
 
 pytestmark = pytest.mark.hardening
 
@@ -87,11 +87,16 @@ def _staff_with_source(
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """An active Analyst member of a new project with one ingested source: (staff, source)."""
     staff = make_active_user(app_engine, world)
-    assign_role(conn, world["admin"], staff, Role.ANALYST)
+    assign_role(conn, remote_prove(conn, world["admin"], "role.assign", staff), staff, Role.ANALYST)
     project = projects.create_project(
-        conn, world["admin"], name=name, data_classification="confidential_client"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name=name,
+        data_classification="confidential_client",
     )
-    projects.add_member(conn, world["admin"], project, staff)
+    projects.add_member(
+        conn, remote_prove(conn, world["admin"], "project.membership.add", project), project, staff
+    )
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
@@ -148,7 +153,7 @@ def test_n4_an_analyst_grant_cannot_be_rewritten_into_an_administrator_grant(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
     staff = make_active_user(app_engine, world)
-    assign_role(conn, world["admin"], staff, Role.ANALYST)
+    assign_role(conn, remote_prove(conn, world["admin"], "role.assign", staff), staff, Role.ANALYST)
     _refused(
         conn,
         [
@@ -242,13 +247,16 @@ def test_n12_quarantined_content_cannot_be_marked_clean(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
     project = projects.create_project(
-        conn, world["admin"], name="N12", data_classification="restricted"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N12",
+        data_classification="restricted",
     )
     # Restricted content needs an explicit grant. The second Administrator grants the first;
     # an Administrator may not grant to themselves (self-grant is refused).
     projects.grant_restricted(
         conn,
-        world["second"],
+        remote_prove(conn, world["second"], "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=world["admin"],
@@ -305,7 +313,10 @@ def test_n16_the_system_project_create_principal_cannot_be_inserted_for_an_unrel
 ) -> None:
     staff = make_active_user(app_engine, world)
     project = projects.create_project(
-        conn, world["admin"], name="N16", data_classification="internal"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N16",
+        data_classification="internal",
     )
     _refused(
         conn,
@@ -342,7 +353,7 @@ def test_n19_a_non_administrator_cannot_reassess_classification(
     with pytest.raises(ReassessError) as refusal:
         reassess_source_classification(
             conn,
-            staff,
+            remote_prove(conn, staff, "classification.reassess", source),
             source,
             new_class="restricted",
             justification="hardening N19",
@@ -390,7 +401,9 @@ def test_n6_a_consumed_appointment_cannot_be_reused(
             "SELECT count(*) FROM role_assignments WHERE appointment_approval_id = :a",
             {"a": appointment},
         ),
-        message="consumed",
+        # The application login has no INSERT on role_assignments (migration 0025), so the
+        # refusal is a privilege refusal. The appointment rule is asserted for the ceremony role in
+        # tests/integration/test_gate1_schema.py::test_appointment_is_consumed_once.
     )
 
 
@@ -400,9 +413,18 @@ def test_n10_an_access_grant_cannot_be_moved_to_another_user(
     staff = make_active_user(app_engine, world)
     other = make_active_user(app_engine, world)
     project = projects.create_project(
-        conn, world["admin"], name="N10", data_classification="internal"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N10",
+        data_classification="internal",
     )
-    grant = projects.grant_project_access(conn, world["admin"], project, staff, ["project.view"])
+    grant = projects.grant_project_access(
+        conn,
+        remote_prove(conn, world["admin"], "project.access.grant", project),
+        project,
+        staff,
+        ["project.view"],
+    )
     _refused(
         conn,
         [
@@ -421,11 +443,14 @@ def test_n10_a_restricted_content_grant_cannot_be_moved_to_another_user(
     staff = make_active_user(app_engine, world)
     other = make_active_user(app_engine, world)
     project = projects.create_project(
-        conn, world["admin"], name="N10R", data_classification="restricted"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N10R",
+        data_classification="restricted",
     )
     grant = projects.grant_restricted(
         conn,
-        world["second"],
+        remote_prove(conn, world["second"], "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=staff,
@@ -450,11 +475,14 @@ def test_n13_a_segment_cannot_be_inserted_for_a_quarantined_version(
     conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
     project = projects.create_project(
-        conn, world["admin"], name="N13", data_classification="restricted"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N13",
+        data_classification="restricted",
     )
     projects.grant_restricted(
         conn,
-        world["second"],
+        remote_prove(conn, world["second"], "restricted.grant", project),
         resource_type="project",
         resource_id=project,
         user=world["admin"],
@@ -503,16 +531,34 @@ def test_n14_a_run_snapshot_cannot_reference_another_project(
     conn: Connection, world: dict[str, uuid.UUID], app_engine: Engine
 ) -> None:
     analyst = make_active_user(app_engine, world)
-    assign_role(conn, world["admin"], analyst, Role.ANALYST)
-    project_a = projects.create_project(
-        conn, world["admin"], name="N14A", data_classification="internal"
+    assign_role(
+        conn, remote_prove(conn, world["admin"], "role.assign", analyst), analyst, Role.ANALYST
     )
-    projects.add_member(conn, world["admin"], project_a, analyst)
+    project_a = projects.create_project(
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N14A",
+        data_classification="internal",
+    )
+    projects.add_member(
+        conn,
+        remote_prove(conn, world["admin"], "project.membership.add", project_a),
+        project_a,
+        analyst,
+    )
     run = start_run(conn, analyst, project_a, expected_project_revision=_revision(conn, project_a))
     project_b = projects.create_project(
-        conn, world["admin"], name="N14B", data_classification="internal"
+        conn,
+        remote_prove(conn, world["admin"], "project.create"),
+        name="N14B",
+        data_classification="internal",
     )
-    projects.add_member(conn, world["admin"], project_b, analyst)
+    projects.add_member(
+        conn,
+        remote_prove(conn, world["admin"], "project.membership.add", project_b),
+        project_b,
+        analyst,
+    )
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
@@ -614,8 +660,10 @@ def test_n5_a_revoked_role_assignment_cannot_be_reactivated(
     from webdesk.rbac.revoke import revoke_role
 
     staff = make_active_user(app_engine, world)
-    assignment = assign_role(conn, world["admin"], staff, Role.ANALYST)
-    revoke_role(conn, world["admin"], assignment)
+    assignment = assign_role(
+        conn, remote_prove(conn, world["admin"], "role.assign", staff), staff, Role.ANALYST
+    )
+    revoke_role(conn, remote_prove(conn, world["admin"], "role.revoke", assignment), assignment)
     _refused(
         conn,
         [
