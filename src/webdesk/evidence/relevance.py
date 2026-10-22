@@ -25,7 +25,7 @@ from webdesk.evidence.retrieval import content_terms
 
 DIRECT_MIN_TERMS: Final[int] = 3
 DIRECT_MIN_RATIO: Final[float] = 0.5
-PARTIAL_MIN_TERMS: Final[int] = 2
+PARTIAL_MIN_TERMS: Final[int] = 3
 
 
 class Relevance(StrEnum):

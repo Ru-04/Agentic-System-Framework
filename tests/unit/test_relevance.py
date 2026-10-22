@@ -32,8 +32,10 @@ REQUIREMENT = "Pickup time slots with capacity limits and cut-off times enforced
     [
         # Four of the requirement's meaningful terms appear: direct.
         ("Pickup slots use capacity limits and enforce cut-off times.", Relevance.DIRECT),
-        # Two terms appear: partial, not sufficient for coverage.
-        ("Checkout settings include a pickup option.", Relevance.PARTIAL),
+        # Four terms of about ten appear: partial, not direct (below half).
+        ("Pickup slots at checkout settings include a capacity option.", Relevance.PARTIAL),
+        # Two terms appear: irrelevant under the three-term partial floor.
+        ("Checkout settings include a pickup option.", Relevance.IRRELEVANT),
         # One generic term appears: irrelevant.
         ("The store opens at nine every morning.", Relevance.IRRELEVANT),
         # Only stopwords overlap: irrelevant.
@@ -92,10 +94,10 @@ def _run(text: str, task: str) -> tuple[dict[str, Any], frozenset[Any]]:
 
 
 def test_partial_only_evidence_gives_no_coverage_and_says_so() -> None:
-    # Six task terms; the passage shares two (pickup, checkout), so it is partial, not direct.
+    # Eight task terms; the passage shares three (pickup, checkout, settings): partial, not direct.
     output, coverage = _run(
-        "FIXTURE pickup checkout shopify app option.\n",
-        "pickup capacity cutoff checkout settings holidays",
+        "FIXTURE pickup checkout settings shopify app option.\n",
+        "pickup capacity cutoff checkout settings holidays regional zones",
     )
     assert coverage == frozenset()
     assert any("partial evidence only" in unknown for unknown in output["unknowns"])

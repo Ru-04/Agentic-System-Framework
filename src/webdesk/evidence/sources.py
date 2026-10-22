@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST
+from webdesk.evidence.allowlist import SPRINT2_ALLOWLIST
 
-VENDOR_ALLOWLIST = PROPOSED_SHOPIFY_ALLOWLIST
+VENDOR_ALLOWLIST = SPRINT2_ALLOWLIST
 INTERNAL_ORIGIN_PREFIX = "internal:"
 
 
