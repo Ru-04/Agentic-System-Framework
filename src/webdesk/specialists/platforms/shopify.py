@@ -181,7 +181,15 @@ class ShopifySpecialist:
         )
         usable, quarantined = split_by_trust(in_workspace)
         usable = tuple(sorted(usable, key=lambda p: _rank_key(request.task, p)))
+        candidates_full = len(result.passages) >= CANDIDATE_LIMIT
         unknowns: list[str] = []
+        if candidates_full:
+            # The retriever returns the best matches by term overlap. Passages beyond the limit were
+            # never assessed, so the output says so rather than staying silent (QA4-05).
+            unknowns.append(
+                f"the candidate set reached its limit of {CANDIDATE_LIMIT} passages; further "
+                "passages were not assessed"
+            )
         if quarantined:
             unknowns.append(
                 f"{len(quarantined)} passage(s) contained instruction-like text and were excluded"

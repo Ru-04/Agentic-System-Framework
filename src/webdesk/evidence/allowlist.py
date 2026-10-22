@@ -7,12 +7,13 @@ matches are refused.
 
 Two kinds of entry:
 - A host in ``hosts`` permits any path on that host (the Shopify developer and help entries).
-- A host in ``scoped`` permits only the path prefixes given for it, matched on a path segment
-  boundary, with no query string. Plan documentation and Canadian tax documentation use this, so a
-  permitted host cannot be crawled.
+- A host in ``scoped`` permits only the paths given for it. A prefix entry permits its path and
+  paths beneath it on a segment boundary. An exact entry permits only that path, with no children.
+  Scoped hosts also refuse query strings, percent-encoding, backslashes and dot segments, so a
+  permitted path cannot be walked out of its scope (QA4-01, QA4-02).
 
-The host list and scopes are the working selection recorded on 22 October 2026, and S2-D07 to S2-D09
-approve them for the Sprint 2 evaluation. The origin rule (P1) is approved.
+Scope values: the host list and scopes are the working selection recorded on 22 October 2026, and
+S2-D07 to S2-D09 approve them for the Sprint 2 evaluation. The origin rule (P1) is approved.
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ from urllib.parse import urlsplit
 @dataclass(frozen=True)
 class ScopedHost:
     host: str
-    path_prefixes: tuple[str, ...]
+    paths: tuple[str, ...]
+    exact: bool = False
 
 
 @dataclass(frozen=True)
@@ -40,8 +42,10 @@ class VendorAllowlist:
         if set(self.hosts) & {entry.host for entry in self.scoped}:
             raise ValueError("a host cannot be both unscoped and scoped")
         for entry in self.scoped:
-            if not entry.path_prefixes or any(not p.startswith("/") for p in entry.path_prefixes):
-                raise ValueError("each scoped host needs path prefixes that start with '/'")
+            if not entry.paths or any(not p.startswith("/") for p in entry.paths):
+                raise ValueError("each scoped host needs paths that start with '/'")
+            if any(_unsafe_path(p) for p in entry.paths):
+                raise ValueError("scoped paths must not contain dot segments or encoding")
 
     def permits(self, url: str) -> bool:
         if not url.isascii() or any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in url):
@@ -61,16 +65,26 @@ class VendorAllowlist:
             return True
         for entry in self.scoped:
             if parts.hostname == entry.host:
-                return not parts.query and any(
-                    _within(parts.path, prefix) for prefix in entry.path_prefixes
-                )
+                if parts.query or _unsafe_path(parts.path):
+                    return False
+                return any(_matches(parts.path, p, entry.exact) for p in entry.paths)
         return False
 
 
-def _within(path: str, prefix: str) -> bool:
-    if not path.startswith(prefix):
+def _unsafe_path(path: str) -> bool:
+    # Percent-encoding, backslashes, and dot segments are refused outright. They can make a path
+    # look like it is inside a scope while the server resolves it elsewhere.
+    if "%" in path or "\\" in path:
+        return True
+    return any(segment in (".", "..") for segment in path.split("/"))
+
+
+def _matches(path: str, scoped_path: str, exact: bool) -> bool:
+    if exact:
+        return path == scoped_path
+    if not path.startswith(scoped_path):
         return False
-    rest = path[len(prefix) :]
+    rest = path[len(scoped_path) :]
     return rest == "" or rest[0] in "/."
 
 
@@ -78,17 +92,17 @@ PROPOSED_SHOPIFY_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(
     frozenset({"shopify.dev", "help.shopify.com"})
 )
 
-# S2-D08: Shopify plan and pricing documentation only. Validated 22 Oct 2026: /pricing and /plus
-# return HTTP 200 on the canonical host. /features redirects into /pos/features, so it is excluded.
-# shopify.com redirects to www.shopify.com, so both hosts carry the same scope (flagged for
-# decision-maker confirmation).
+# S2-D08: Shopify plan and pricing documentation only. Directory-style prefixes. /features is
+# excluded because it redirects into /pos/features. shopify.com redirects to www.shopify.com, so
+# both hosts carry the same scope (flagged for decision-maker confirmation). Note: the plan pages
+# returned HTTP 403 to the fetch client when last attempted (see the evaluation record).
 SHOPIFY_PLAN_SCOPES: Final[tuple[ScopedHost, ...]] = (
     ScopedHost("shopify.com", ("/pricing", "/plus")),
     ScopedHost("www.shopify.com", ("/pricing", "/plus")),
 )
 
-# S2-D09: two exact official CRA pages, validated 22 Oct 2026 (the e-commerce page returns HTTP 200;
-# the second is the bulletin it links to). Exact paths only: no other canada.ca page is permitted.
+# S2-D09: two exact official CRA pages. The e-commerce page returned HTTP 200 and the bulletin it
+# links to returned HTTP 200 when validated. Exact paths only, with no children.
 CANADA_TAX_SCOPE: Final[ScopedHost] = ScopedHost(
     "www.canada.ca",
     (
@@ -96,6 +110,7 @@ CANADA_TAX_SCOPE: Final[ScopedHost] = ScopedHost(
         "charge-collect-specific-situations/e-commerce.html",
         "/en/revenue-agency/services/forms-publications/publications/b-090.html",
     ),
+    exact=True,
 )
 
 SPRINT2_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(

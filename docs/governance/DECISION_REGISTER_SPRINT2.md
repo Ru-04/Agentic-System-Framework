@@ -28,3 +28,8 @@
 
 - Name, role and signature: **not provided in this record**.
 - Effective date: 22 October 2026, as stated in the decision-maker's instruction. This is not a signature.
+
+## Update after independent QA4 (commit fd83e7e)
+
+- S2-D10 figures above (46 of 55; 15 PARTIAL; 3 requirements with findings) are **superseded**. Current figures: 0 DIRECT, 5 PARTIAL, 107 IRRELEVANT; 0 requirements with a cited finding; agreement 44 of 55 with generic words excluded (tuned, not validated). See `docs/evidence/SPRINT2_QA4_RESPONSE.md`.
+- New decision needed (QA4-16 and section "What this means" in the QA4 response): how to treat requirements with fewer than three content terms, and whether to authorize human review or a D09 semantic validator for relevance.

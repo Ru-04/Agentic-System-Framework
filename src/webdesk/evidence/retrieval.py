@@ -141,8 +141,9 @@ def content_terms(text: str) -> set[str]:
 
 
 def _singular(word: str) -> str:
-    # Simple plural folding: "filters" -> "filter". Words ending in "ss" are kept.
-    if len(word) > 4 and word.endswith("s") and not word.endswith("ss"):
+    # Simple plural folding: "filters" -> "filter". Words ending in "ss", "us", "is" or "ps" are
+    # kept, so "https" does not fold to "http" (QA4-09). "-es" plurals are not folded (known limit).
+    if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is", "ps")):
         return word[:-1]
     return word
 

@@ -4,14 +4,16 @@ Keyword overlap alone was shown to be insufficient (QA3 and the spot-checks). Th
 well one passage addresses one requirement, using deterministic rules over the requirement's own
 meaningful terms:
 
+Platform-generic words (for example "shopify", "store", "product") are not counted at all.
+
 - DIRECT: at least three distinct requirement terms, and at least half of the requirement's terms,
   appear in the passage.
-- PARTIAL: at least two distinct requirement terms appear. The passage may support part of the
-  requirement but is not sufficient on its own.
-- IRRELEVANT: fewer than two terms appear. The passage is excluded.
+- PARTIAL: at least three distinct requirement terms appear (PARTIAL_MIN_TERMS), but not enough
+  for DIRECT. The passage may support part of the requirement but is not sufficient on its own.
+- IRRELEVANT: fewer than three terms appear. The passage is excluded.
 
-This is a lexical grade. It can miss a direct answer phrased in other words, and it can accept a
-passage that shares generic terms. It therefore never establishes technical feasibility, and its
+This is a lexical grade. It can miss a direct answer phrased in other words, and a shared specific
+word can still be a coincidence. It therefore never establishes technical feasibility, and its
 grades are reported with that limit. A semantic validator may be plugged in later. It is not
 enabled, because it would need a model call, which is not authorized (D09). See SemanticValidator.
 """
@@ -34,11 +36,42 @@ class Relevance(StrEnum):
     IRRELEVANT = "irrelevant"
 
 
+# Platform-generic words appear in almost every Shopify passage. They say nothing about a specific
+# requirement, so they are not counted as evidence of relevance (QA4-04).
+PLATFORM_GENERIC_TERMS: Final[frozenset[str]] = frozenset(
+    {
+        "shopify",
+        "store",
+        "online",
+        "merchant",
+        "customer",
+        "order",
+        "product",
+        "platform",
+        "business",
+        "client",
+        "site",
+        "website",
+        "system",
+        "feature",
+        "solution",
+        "support",
+        "using",
+        "based",
+        "app",
+    }
+)
+
+
+def _judge_terms(text: str) -> set[str]:
+    return content_terms(text) - PLATFORM_GENERIC_TERMS
+
+
 def judge_relevance(requirement: str, passage_text: str) -> Relevance:
-    required = content_terms(requirement)
+    required = _judge_terms(requirement)
     if not required:
         return Relevance.IRRELEVANT
-    matched = required & content_terms(passage_text)
+    matched = required & _judge_terms(passage_text)
     if len(matched) >= DIRECT_MIN_TERMS and len(matched) / len(required) >= DIRECT_MIN_RATIO:
         return Relevance.DIRECT
     if len(matched) >= PARTIAL_MIN_TERMS:
