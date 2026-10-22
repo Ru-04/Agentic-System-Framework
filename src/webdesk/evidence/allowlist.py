@@ -94,7 +94,7 @@ PROPOSED_SHOPIFY_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(
 
 # S2-D08: Shopify plan and pricing documentation only. Directory-style prefixes. /features is
 # excluded because it redirects into /pos/features. shopify.com redirects to www.shopify.com, so
-# both hosts carry the same scope (flagged for decision-maker confirmation). Note: the plan pages
+# both hosts carry the same scope (confirmed by the decision-maker, 22 Oct 2026). The plan pages
 # returned HTTP 403 to the fetch client when last attempted (see the evaluation record).
 SHOPIFY_PLAN_SCOPES: Final[tuple[ScopedHost, ...]] = (
     ScopedHost("shopify.com", ("/pricing", "/plus")),

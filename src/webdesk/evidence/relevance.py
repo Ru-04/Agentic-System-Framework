@@ -63,15 +63,16 @@ PLATFORM_GENERIC_TERMS: Final[frozenset[str]] = frozenset(
 )
 
 
-def _judge_terms(text: str) -> set[str]:
+def specific_terms(text: str) -> set[str]:
+    """Requirement or passage terms that count for relevance (platform-generic words removed)."""
     return content_terms(text) - PLATFORM_GENERIC_TERMS
 
 
 def judge_relevance(requirement: str, passage_text: str) -> Relevance:
-    required = _judge_terms(requirement)
+    required = specific_terms(requirement)
     if not required:
         return Relevance.IRRELEVANT
-    matched = required & _judge_terms(passage_text)
+    matched = required & specific_terms(passage_text)
     if len(matched) >= DIRECT_MIN_TERMS and len(matched) / len(required) >= DIRECT_MIN_RATIO:
         return Relevance.DIRECT
     if len(matched) >= PARTIAL_MIN_TERMS:

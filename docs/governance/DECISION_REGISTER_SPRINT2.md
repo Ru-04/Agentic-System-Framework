@@ -33,3 +33,12 @@
 
 - S2-D10 figures above (46 of 55; 15 PARTIAL; 3 requirements with findings) are **superseded**. Current figures: 0 DIRECT, 5 PARTIAL, 107 IRRELEVANT; 0 requirements with a cited finding; agreement 44 of 55 with generic words excluded (tuned, not validated). See `docs/evidence/SPRINT2_QA4_RESPONSE.md`.
 - New decision needed (QA4-16 and section "What this means" in the QA4 response): how to treat requirements with fewer than three content terms, and whether to authorize human review or a D09 semantic validator for relevance.
+
+## Decisions reported by the decision-maker after the QA4 response (22 October 2026)
+
+| ID | Decision as reported | Effect and limit |
+|---|---|---|
+| **S2-R1** | Both: human review of the candidate passages, and a semantic validator for relevance. | **Human review:** a review sheet is prepared (`docs/evaluation/HUMAN_REVIEW_SHEET_SPRINT2.md`, 55 pairs). No reviewer has labelled anything yet. Passage text is in a scratch file that the decision-maker must arrange access to. **Semantic validator:** approval in principle only. D09 still requires an approved provider, exact model ID, credentials and usage budget. None of these was provided, so the validator stays **disabled**. |
+| **S2-R2** | Handle requirements with too few specific terms on my own. | Implemented: a requirement with fewer than three specific terms gets a clarification request ("restate the requirement with the platform features it involves") rather than a relevance grade. No requirement among the 17 falls below the threshold, so no current result changes. |
+| **S2-R3** | `www.shopify.com` is within S2-D08. | Confirmed. The scope on `www.shopify.com` is the same as on `shopify.com`. |
+| **S2-R4** | "AS approves." | Reported by the decision-maker. **This is not AS's signed sign-off.** AS's own signed record, stating AS's name, role, date and the commit reviewed, is still required in `docs/evidence/SPRINT2_EVIDENCE_PACKAGE.md`, section 13. No sign-off has been recorded on AS's behalf. |
