@@ -31,7 +31,6 @@ OPTION_LABELS: Final[dict[OptionClass, str]] = {
 _INDICATORS: Final[dict[OptionClass, tuple[str, ...]]] = {
     OptionClass.NATIVE: (
         "in the shopify admin",
-        "shopify admin",
         "built-in",
         "out of the box",
         "theme editor",

@@ -5,18 +5,13 @@
 **Source reliability:** every claim below is WDS's own marketing description of past work. Outcomes and figures on those pages are NOT used here, and none has been verified.
 **Traceability:** each brief maps to one public WDS case-study page. The page slug is kept in section 0 only, so the mapping can be checked against the public site.
 
-## 0. Traceability (public pages)
+## 0. Traceability
 
-| Brief | Public WDS page (slug) |
-|---|---|
-| SH-CASE-01 | `telus-high-stakes-shopify-plus-store-customization` |
-| SH-CASE-02 | `shopify-plus-custom-filters-advanced-search` |
-| SH-CASE-03 | `custom-shopify-platform-for-fundraising-and-multi-system-integration` |
-| SH-CASE-04 | `shopify-custom-dashboard-automation` |
+Each brief maps to one public WDS case-study page. The page reference is held by the decision-maker, outside this repository, so the public page can be checked without naming the client here.
 
 ## SH-CASE-01 — Shopify Plus telecom rate-plan store
 
-**Context:** A Canadian telecom subscription business sells rate plans on Shopify Plus, with account and renewal flows.
+**Context:** A Canadian subscription business sells recurring plans on Shopify Plus, with account and renewal flows.
 
 **Requirements (sanitized):**
 1. Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses.

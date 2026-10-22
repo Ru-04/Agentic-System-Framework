@@ -5,8 +5,9 @@ host alone or the host with the explicit port 443. Any control character, whites
 character anywhere in the URL is refused before parsing. Suffix, substring and encoded-host
 matches are refused.
 
-The entries below are a PROPOSED configuration. D08 approves the approach, not the list. Until the
-list is approved, no live fetch is treated as approved vendor retrieval.
+The entries below are the working selection recorded on 22 October 2026. The origin rule (P1) is
+approved. The host list is not yet a formal approval of official vendor domains under D08, and the
+decision-maker must confirm it.
 """
 
 from __future__ import annotations

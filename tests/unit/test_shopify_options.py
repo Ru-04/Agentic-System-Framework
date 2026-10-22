@@ -100,7 +100,9 @@ def test_uncovered_option_classes_become_gaps_with_clarification_questions() -> 
 
 
 def test_investigate_reports_covered_option_classes() -> None:
-    specialist = _specialist("FIXTURE storefront api graphql query. Use the shopify admin.")
+    specialist = _specialist(
+        "FIXTURE storefront api graphql query. Configure it with built-in settings."
+    )
     request = SpecialistInput.model_validate(_request("storefront api graphql query admin"))
     _, coverage = specialist.investigate(request)
     assert OptionClass.CUSTOM_API in coverage

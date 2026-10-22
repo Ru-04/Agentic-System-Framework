@@ -31,23 +31,23 @@ Help-centre pages on `help.shopify.com` were not included: they returned HTTP 40
 
 | Brief | Requirement | Status | Cited findings | Sources cited | Option classes evidenced | Gaps reported |
 |---|---|---|---|---|---|---|
-| SH-CASE-01 | Validate Canadian postal addresses at checkout, including rural and remote addresses | incomplete | 14 | shopify-doc-05 | custom code against a documented API, third-party app or extension | 1 of 3 |
-| SH-CASE-01 | Capture province explicitly at checkout instead of IP-based detection | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-01 | Let a customer renew a subscription from the order status page without an account | incomplete | 3 | shopify-doc-09, shopify-doc-13 | none | 3 of 3 |
-| SH-CASE-01 | Create a customer account after purchase reusing checkout details | incomplete | 4 | shopify-doc-01, shopify-doc-13 | custom code against a documented API, third-party app or extension | 1 of 3 |
-| SH-CASE-01 | Calculate tax and fixed levies for a digital subscription and hide shipping fields | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-02 | Dedicated page per artist with featured works in the online store | incomplete | 2 | shopify-doc-01 | custom code against a documented API | 2 of 3 |
-| SH-CASE-02 | Faceted product filters with AND OR logic that update without a page reload | incomplete | 1 | shopify-doc-10 | native Shopify configuration | 2 of 3 |
-| SH-CASE-02 | Search with autocomplete and typo tolerance across a large catalogue | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-02 | Keep the checkout behaviour unchanged | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-03 | Campaign pages with real-time sales tracking per fundraiser | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-03 | Permanent partner stores coexisting with campaign stores | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-03 | Role-based staff permissions for partners and administrators | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-03 | Synchronize orders and product data with external systems through webhooks and the Admin API | incomplete | 15 | shopify-doc-08, shopify-doc-14 | custom code against a documented API, native Shopify configuration | 1 of 3 |
-| SH-CASE-04 | Pickup time slots with capacity limits and cut-off times enforced at checkout | incomplete | 5 | shopify-doc-05 | third-party app or extension | 2 of 3 |
-| SH-CASE-04 | Blackout dates and holidays for pickup | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-04 | Staff dashboard with daily volume reporting | incomplete | 0 | — | none | 3 of 3 |
-| SH-CASE-04 | Automated order preparation timelines using workflow automation | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-01 | Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses. | incomplete | 2 | shopify-doc-05 | third-party app or extension | 2 of 3 |
+| SH-CASE-01 | Do not rely on IP-based province detection. Province must be captured explicitly. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-01 | Let a customer renew a rate plan from the order status page without creating an account. | incomplete | 3 | shopify-doc-09, shopify-doc-13 | none | 3 of 3 |
+| SH-CASE-01 | Create the customer account after purchase, reusing details already entered at checkout. | incomplete | 4 | shopify-doc-01, shopify-doc-13 | custom code against a documented API, third-party app or extension | 1 of 3 |
+| SH-CASE-01 | Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-02 | Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-02 | Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set. | incomplete | 1 | shopify-doc-11 | custom code against a documented API | 2 of 3 |
+| SH-CASE-02 | Provide search that handles natural-language phrasing, typos and autocomplete at catalogue scale. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-02 | Keep checkout behaviour unchanged. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-03 | Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-03 | Coexistence of permanent partner stores and campaign-driven stores. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-03 | Role-based administration for partners and staff. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-03 | Synchronization of orders and product data with several external systems, some with custom endpoints. | incomplete | 3 | shopify-doc-03, shopify-doc-08 | native Shopify configuration | 2 of 3 |
+| SH-CASE-04 | Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout. | incomplete | 2 | shopify-doc-05 | third-party app or extension | 2 of 3 |
+| SH-CASE-04 | Blackout dates and holidays. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-04 | Staff dashboard with daily volume, forecasting and reporting. | incomplete | 0 | — | none | 3 of 3 |
+| SH-CASE-04 | Automated order preparation timelines. | incomplete | 0 | — | none | 3 of 3 |
 
 ## 3. Interpretation limits
 

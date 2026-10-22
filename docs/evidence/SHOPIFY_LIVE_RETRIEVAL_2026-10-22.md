@@ -22,3 +22,7 @@ Specialist run on this text (structure only):
 Limits:
 - This is one page, not a corpus. It is not a test of plan-specific or version-sensitive claims.
 - Acceptance under D11 is not granted by this record.
+
+## Addendum: Sprint 2 run corpus
+
+A further 16 allowlisted fetches were made for the Sprint 2 run on the same day. Their metadata is in `docs/evaluation/SHOPIFY_REAL_INVESTIGATION_2026-10-22.md`, section 1. The scope of these fetches is pending the decision-maker's confirmation (`DECISION_RECORD_2026-10-22.md`, section 7).

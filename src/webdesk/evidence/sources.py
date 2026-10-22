@@ -51,8 +51,10 @@ class SourceRecord:
         if self.kind is SourceKind.VENDOR_DOC:
             if not VENDOR_ALLOWLIST.permits(self.origin):
                 raise ValueError("vendor origin is not on the approved vendor allowlist")
-        elif not self.origin.startswith(INTERNAL_ORIGIN_PREFIX):
-            raise ValueError("internal origin must use the internal: scheme")
+        else:
+            identifier = self.origin[len(INTERNAL_ORIGIN_PREFIX) :]
+            if not self.origin.startswith(INTERNAL_ORIGIN_PREFIX) or not identifier.strip():
+                raise ValueError("internal origin must use the internal: scheme and an identifier")
 
     @property
     def content_sha256(self) -> str:

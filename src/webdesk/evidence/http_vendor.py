@@ -44,8 +44,9 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def build_vendor_opener() -> urllib.request.OpenerDirector:
-    # Proposal P2 (approved 22 October 2026): an empty ProxyHandler stops urllib from reading
-    # HTTP_PROXY / HTTPS_PROXY, so the allowlist is the only route control for vendor fetches.
+    # Proposal P2 (approved 22 October 2026). Passing a ProxyHandler instance makes urllib skip its
+    # default handler, which reads HTTP_PROXY and HTTPS_PROXY. The empty instance installs no proxy
+    # handler of its own, so no proxy is used and the allowlist controls the destination.
     return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler)
 
 
