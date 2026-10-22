@@ -642,7 +642,7 @@ resource (the project for upload and start; the version for reparse; the run for
 Verified on freshly rebuilt databases (`webdesk_integration` and `webdesk_hardening`, both dropped, recreated with owner
 `webdesk_integration_owner`, and migrated to head `0032_app_direct_write_revocation`):
 
-- Full suite: **514 passed, 0 failed, 0 skipped** (`python -m pytest -q`, 3 min 31 s). Baseline before this work at
+- Full suite: **516 passed, 0 failed, 0 skipped** (514 plus two reparse and resume replay tests added in the final step) (`python -m pytest -q`, 3 min 31 s). Baseline before this work at
   e454b71: 486 passed.
 - `ruff check src tests migrations`: clean. `mypy --strict src/webdesk`: clean (55 source files).
 - Alembic on a fresh scratch database: upgrade head, downgrade to `0029_ceremony_least_privilege`, upgrade head again:
@@ -694,8 +694,9 @@ Residual risks (not closed by this change):
    residual the earlier operations carry.
 3. The snapshot input digest is computed in Python (RFC 8785). The guard re-derives the selection and refuses a
    difference, but it does not recompute the digest.
-4. Replay coverage is partial. Reparse replay and resume replay are not tested directly: reparse needs a failed version
-   from a login-role fixture, and Gate 1 cannot reach `waiting_human`, so resume only has the pre-guard refusal path.
+4. Replay coverage for reparse and resume is in the integration suite, not the restricted-login suite. The owner sets the
+   failed version or the `waiting_human` state (Gate 1 cannot reach `waiting_human` by itself), then the proof is spent by
+   its first attempt that reaches the guard (`test_gap_closure.py`). The restricted login cannot set those states.
 5. No worker login exists. `webdesk_worker` is a NOLOGIN role. `process_one` has no production caller in this repository,
    and the deployment of a worker login (a member of `webdesk_worker` only) is a deployment item. The worker tests run
    the worker code as `webdesk_worker` through `SET ROLE` from the owner, not through a worker login.

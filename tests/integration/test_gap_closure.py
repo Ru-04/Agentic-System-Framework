@@ -23,6 +23,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake import parse_service
 from webdesk.intake.ingest import IngestError, ingest_source
@@ -325,6 +326,63 @@ def test_reparse_refuses_a_quarantined_version(conn: Connection, store: ContentS
             expected_source_revision=1,
         )
     assert exc.value.reason == "quarantined"
+
+
+def test_a_reparse_proof_is_spent_by_its_first_accepted_reparse(
+    conn: Connection, store: ContentStore
+) -> None:
+    ids = _setup(conn)
+    version = _ingest(conn, store, ids)
+    proof = prove(conn, ids["admin"], "source.reparse", version.source_version_id)
+    _set(
+        conn,
+        "UPDATE source_versions SET parse_status = 'failed' WHERE source_version_id = :v",
+        {"v": version.source_version_id},
+    )
+    reparse_source_version(
+        conn, proof, version.source_version_id, reason="first", expected_source_revision=1
+    )
+    _set(
+        conn,
+        "UPDATE source_versions SET parse_status = 'failed' WHERE source_version_id = :v",
+        {"v": version.source_version_id},
+    )
+    current = int(
+        conn.execute(
+            text("SELECT revision FROM sources WHERE source_id = :s"), {"s": version.source_id}
+        ).scalar_one()
+    )
+    with pytest.raises(ProofRefused) as exc:
+        reparse_source_version(
+            conn,
+            proof,
+            version.source_version_id,
+            reason="replay",
+            expected_source_revision=current,
+        )
+    assert exc.value.reason == "proof_spent"
+
+
+def test_a_resume_proof_is_spent_by_its_first_attempt_that_reaches_the_guard(
+    conn: Connection, store: ContentStore
+) -> None:
+    ids = _setup(conn)
+    _ingest(conn, store, ids)
+    run = _start(conn, ids)
+    _set(
+        conn,
+        "UPDATE workflow_runs SET status = 'waiting_human' WHERE run_id = :r",
+        {"r": run},
+    )
+    proof = prove(conn, ids["admin"], "run.resume", run)
+    revision = _run_rev(conn, run)
+    # Gate 1: the first attempt reaches the guard and consumes the proof, then is refused.
+    with pytest.raises(RunError) as refused:
+        runs.resume_run(conn, proof, run, expected_run_revision=revision)
+    assert refused.value.reason == "resume_not_supported_in_gate_1"
+    with pytest.raises(ProofRefused) as spent:
+        runs.resume_run(conn, proof, run, expected_run_revision=revision)
+    assert spent.value.reason == "proof_spent"
 
 
 def test_reparse_refuses_a_superseded_failed_version(conn: Connection, store: ContentStore) -> None:

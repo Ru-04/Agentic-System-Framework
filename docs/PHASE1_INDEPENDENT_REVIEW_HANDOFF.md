@@ -143,7 +143,7 @@ disappeared on a clean run.
   run tables. The application role keeps SELECT.
 - **Tests.** `tests/hardening/test_intake_run_boundary.py` (28 cases, restricted login) covers direct-write refusal,
   role isolation, actor spoofing, replay and rollback. The full suite passes on freshly rebuilt databases.
-- **Verified results:** 514 passed, 0 failed, 0 skipped; ruff and strict mypy clean; alembic head, downgrade to 0029 and
+- **Verified results:** 516 passed, 0 failed, 0 skipped; ruff and strict mypy clean; alembic head, downgrade to 0029 and
   head again succeed. Detail is in `docs/INCREMENT_3_EVIDENCE.md`, section "Phase 1 release blocker 1 closure".
 - **Still open after this change (recorded, not closed):** source-content reads are not proof-gated (residual 1 of the
   evidence document); authorization decisions remain in Python behind the proofs; the outbox worker role (item 3),
