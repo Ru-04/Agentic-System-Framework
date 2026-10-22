@@ -1,8 +1,15 @@
 """Source ingest, supersession and quarantined reads (I-4, I-5; EVAL-F02, F03, F05).
 
-Ingest order: authorize, lock the project, check the project revision, validate the upload, store
-the bytes, then write the source and version rows. Any refusal happens before a row is written.
-The refusal is audited and then raised, so the API can keep the audit (C-2).
+Ingest order: authorize, check the project state, validate the upload, store the bytes, then admit
+the
+source or version through ``webdesk_guard.fn_admit_source_with_proof``. Any refusal happens before a
+row is
+written. The refusal is audited and then raised, so the API can keep the audit (C-2).
+
+The actor is the account the ``source.upload`` operation proof was issued to. No caller supplies an
+actor
+(R4 Option A, release blocker 1). Every intake row is written by the guard, never by the application
+role.
 
 Quarantine (I-4): restricted content without a clean scan is stored with ``scan_status =
 quarantined``. It is never parsed, snapshotted or read back. Reads of quarantined content return
@@ -20,9 +27,10 @@ from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_row, wrapper_refusal
 from webdesk.idempotency.service import IdempotencyError, lookup, record
 from webdesk.intake.validation import UploadRefusal, validate_upload
 from webdesk.rbac.engine import ResourceRef, authorize
@@ -47,6 +55,26 @@ SOURCE_TYPES = frozenset(
 )
 TRUSTS = frozenset({"untrusted_input", "approved_reference", "authorized_internal"})
 CLASS_RANK = {"internal": 1, "confidential_client": 2, "restricted": 3}
+
+# Named refusals raised by the guard, mapped to (status, denial event). A denial event means the
+# refusal was audited before it was raised. Other refusals are raised without an audit row, as
+# before.
+PROJECT_REFUSALS: dict[str, tuple[int, str | None]] = {
+    "project_not_found": (404, None),
+    "project_archived": (409, "source.upload.denied"),
+    "classification_below_project": (422, None),
+    "revision_conflict": (409, None),
+}
+ADMISSION_REFUSALS: dict[str, tuple[int, str | None]] = {
+    "expected_source_revision_required": (422, None),
+    "source_not_found": (404, None),
+    "source_revision_conflict": (409, None),
+}
+ADMIT_SQL = (
+    "SELECT * FROM webdesk_guard.fn_admit_source_with_proof("
+    ":p, :project, :supersedes, :expected_source, :expected_project, :title, :st, :tr, :ac,"
+    " :k, :m, :size)"
+)
 
 
 class IngestError(Exception):
@@ -89,23 +117,10 @@ def _authorize(
         _deny(conn, actor, event, decision.reason, 403)
 
 
-def _lock_project(conn: Connection, project: uuid.UUID) -> tuple[str, str, int]:
-    row = conn.execute(
-        text(
-            """SELECT status, data_classification, revision
-               FROM projects WHERE project_id = :p FOR UPDATE"""
-        ),
-        {"p": project},
-    ).one_or_none()
-    if row is None:
-        raise IngestError(404, "project_not_found")
-    return str(row[0]), str(row[1]), int(row[2])
-
-
 def ingest_source(
     conn: Connection,
     store: ContentStore,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     project: uuid.UUID,
     *,
     title: str,
@@ -120,7 +135,11 @@ def ingest_source(
     expected_source_revision: int | None = None,
     idempotency_key: uuid.UUID | None = None,
 ) -> tuple[IngestResult, bool]:
-    """Admit a source or a new version. Returns ``(result, replayed)``."""
+    """Admit a source or a new version. Returns ``(result, replayed)``.
+
+    The actor is the account the ``source.upload`` operation proof was issued to. The caller never
+    supplies one.
+    """
     if source_type not in SOURCE_TYPES or source_trust not in TRUSTS:
         raise IngestError(422, "metadata_invalid")
     if not 1 <= len(title.strip()) <= 255:
@@ -128,6 +147,7 @@ def ingest_source(
     if access_classification not in CLASS_RANK:
         raise IngestError(422, "classification_invalid")
 
+    actor = actor_for(conn, proof, "source.upload", project)
     endpoint = f"POST /projects/{project}/sources"
     digest = hashlib.sha256(data).hexdigest()
     payload: dict[str, Any] = {
@@ -161,17 +181,14 @@ def ingest_source(
         ResourceRef(project_id=project, data_class=access_classification),
         "source.upload.denied",
     )
-    status, project_class, revision = _lock_project(conn, project)
-    if status != "active":
-        _deny(conn, actor, "source.upload.denied", "project_archived", 409)
-    if CLASS_RANK[access_classification] < CLASS_RANK[project_class]:
-        raise IngestError(422, "classification_below_project")
-    if expected_project_revision != revision:
-        raise IngestError(409, "revision_conflict")
+    # A plain read, so refusals found here happen before any bytes are stored. The guard checks
+    # again under its row lock.
+    _precheck_project(conn, actor, project, access_classification, expected_project_revision)
 
     response = _admit(
         conn,
         store,
+        proof,
         actor,
         project,
         title=title.strip(),
@@ -181,6 +198,7 @@ def ingest_source(
         filename=filename,
         declared_mime=declared_mime,
         data=data,
+        expected_project_revision=expected_project_revision,
         supersedes_source_id=supersedes_source_id,
         expected_source_revision=expected_source_revision,
     )
@@ -203,6 +221,27 @@ def ingest_source(
     return response, False
 
 
+def _precheck_project(
+    conn: Connection,
+    actor: uuid.UUID,
+    project: uuid.UUID,
+    access_classification: str,
+    expected_project_revision: int,
+) -> None:
+    row = conn.execute(
+        text("SELECT status, data_classification, revision FROM projects WHERE project_id = :p"),
+        {"p": project},
+    ).one_or_none()
+    if row is None:
+        raise IngestError(404, "project_not_found")
+    if str(row[0]) != "active":
+        _deny(conn, actor, "source.upload.denied", "project_archived", 409)
+    if CLASS_RANK[access_classification] < CLASS_RANK[str(row[1])]:
+        raise IngestError(422, "classification_below_project")
+    if int(row[2]) != expected_project_revision:
+        raise IngestError(409, "revision_conflict")
+
+
 def _result(stored: dict[str, Any]) -> IngestResult:
     return IngestResult(
         source_id=uuid.UUID(str(stored["source_id"])),
@@ -216,6 +255,7 @@ def _result(stored: dict[str, Any]) -> IngestResult:
 def _admit(
     conn: Connection,
     store: ContentStore,
+    proof: uuid.UUID,
     actor: uuid.UUID,
     project: uuid.UUID,
     *,
@@ -226,6 +266,7 @@ def _admit(
     filename: str,
     declared_mime: str,
     data: bytes,
+    expected_project_revision: int,
     supersedes_source_id: uuid.UUID | None,
     expected_source_revision: int | None,
 ) -> IngestResult:
@@ -241,73 +282,40 @@ def _admit(
         raise IngestError(422, exc.reason) from exc
 
     try:
-        with conn.begin_nested():
-            if supersedes_source_id is None:
-                source_id = uuid.UUID(
-                    str(
-                        conn.execute(
-                            text(
-                                """INSERT INTO sources (project_id, source_type, source_trust,
-                                       title, access_classification, uploaded_by_user_id)
-                                   VALUES (:p, :st, :tr, :t, :ac, :u) RETURNING source_id"""
-                            ),
-                            {
-                                "p": project,
-                                "st": source_type,
-                                "tr": source_trust,
-                                "t": title,
-                                "ac": access_classification,
-                                "u": actor,
-                            },
-                        ).scalar_one()
-                    )
-                )
-                version = 1
-                supersedes_version = None
-            else:
-                source_id, version, supersedes_version = _next_version(
-                    conn, actor, project, supersedes_source_id, expected_source_revision
-                )
-            scan = "quarantined" if access_classification == "restricted" else "not_scanned"
-            version_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO source_versions (source_id, project_id, version,
-                                   supersedes_version_id, content_hash, storage_key, mime_type,
-                                   file_size_bytes, access_classification, scan_status,
-                                   ingested_by_user_id)
-                               VALUES (:s, :p, :v, :sup, :h, :k, :m, :size, :ac, :scan, :u)
-                               RETURNING source_version_id"""
-                        ),
-                        {
-                            "s": source_id,
-                            "p": project,
-                            "v": version,
-                            "sup": supersedes_version,
-                            "h": storage_key,
-                            "k": storage_key,
-                            "m": validated.mime_type,
-                            "size": len(data),
-                            "ac": access_classification,
-                            "scan": scan,
-                            "u": actor,
-                        },
-                    ).scalar_one()
-                )
-            )
-            conn.execute(
-                text(
-                    "UPDATE projects SET revision = revision + 1, updated_at = now() "
-                    "WHERE project_id = :p"
-                ),
-                {"p": project},
-            )
-    except SQLAlchemyError as exc:
+        row = consume_row(
+            conn,
+            "source.upload",
+            ADMIT_SQL,
+            {
+                "p": proof,
+                "project": project,
+                "supersedes": supersedes_source_id,
+                "expected_source": expected_source_revision,
+                "expected_project": expected_project_revision,
+                "title": title,
+                "st": source_type,
+                "tr": source_trust,
+                "ac": access_classification,
+                "k": storage_key,
+                "m": validated.mime_type,
+                "size": len(data),
+            },
+        )
+    except DBAPIError as exc:
+        reason = wrapper_refusal(exc)
+        if reason in PROJECT_REFUSALS or reason in ADMISSION_REFUSALS:
+            status, event = {**PROJECT_REFUSALS, **ADMISSION_REFUSALS}[reason]
+            if event is not None:
+                _deny(conn, actor, event, reason, status)
+            raise IngestError(status, reason) from exc
         original = str(getattr(exc, "orig", exc))
-        reason = "source_limit_reached" if "limit" in original else "database_refused"
-        _deny(conn, actor, "source.upload.refused", reason, 409)
+        refused = "source_limit_reached" if "limit" in original else "database_refused"
+        _deny(conn, actor, "source.upload.refused", refused, 409)
 
+    source_id = uuid.UUID(str(row[0]))
+    version_id = uuid.UUID(str(row[1]))
+    version = int(row[2])
+    scan = str(row[3])
     record_event(
         conn,
         actor_type="human",
@@ -326,54 +334,16 @@ def _admit(
     )
 
 
-def _next_version(
-    conn: Connection,
-    actor: uuid.UUID,
-    project: uuid.UUID,
-    supersedes_source_id: uuid.UUID,
-    expected_source_revision: int | None,
-) -> tuple[uuid.UUID, int, uuid.UUID]:
-    """Find the latest version of the source to supersede. Refuse a stale revision."""
-    if expected_source_revision is None:
-        raise IngestError(422, "expected_source_revision_required")
-    source = conn.execute(
-        text(
-            """SELECT revision FROM sources WHERE source_id = :s AND project_id = :p FOR UPDATE"""
-        ),
-        {"s": supersedes_source_id, "p": project},
-    ).one_or_none()
-    if source is None:
-        raise IngestError(404, "source_not_found")
-    if int(source[0]) != expected_source_revision:
-        raise IngestError(409, "source_revision_conflict")
-    latest = conn.execute(
-        text(
-            """SELECT v.source_version_id, v.version FROM source_versions v
-               WHERE v.source_id = :s
-                 AND NOT EXISTS (SELECT 1 FROM source_versions n
-                                 WHERE n.supersedes_version_id = v.source_version_id)
-               ORDER BY v.version DESC LIMIT 1"""
-        ),
-        {"s": supersedes_source_id},
-    ).one()
-    conn.execute(
-        text("UPDATE sources SET revision = revision + 1 WHERE source_id = :s"),
-        {"s": supersedes_source_id},
-    )
-    next_version = conn.execute(
-        text("SELECT max(version) + 1 FROM source_versions WHERE source_id = :s"),
-        {"s": supersedes_source_id},
-    ).scalar_one()
-    return supersedes_source_id, int(next_version), uuid.UUID(str(latest[0]))
-
-
 def read_source_content(
     conn: Connection,
     store: ContentStore,
     actor: uuid.UUID,
     source_version_id: uuid.UUID,
 ) -> bytes:
-    """Client-content read. Quarantined content is refused and every read is audited (I-4, I-17)."""
+    """Client-content read. Quarantined content is refused and every read is audited (I-4, I-17).
+
+    Read-only. It is not a proof-gated operation in this revision (see the evidence report).
+    """
     row = conn.execute(
         text(
             """SELECT v.project_id, v.storage_key, v.scan_status, v.access_classification,

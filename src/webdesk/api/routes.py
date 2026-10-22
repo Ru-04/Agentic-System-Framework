@@ -23,6 +23,7 @@ from webdesk.api.errors import DOMAIN_ERRORS
 from webdesk.api.transactions import run_in_transaction
 from webdesk.auth.service import AuthError
 from webdesk.authority.client import AuthorityClient, AuthorityUnavailable
+from webdesk.authority.proofs import ProofRefused
 from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
 from webdesk.intake.reparse import reparse_source_version
 from webdesk.runs import service as runs
@@ -83,6 +84,32 @@ def current_actor(request: Request) -> uuid.UUID:
 Actor = Annotated[uuid.UUID, Depends(current_actor)]
 
 
+def session_token(request: Request) -> str:
+    header = request.headers.get("authorization", "")
+    if not header.startswith("Bearer ") or len(header) <= len("Bearer "):
+        raise AuthError("missing_session")
+    return header[len("Bearer ") :]
+
+
+Token = Annotated[str, Depends(session_token)]
+
+
+def _proof(request: Request, token: str, operation: str, resource: uuid.UUID | None) -> uuid.UUID:
+    """An operation proof from the authority process. The service takes a proof, not an actor."""
+    authority: AuthorityClient | None = request.app.state.authority
+    if authority is None:
+        raise AuthError("authority_unconfigured")
+    try:
+        # A dead session is 401. A live session the authority will not grant the operation is 403.
+        authority.validate_session(token)
+        return authority.issue_operation_proof(token, operation, resource)
+    except AuthorityUnavailable as exc:
+        raise AuthError("authority_unavailable") from exc
+    except AuthError as exc:
+        # The session is live, so the authority refused this operation for this account.
+        raise ProofRefused("operation_not_permitted") from exc
+
+
 def _store(request: Request) -> ContentStore:
     store: ContentStore | None = request.app.state.store
     if store is None:
@@ -98,7 +125,7 @@ def _uuid(value: str) -> uuid.UUID:
 
 
 @router.post("/projects/{project_id}/sources")
-async def upload_source(project_id: str, request: Request, actor: Actor) -> dict[str, Any]:
+async def upload_source(project_id: str, request: Request, token: Token) -> dict[str, Any]:
     form = await request.form()
     rejected = sorted(key for key in form if key in SERVER_OWNED_FIELDS)
     if rejected:
@@ -115,12 +142,13 @@ async def upload_source(project_id: str, request: Request, actor: Actor) -> dict
     engine = request.app.state.engine
 
     def operation() -> tuple[Any, bool]:
+        proof = _proof(request, token, "source.upload", project)
         return run_in_transaction(
             engine,
             lambda conn: ingest_source(
                 conn,
                 store,
-                actor,
+                proof,
                 project,
                 title=str(form.get("title", "")),
                 source_type=str(form.get("source_type", "")),
@@ -168,18 +196,29 @@ async def start(
     project_id: str,
     body: RunStartBody,
     request: Request,
-    actor: Actor,
+    token: Token,
 ) -> dict[str, str]:
     engine = request.app.state.engine
     project = _uuid(project_id)
-    run = await run_in_threadpool(
-        run_in_transaction,
-        engine,
-        lambda conn: runs.start_run(
-            conn, actor, project, expected_project_revision=body.expected_project_revision
-        ),
-    )
+
+    def operation() -> uuid.UUID:
+        proof = _proof(request, token, "run.start", project)
+        return run_in_transaction(
+            engine,
+            lambda conn: runs.start_run(
+                conn, proof, project, expected_project_revision=body.expected_project_revision
+            ),
+        )
+
+    run = await run_in_threadpool(operation)
     return {"run_id": str(run)}
+
+
+CONTROL_OPERATIONS = {
+    "cancel": ("run.cancel", runs.cancel_run),
+    "retry": ("run.retry", runs.retry_run),
+    "resume": ("run.resume", runs.resume_run),
+}
 
 
 @router.post("/runs/{run_id}/{operation}")
@@ -188,23 +227,22 @@ async def control(
     operation: str,
     body: RunControlBody,
     request: Request,
-    actor: Actor,
+    token: Token,
 ) -> dict[str, str]:
-    actions = {
-        "cancel": runs.cancel_run,
-        "retry": runs.retry_run,
-        "resume": runs.resume_run,
-    }
-    if operation not in actions:
+    if operation not in CONTROL_OPERATIONS:
         raise IngestError(404, "operation_not_found")
     engine = request.app.state.engine
     run = _uuid(run_id)
-    action = actions[operation]
-    await run_in_threadpool(
-        run_in_transaction,
-        engine,
-        lambda conn: action(conn, actor, run, expected_run_revision=body.expected_run_revision),
-    )
+    proof_operation, action = CONTROL_OPERATIONS[operation]
+
+    def attempt() -> None:
+        proof = _proof(request, token, proof_operation, run)
+        run_in_transaction(
+            engine,
+            lambda conn: action(conn, proof, run, expected_run_revision=body.expected_run_revision),
+        )
+
+    await run_in_threadpool(attempt)
     return {"run_id": str(run), "operation": operation, "status": "accepted"}
 
 
@@ -213,21 +251,25 @@ async def reparse(
     version_id: str,
     body: ReparseBody,
     request: Request,
-    actor: Actor,
+    token: Token,
 ) -> dict[str, str]:
     engine = request.app.state.engine
     version = _uuid(version_id)
-    await run_in_threadpool(
-        run_in_transaction,
-        engine,
-        lambda conn: reparse_source_version(
-            conn,
-            actor,
-            version,
-            reason=body.reason,
-            expected_source_revision=body.expected_source_revision,
-        ),
-    )
+
+    def attempt() -> None:
+        proof = _proof(request, token, "source.reparse", version)
+        run_in_transaction(
+            engine,
+            lambda conn: reparse_source_version(
+                conn,
+                proof,
+                version,
+                reason=body.reason,
+                expected_source_revision=body.expected_source_revision,
+            ),
+        )
+
+    await run_in_threadpool(attempt)
     return {"source_version_id": str(version), "status": "pending"}
 
 

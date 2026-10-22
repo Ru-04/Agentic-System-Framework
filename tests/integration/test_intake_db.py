@@ -138,7 +138,7 @@ def _ingest(
     return ingest_source(
         conn,
         store,
-        actor,
+        prove(conn, actor, "source.upload", project),
         project,
         title=extra.pop("title", "Client notes"),
         source_type="client_brief",

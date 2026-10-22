@@ -125,7 +125,7 @@ def _ingest(
     result, _ = ingest_source(
         conn,
         store,
-        ids[actor],
+        prove(conn, ids[actor], "source.upload", ids["project"]),
         ids["project"],
         title=f"Notes {uuid.uuid4().hex[:6]}",
         source_type="client_brief",
@@ -142,7 +142,7 @@ def _ingest(
 def _start(conn: Connection, ids: dict[str, uuid.UUID]) -> uuid.UUID:
     return runs.start_run(
         conn,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "run.start", ids["project"]),
         ids["project"],
         expected_project_revision=_revision(conn, ids["project"]),
     )

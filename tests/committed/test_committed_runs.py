@@ -55,7 +55,7 @@ def committed_run(
         ingest_source(
             conn,
             store,
-            analyst,
+            prove(conn, analyst, "source.upload", project),
             project,
             title="Committed notes",
             source_type="client_brief",
@@ -69,7 +69,12 @@ def committed_run(
         revision = conn.execute(
             text("SELECT revision FROM projects WHERE project_id = :p"), {"p": project}
         ).scalar_one()
-        run = runs.start_run(conn, analyst, project, expected_project_revision=int(revision))
+        run = runs.start_run(
+            conn,
+            prove(conn, analyst, "run.start", project),
+            project,
+            expected_project_revision=int(revision),
+        )
     return run
 
 

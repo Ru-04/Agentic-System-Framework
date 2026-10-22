@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 
 from tests.support.authority import start_in_process_authority
@@ -31,6 +31,23 @@ pytestmark = pytest.mark.integration
 
 def _email() -> str:
     return f"{uuid.uuid4().hex}@wds-test.example"
+
+
+def _app_engine(url: str) -> Engine:
+    """The API's engine. Production connects as the restricted login, a member of webdesk_app.
+
+    The test engine therefore switches each connection to webdesk_app, so the application role's
+    privileges (not the owner's) govern every route.
+    """
+    engine = create_engine(url.replace("postgresql://", "postgresql+psycopg://"))
+
+    @event.listens_for(engine, "connect")
+    def _as_application_role(dbapi_connection: object, _record: object) -> None:
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("SET ROLE webdesk_app")
+        cursor.close()
+
+    return engine
 
 
 def _session(engine: Engine, user: uuid.UUID) -> str:
@@ -70,9 +87,10 @@ def http(
             conn, prove(conn, admin, "project.membership.add", project), project, analyst
         )
     authority = start_in_process_authority(committed_url)
+    app_engine = _app_engine(committed_url)
     app = create_app(
         Settings(_env_file=None, env="test", storage_root=tmp_path / "root"),
-        committed_engine,
+        app_engine,
         store=store,
         authority=authority.client,
     )
@@ -84,6 +102,7 @@ def http(
         "engine": committed_engine,
     }
     authority.close()
+    app_engine.dispose()
 
 
 def _revision(engine: Engine, project: str) -> int:

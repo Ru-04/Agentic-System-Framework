@@ -1,34 +1,44 @@
 """Run lifecycle, snapshots and run controls (I-9, I-10, I-12; EVAL-F07, F09, F13).
 
 - ``start_run`` is Analyst-only with membership (C-1). It freezes one snapshot row per source,
-  taken from the
-  latest non-superseded version that is not quarantined and whose parse status is eligible
+  taken from the latest non-superseded version that is not quarantined and whose parse status is
+  eligible
   (pending, succeeded, partial, unsupported). Failed versions are excluded (F13, source.reparse).
 - The partial unique index allows one queued, running or waiting_human run per project (F07). A
   parked run is outside it.
-- Transitions are checked against the ARCH §7 table and applied with an expected-state guard.
-- Controls: cancel is Administrator-only and allowed on archived projects. Retry is
-  Administrator-only, only for failed runs with a system failure, and only with no newer run.
-  Resume is Administrator-only
-  and refuses every parked run in Gate 1.
+  - Transitions are checked against the ARCH §7 table. The guard applies each write with an
+    expected-state
+  condition.
+  - Controls: cancel is Administrator-only and allowed on archived projects. Retry is Administrator-
+    only,
+  only for failed runs with a system failure, and only with no newer run. Resume is Administrator-
+  only and
+  refuses every parked run in Gate 1.
+
+Every operation takes an operation proof (R4 Option A). The actor is the account the proof was
+issued to.
+The writes are performed by ``webdesk_guard`` wrappers in the same transaction that consumes the
+proof.
 """
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
 from webdesk.rbac.engine import ResourceRef, authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
 from webdesk.runs.errors import RunError
 from webdesk.runs.hashing import input_revision_hash, version_tuple
-from webdesk.runs.staleness import record_run_dependency
 
 ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "created": frozenset({"intake_pending", "cancelled"}),
@@ -38,6 +48,31 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "failed": frozenset({"intake_pending"}),  # Administrator retry only (I-12)
 }
 ACTIVE_STATUSES = ("queued", "running", "waiting_human")
+ELIGIBLE_PARSE = ("pending", "succeeded", "partial", "unsupported")
+
+START_SQL = (
+    "SELECT webdesk_guard.fn_start_run_with_proof("
+    ":p, :project, :rev, CAST(:selected AS jsonb), :digest)"
+)
+CANCEL_SQL = "SELECT webdesk_guard.fn_cancel_run_with_proof(:p, :run, :rev)"
+RETRY_SQL = "SELECT webdesk_guard.fn_retry_run_with_proof(:p, :run, :rev)"
+RESUME_SQL = "SELECT webdesk_guard.fn_resume_run_with_proof(:p, :run)"
+
+# Refusals raised by the control guards. Refusals listed in DENIED_REASONS are audited as denials
+# before
+# they are raised, as they were before the guards existed. The rest are raised without an audit row.
+CONTROL_STATUS: dict[str, int] = {
+    "run_not_found": 404,
+    "revision_conflict": 409,
+    "state_changed": 409,
+    "not_cancellable": 409,
+    "project_archived": 409,
+    "not_retryable": 409,
+    "newer_run_exists": 409,
+}
+DENIED_REASONS = frozenset(
+    {"not_cancellable", "project_archived", "not_retryable", "newer_run_exists"}
+)
 
 
 @dataclass(frozen=True)
@@ -71,14 +106,12 @@ def _audit(
     )
 
 
-def load_run(conn: Connection, run_id: uuid.UUID) -> RunRef:
-    row = conn.execute(
-        text(
-            """SELECT run_id, project_id, state, status, failure_class, revision
-               FROM workflow_runs WHERE run_id = :r FOR UPDATE"""
-        ),
-        {"r": run_id},
-    ).one_or_none()
+def load_run(conn: Connection, run_id: uuid.UUID, *, lock: bool = True) -> RunRef:
+    """Read one run. ``lock`` takes the row lock (the worker path owns its writes)."""
+    select = """SELECT run_id, project_id, state, status, failure_class, revision
+                FROM workflow_runs WHERE run_id = :r"""
+    statement = text(select + " FOR UPDATE" if lock else select)
+    row = conn.execute(statement, {"r": run_id}).one_or_none()
     if row is None:
         raise RunError(404, "run_not_found")
     return RunRef(
@@ -149,16 +182,14 @@ def _authorize(
 
 def start_run(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     project: uuid.UUID,
     *,
     expected_project_revision: int,
 ) -> uuid.UUID:
+    actor = actor_for(conn, proof, "run.start", project)
     project_row = conn.execute(
-        text(
-            """SELECT status, data_classification, revision FROM projects
-               WHERE project_id = :p FOR UPDATE"""
-        ),
+        text("SELECT status, data_classification, revision FROM projects WHERE project_id = :p"),
         {"p": project},
     ).one_or_none()
     if project_row is None:
@@ -180,58 +211,61 @@ def start_run(
     if expected_project_revision != revision:
         raise RunError(409, "revision_conflict")
 
+    selected = _select_snapshot(conn, project)
+    tuples = [version_tuple(version_id, rev) for _, version_id, rev, _ in selected]
+    digest = input_revision_hash(tuples)
+    payload: list[dict[str, Any]] = [
+        {
+            "source_id": str(source_id),
+            "source_version_id": str(version_id),
+            "revision": rev,
+            "parse": parse,
+        }
+        for source_id, version_id, rev, parse in selected
+    ]
     try:
-        with conn.begin_nested():
-            run_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO workflow_runs (project_id, state, status,
-                                   started_by_user_id)
-                               VALUES (:p, 'intake_pending', 'queued', :a) RETURNING run_id"""
-                        ),
-                        {"p": project, "a": actor},
-                    ).scalar_one()
-                )
-            )
-            selected = _select_snapshot(conn, project)
-            tuples = [version_tuple(version_id, revision) for _, version_id, revision in selected]
-            digest = input_revision_hash(tuples)
-            _write_snapshot(conn, run_id, project, selected, digest)
-            for _source, version_id, revision in selected:
-                record_run_dependency(conn, project, run_id, version_id, revision)
-            conn.execute(
-                text("UPDATE workflow_runs SET input_revision_hash = :h WHERE run_id = :r"),
-                {"h": digest, "r": run_id},
-            )
-            conn.execute(
-                text(
-                    """INSERT INTO workflow_jobs (project_id, run_id, job_status,
-                           input_revision_hash)
-                       VALUES (:p, :r, 'queued', :h)"""
-                ),
-                {"p": project, "r": run_id, "h": digest},
-            )
-    except IntegrityError as exc:
-        _deny(conn, actor, "run.start.denied", "active_run_exists", 409)
-        raise RunError(409, "active_run_exists") from exc
+        run_id = consume_with(
+            conn,
+            "run.start",
+            START_SQL,
+            {
+                "p": proof,
+                "project": project,
+                "rev": expected_project_revision,
+                "selected": json.dumps(payload),
+                "digest": digest,
+            },
+        )
+    except DBAPIError as exc:
+        refusal = wrapper_refusal(exc)
+        if refusal == "project_not_found":
+            raise RunError(404, refusal) from exc
+        if refusal == "revision_conflict":
+            raise RunError(409, refusal) from exc
+        if refusal in ("project_archived", "snapshot_changed"):
+            _deny(conn, actor, "run.start.denied", refusal, 409)
+        if getattr(exc.orig, "sqlstate", None) == "23505":
+            _deny(conn, actor, "run.start.denied", "active_run_exists", 409)
+        raise
+    run_uuid = uuid.UUID(str(run_id))
     _audit(
         conn,
         actor,
         "run.start.succeeded",
         "success",
-        [str(run_id), str(project)],
+        [str(run_uuid), str(project)],
         details={"input_revision_hash": digest, "snapshot_size": len(tuples)},
     )
-    return run_id
+    return run_uuid
 
 
 def _select_snapshot(
     conn: Connection, project: uuid.UUID
-) -> list[tuple[uuid.UUID, uuid.UUID, int]]:
+) -> list[tuple[uuid.UUID, uuid.UUID, int, str]]:
     """Choose one version per source: the latest non-superseded, if not quarantined and eligible.
 
-    Returns (source_id, source_version_id, revision) for each eligible source.
+    Returns (source_id, source_version_id, revision, parse_status) for each eligible source, ordered
+    by source ID. The guard recomputes this selection under lock and refuses a difference.
     """
     rows = conn.execute(
         text(
@@ -246,118 +280,86 @@ def _select_snapshot(
         ),
         {"p": project},
     ).all()
-    selected: list[tuple[uuid.UUID, uuid.UUID, int]] = []
+    selected: list[tuple[uuid.UUID, uuid.UUID, int, str]] = []
     for source_id, version_id, revision, scan, parse in rows:
         if scan == "quarantined" or parse not in ELIGIBLE_PARSE:
             continue
-        selected.append((uuid.UUID(str(source_id)), uuid.UUID(str(version_id)), int(revision)))
-    return selected
-
-
-ELIGIBLE_PARSE = ("pending", "succeeded", "partial", "unsupported")
-
-
-def _write_snapshot(
-    conn: Connection,
-    run_id: uuid.UUID,
-    project: uuid.UUID,
-    selected: list[tuple[uuid.UUID, uuid.UUID, int]],
-    digest: str,
-) -> None:
-    """Insert the immutable snapshot rows, each carrying the run's input hash."""
-    for source_id, version_id, _revision in selected:
-        parse = conn.execute(
-            text("SELECT parse_status FROM source_versions WHERE source_version_id = :v"),
-            {"v": version_id},
-        ).scalar_one()
-        conn.execute(
-            text(
-                """INSERT INTO run_input_snapshots (run_id, project_id, source_id,
-                       source_version_id, included_reason, input_revision_hash)
-                   VALUES (:r, :p, :s, :v, :reason, :h)"""
-            ),
-            {
-                "r": run_id,
-                "p": project,
-                "s": source_id,
-                "v": version_id,
-                "reason": parse,
-                "h": digest,
-            },
+        selected.append(
+            (
+                uuid.UUID(str(source_id)),
+                uuid.UUID(str(version_id)),
+                int(revision),
+                str(parse),
+            )
         )
+    return sorted(selected, key=lambda item: str(item[0]))
+
+
+def _control(
+    conn: Connection,
+    actor: uuid.UUID,
+    operation: str,
+    call: str,
+    params: dict[str, object],
+) -> None:
+    """Run one control guard. Map its named refusals to a status, auditing the denials."""
+    try:
+        consume_with(conn, operation, call, params)
+    except DBAPIError as exc:
+        refusal = wrapper_refusal(exc)
+        if refusal not in CONTROL_STATUS:
+            raise
+        if refusal in DENIED_REASONS:
+            _deny(conn, actor, f"run.{operation}.denied", refusal, CONTROL_STATUS[refusal])
+        raise RunError(CONTROL_STATUS[refusal], refusal) from exc
 
 
 def cancel_run(
-    conn: Connection, actor: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
+    conn: Connection, proof: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
 ) -> None:
+    actor = actor_for(conn, proof, "run.cancel", run_id)
     _authorize(conn, actor, Permission.RUN_CANCEL, None, "run.cancel.denied")
-    run = load_run(conn, run_id)
-    _check_revision(run, expected_run_revision)
-    if run.status not in (*ACTIVE_STATUSES, "blocked_pending_decision"):
-        _deny(conn, actor, "run.cancel.denied", "not_cancellable", 409)
-    conn.execute(
-        text(
-            """UPDATE workflow_runs SET state = 'cancelled', status = 'cancelled',
-                   revision = revision + 1, updated_at = now()
-               WHERE run_id = :r"""
-        ),
-        {"r": run_id},
-    )
-    conn.execute(
-        text(
-            """UPDATE workflow_jobs SET job_status = 'cancelled', lease_owner = NULL,
-                   lease_expires_at = NULL, updated_at = now()
-               WHERE run_id = :r AND job_status IN ('queued', 'leased', 'waiting_human')"""
-        ),
-        {"r": run_id},
+    _control(
+        conn,
+        actor,
+        "run.cancel",
+        CANCEL_SQL,
+        {"p": proof, "run": run_id, "rev": expected_run_revision},
     )
     _audit(conn, actor, "run.cancel.succeeded", "success", [str(run_id)])
 
 
 def retry_run(
-    conn: Connection, actor: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
+    conn: Connection, proof: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
 ) -> None:
     """Requeue a failed run after a system failure. Refused if a newer run exists (I-12)."""
+    actor = actor_for(conn, proof, "run.retry", run_id)
     _authorize(conn, actor, Permission.RUN_RETRY, None, "run.retry.denied")
-    run = load_run(conn, run_id)
-    _check_revision(run, expected_run_revision)
-    project_status = conn.execute(
-        text("SELECT status FROM projects WHERE project_id = :p"), {"p": run.project_id}
-    ).scalar_one()
-    if project_status != "active":
-        _deny(conn, actor, "run.retry.denied", "project_archived", 409)
-    if run.status != "failed" or run.failure_class != "system_failure":
-        _deny(conn, actor, "run.retry.denied", "not_retryable", 409)
-    newer = conn.execute(
-        text(
-            """SELECT 1 FROM workflow_runs
-               WHERE project_id = :p AND created_at > (SELECT created_at FROM workflow_runs
-                                                      WHERE run_id = :r)"""
-        ),
-        {"p": run.project_id, "r": run_id},
-    ).first()
-    if newer is not None:
-        _deny(conn, actor, "run.retry.denied", "newer_run_exists", 409)
-    transition(conn, run_id, "failed", "intake_pending", "queued", failure_class=None)
-    conn.execute(
-        text(
-            """INSERT INTO workflow_jobs (project_id, run_id, job_status)
-               VALUES (:p, :r, 'queued')"""
-        ),
-        {"p": run.project_id, "r": run_id},
+    _control(
+        conn,
+        actor,
+        "run.retry",
+        RETRY_SQL,
+        {"p": proof, "run": run_id, "rev": expected_run_revision},
     )
     _audit(conn, actor, "run.retry.succeeded", "success", [str(run_id)])
 
 
 def resume_run(
-    conn: Connection, actor: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
+    conn: Connection, proof: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
 ) -> None:
-    """Gate 1: resume applies only to waiting_human. Parked runs are never resumed."""
+    """Gate 1: resume applies only to waiting_human. Parked runs are never resumed.
+
+    The proof is consumed when the attempt reaches the guard. Every such attempt ends in the Gate 1
+    refusal, which the transaction runner commits, so the proof is spent.
+    """
+    actor = actor_for(conn, proof, "run.resume", run_id)
     _authorize(conn, actor, Permission.RUN_RESUME, None, "run.resume.denied")
-    run = load_run(conn, run_id)
+    run = load_run(conn, run_id, lock=False)
     _check_revision(run, expected_run_revision)
     if run.status == "blocked_pending_decision":
         _deny(conn, actor, "run.resume.denied", "parked_run_not_resumable", 409)
     if run.status != "waiting_human":
         _deny(conn, actor, "run.resume.denied", "not_waiting_human", 409)
+    consume_with(conn, "run.resume", RESUME_SQL, {"p": proof, "run": run_id})
     raise RunError(409, "resume_not_supported_in_gate_1")

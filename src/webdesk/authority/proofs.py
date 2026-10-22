@@ -93,6 +93,18 @@ def consume_with(conn: Connection, operation: str, call: str, params: dict[str, 
         raise ProofRefused(reason) from exc
 
 
+def wrapper_refusal(exc: DBAPIError) -> str | None:
+    """The named reason a guard raised (SQLSTATE P0001), or None for any other database error.
+
+    Business refusals raised by ``*_with_proof`` guards carry the reason as the first message line.
+    """
+    orig = exc.orig
+    if orig is None or getattr(orig, "sqlstate", None) != "P0001":
+        return None
+    lines = str(orig).splitlines()
+    return lines[0].strip() if lines else None
+
+
 def consume_row(conn: Connection, operation: str, call: str, params: dict[str, object]) -> Any:
     """Like ``consume_with``, but returns the whole first row.
 

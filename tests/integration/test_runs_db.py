@@ -19,7 +19,7 @@ from sqlalchemy.engine import Connection
 from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
-from tests.support.proofs import prove
+from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.parsers import ParseResult
@@ -126,7 +126,7 @@ def _ingest(
     result, _ = ingest_source(
         conn,
         store,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "source.upload", ids["project"]),
         ids["project"],
         title=f"Notes {uuid.uuid4().hex[:6]}",
         source_type="client_brief",
@@ -176,7 +176,7 @@ def _job_row(conn: Connection, run: uuid.UUID) -> tuple[Any, ...]:
 def _start(conn: Connection, ids: dict[str, uuid.UUID]) -> uuid.UUID:
     return runs.start_run(
         conn,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "run.start", ids["project"]),
         ids["project"],
         expected_project_revision=_revision(conn, ids["project"]),
     )
@@ -204,7 +204,7 @@ def test_an_administrator_alone_cannot_start_a_run(conn: Connection, store: Cont
     with pytest.raises(RunError) as exc:
         runs.start_run(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "run.start", ids["project"]),
             ids["project"],
             expected_project_revision=_revision(conn, ids["project"]),
         )
@@ -299,7 +299,7 @@ def test_a_failed_version_does_not_fail_the_run_and_is_reparsed_into_the_next_ru
     stored.write_bytes(TEXT)  # the bytes are healthy again before reparse
     reparse_source_version(
         conn,
-        ids["admin"],
+        prove(conn, ids["admin"], "source.reparse", bad.source_version_id),
         bad.source_version_id,
         reason="storage repaired",
         expected_source_revision=_source_revision(conn, bad.source_id),
@@ -324,24 +324,22 @@ def test_reparse_is_administrator_only_and_needs_a_reason_and_a_failed_version(
 ) -> None:
     ids = _setup(conn)
     result = _ingest(conn, store, ids)
+    # An Analyst never receives an Administrator-only proof: the authority refuses it.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, ids["analyst"], "source.reparse", result.source_version_id)
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
             conn,
-            ids["analyst"],
+            prove(conn, ids["admin"], "source.reparse", result.source_version_id),
             result.source_version_id,
-            reason="nope",
+            reason="   ",
             expected_source_revision=1,
-        )
-    assert exc.value.status == 403
-    with pytest.raises(ReparseError) as exc:
-        reparse_source_version(
-            conn, ids["admin"], result.source_version_id, reason="   ", expected_source_revision=1
         )
     assert exc.value.status == 422
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "source.reparse", result.source_version_id),
             result.source_version_id,
             reason="not failed",
             expected_source_revision=1,
@@ -360,7 +358,11 @@ def test_reparse_refuses_a_stale_source_revision(conn: Connection, store: Conten
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
-            conn, ids["admin"], result.source_version_id, reason="fix", expected_source_revision=99
+            conn,
+            prove(conn, ids["admin"], "source.reparse", result.source_version_id),
+            result.source_version_id,
+            reason="fix",
+            expected_source_revision=99,
         )
     assert exc.value.reason == "revision_conflict"
 
@@ -419,11 +421,16 @@ def test_an_administrator_retries_only_a_system_failure_and_only_with_no_newer_r
         )
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         jobs.process_one(conn, store, "worker-x")
-    with pytest.raises(RunError) as exc:
-        runs.retry_run(conn, ids["analyst"], run, expected_run_revision=_run_rev(conn, run))
-    assert exc.value.status == 403
+    # An Analyst never receives an Administrator-only proof: the authority refuses it.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, ids["analyst"], "run.retry", run)
     monkeypatch.undo()
-    runs.retry_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+    runs.retry_run(
+        conn,
+        prove(conn, ids["admin"], "run.retry", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
     assert _run_row(conn, run)[1] == "queued"
 
 
@@ -471,10 +478,15 @@ def test_an_expired_lease_is_reclaimed_by_another_worker_with_one_more_attempt(
 def test_cancel_is_administrator_only_and_releases_the_slot(conn: Connection) -> None:
     ids = _setup(conn)
     run = _start(conn, ids)
-    with pytest.raises(RunError) as exc:
-        runs.cancel_run(conn, ids["analyst"], run, expected_run_revision=_run_rev(conn, run))
-    assert exc.value.status == 403
-    runs.cancel_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+    # An Analyst never receives an Administrator-only proof: the authority refuses it.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, ids["analyst"], "run.cancel", run)
+    runs.cancel_run(
+        conn,
+        prove(conn, ids["admin"], "run.cancel", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
     assert _run_row(conn, run)[1] == "cancelled"
     _start(conn, ids)
 
@@ -487,9 +499,19 @@ def test_a_parked_run_can_be_cancelled_but_never_resumed(
     run = _start(conn, ids)
     jobs.process_one(conn, store, "worker-p")
     with pytest.raises(RunError) as exc:
-        runs.resume_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+        runs.resume_run(
+            conn,
+            prove(conn, ids["admin"], "run.resume", run),
+            run,
+            expected_run_revision=_run_rev(conn, run),
+        )
     assert exc.value.reason == "parked_run_not_resumable"
-    runs.cancel_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+    runs.cancel_run(
+        conn,
+        prove(conn, ids["admin"], "run.cancel", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
     assert _run_row(conn, run)[1] == "cancelled"
 
 
@@ -506,7 +528,12 @@ def test_an_archived_project_refuses_a_new_run_but_allows_cancelling_a_parked_on
     with pytest.raises(RunError) as exc:
         _start(conn, ids)
     assert exc.value.reason == "project_archived"
-    runs.cancel_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+    runs.cancel_run(
+        conn,
+        prove(conn, ids["admin"], "run.cancel", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
     assert _run_row(conn, run)[1] == "cancelled"
 
 

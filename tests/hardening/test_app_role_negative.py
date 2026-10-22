@@ -111,7 +111,7 @@ def _staff_with_source(
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
-        staff,
+        remote_prove(conn, staff, "source.upload", project),
         project,
         title=name,
         source_type="client_brief",
@@ -282,7 +282,7 @@ def test_n12_quarantined_content_cannot_be_marked_clean(
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
-        world["admin"],
+        remote_prove(conn, world["admin"], "source.upload", project),
         project,
         title="N12",
         source_type="client_brief",
@@ -508,7 +508,7 @@ def test_n13_a_segment_cannot_be_inserted_for_a_quarantined_version(
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
-        world["admin"],
+        remote_prove(conn, world["admin"], "source.upload", project),
         project,
         title="N13",
         source_type="client_brief",
@@ -563,7 +563,12 @@ def test_n14_a_run_snapshot_cannot_reference_another_project(
         project_a,
         analyst,
     )
-    run = start_run(conn, analyst, project_a, expected_project_revision=_revision(conn, project_a))
+    run = start_run(
+        conn,
+        remote_prove(conn, analyst, "run.start", project_a),
+        project_a,
+        expected_project_revision=_revision(conn, project_a),
+    )
     project_b = projects.create_project(
         conn,
         remote_prove(conn, world["admin"], "project.create"),
@@ -579,7 +584,7 @@ def test_n14_a_run_snapshot_cannot_reference_another_project(
     result, _ = ingest_source(
         conn,
         ContentStore(_store_root()),
-        analyst,
+        remote_prove(conn, analyst, "source.upload", project_b),
         project_b,
         title="N14",
         source_type="client_brief",

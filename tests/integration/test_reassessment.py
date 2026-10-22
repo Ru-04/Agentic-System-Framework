@@ -114,7 +114,7 @@ def _source(
     result, _ = ingest_source(
         conn,
         store,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "source.upload", ids["project"]),
         ids["project"],
         title=f"F02 {uuid.uuid4().hex[:6]}",
         source_type="client_brief",

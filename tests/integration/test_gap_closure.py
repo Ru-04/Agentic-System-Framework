@@ -22,7 +22,7 @@ from sqlalchemy.engine import Connection
 from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
-from tests.support.proofs import prove
+from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake import parse_service
 from webdesk.intake.ingest import IngestError, ingest_source
@@ -136,7 +136,7 @@ def _ingest(
     result, _ = ingest_source(
         conn,
         store,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "source.upload", ids["project"]),
         ids["project"],
         title=f"Gap {uuid.uuid4().hex[:6]}",
         source_type="client_brief",
@@ -168,7 +168,7 @@ def _run_rev(conn: Connection, run: uuid.UUID) -> int:
 def _start(conn: Connection, ids: dict[str, uuid.UUID]) -> uuid.UUID:
     return runs.start_run(
         conn,
-        ids["analyst"],
+        prove(conn, ids["analyst"], "run.start", ids["project"]),
         ids["project"],
         expected_project_revision=_revision(conn, ids["project"]),
     )
@@ -191,7 +191,9 @@ def test_run_controls_refuse_a_stale_run_revision(conn: Connection) -> None:
     run = _start(conn, ids)
     stale = _run_rev(conn, run) - 1
     with pytest.raises(RunError) as exc:
-        runs.cancel_run(conn, ids["admin"], run, expected_run_revision=stale)
+        runs.cancel_run(
+            conn, prove(conn, ids["admin"], "run.cancel", run), run, expected_run_revision=stale
+        )
     assert (exc.value.status, exc.value.reason) == (409, "revision_conflict")
     assert (
         conn.execute(
@@ -229,7 +231,12 @@ def test_an_archived_project_refuses_retry_of_a_failed_run(
         conn, prove(conn, ids["admin"], "project.archive", ids["project"]), ids["project"]
     )
     with pytest.raises(RunError) as exc:
-        runs.retry_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+        runs.retry_run(
+            conn,
+            prove(conn, ids["admin"], "run.retry", run),
+            run,
+            expected_run_revision=_run_rev(conn, run),
+        )
     assert exc.value.reason == "project_archived"
 
 
@@ -263,7 +270,12 @@ def test_resume_is_refused_for_a_parked_run_in_gate_1(
     run = _start(conn, ids)
     jobs.process_one(conn, store, "worker-resume")
     with pytest.raises(RunError) as exc:
-        runs.resume_run(conn, ids["admin"], run, expected_run_revision=_run_rev(conn, run))
+        runs.resume_run(
+            conn,
+            prove(conn, ids["admin"], "run.resume", run),
+            run,
+            expected_run_revision=_run_rev(conn, run),
+        )
     assert exc.value.reason == "parked_run_not_resumable"
 
 
@@ -283,23 +295,17 @@ class _PastClock:
 def test_refused_run_cancel_writes_a_denial_audit(conn: Connection) -> None:
     ids = _setup(conn)
     run = _start(conn, ids)
-    with pytest.raises(RunError):
-        runs.cancel_run(conn, ids["analyst"], run, expected_run_revision=_run_rev(conn, run))
-    assert _audit_count(conn, "run.cancel.denied") == 1
+    with pytest.raises(ProofNotIssued):
+        prove(conn, ids["analyst"], "run.cancel", run)
+    assert _audit_count(conn, "authority.proof.refused", "operation_not_permitted") == 1
 
 
 def test_refused_reparse_writes_a_denial_audit(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
     version = _ingest(conn, store, ids)
-    with pytest.raises(ReparseError):
-        reparse_source_version(
-            conn,
-            ids["analyst"],
-            version.source_version_id,
-            reason="nope",
-            expected_source_revision=1,
-        )
-    assert _audit_count(conn, "source.reparse.denied") == 1
+    with pytest.raises(ProofNotIssued):
+        prove(conn, ids["analyst"], "source.reparse", version.source_version_id)
+    assert _audit_count(conn, "authority.proof.refused", "operation_not_permitted") == 1
 
 
 # --- F14: reparse refusals --------------------------------------------------------------------
@@ -312,7 +318,11 @@ def test_reparse_refuses_a_quarantined_version(conn: Connection, store: ContentS
     )
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
-            conn, ids["admin"], version.source_version_id, reason="fix", expected_source_revision=1
+            conn,
+            prove(conn, ids["admin"], "source.reparse", version.source_version_id),
+            version.source_version_id,
+            reason="fix",
+            expected_source_revision=1,
         )
     assert exc.value.reason == "quarantined"
 
@@ -340,7 +350,7 @@ def test_reparse_refuses_a_superseded_failed_version(conn: Connection, store: Co
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
             conn,
-            ids["admin"],
+            prove(conn, ids["admin"], "source.reparse", first.source_version_id),
             first.source_version_id,
             reason="fix",
             expected_source_revision=int(
@@ -368,7 +378,11 @@ def test_reparse_refuses_a_version_of_an_archived_project(
     )
     with pytest.raises(ReparseError) as exc:
         reparse_source_version(
-            conn, ids["admin"], version.source_version_id, reason="fix", expected_source_revision=1
+            conn,
+            prove(conn, ids["admin"], "source.reparse", version.source_version_id),
+            version.source_version_id,
+            reason="fix",
+            expected_source_revision=1,
         )
     assert exc.value.reason == "project_archived"
 
