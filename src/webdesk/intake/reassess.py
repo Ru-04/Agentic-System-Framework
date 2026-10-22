@@ -67,7 +67,7 @@ def reassess_source_classification(
         text(
             """SELECT s.access_classification, s.revision, p.data_classification, p.status
                FROM sources s JOIN projects p ON p.project_id = s.project_id
-               WHERE s.source_id = :s FOR UPDATE OF s"""
+               WHERE s.source_id = :s"""
         ),
         {"s": source},
     ).one_or_none()

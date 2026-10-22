@@ -252,10 +252,7 @@ GRANT USAGE ON SCHEMA webdesk_guard TO webdesk_worker;
 
 DOWNGRADE_SQL = (
     "SET ROLE webdesk_guard_owner;\n"
-    + "".join(
-        f"DROP FUNCTION IF EXISTS {sig};\n"
-        for sig in WORKER_FUNCTIONS
-    )
+    + "".join(f"DROP FUNCTION IF EXISTS {sig};\n" for sig in WORKER_FUNCTIONS)
     + """RESET ROLE;
 REVOKE SELECT ON run_input_snapshots, source_versions, workflow_runs FROM webdesk_worker;
 REVOKE SELECT (event_id) ON audit_events FROM webdesk_guard_owner;
@@ -264,8 +261,8 @@ REVOKE USAGE ON SCHEMA webdesk_guard FROM webdesk_worker;
 RESET ROLE;
 REVOKE webdesk_worker FROM CURRENT_USER;
 """
-# Roles are cluster-wide. The role is left in place with no privileges: another database on the
-# same cluster may still hold grants to it, and DROP ROLE would fail there (as in migration 0021).
+    # Roles are cluster-wide. The role is left in place with no privileges: another database on the
+    # same cluster may still hold grants to it, and DROP ROLE would fail there (as in migration 0021).
 )
 
 

@@ -459,6 +459,8 @@ def test_an_expired_lease_is_reclaimed_by_another_worker_with_one_more_attempt(
     first = as_worker(conn, jobs.claim, conn, "worker-a")
     assert first is not None and first.run_id == run
     assert as_worker(conn, jobs.claim, conn, "worker-b") is None  # the lease is live
+    # The owner sets the lease expiry, as a clock would. The application role has no write here.
+    conn.execute(text("RESET ROLE"))
     conn.execute(
         text(
             "UPDATE workflow_jobs SET lease_expires_at = now() - interval '1 second' "
@@ -466,6 +468,7 @@ def test_an_expired_lease_is_reclaimed_by_another_worker_with_one_more_attempt(
         ),
         {"j": first.job_id},
     )
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
     second = as_worker(conn, jobs.claim, conn, "worker-b")
     assert second is not None and second.job_id == first.job_id
     assert second.attempts == 2
@@ -559,10 +562,12 @@ def test_a_lost_lease_cannot_complete_a_job(conn: Connection, store: ContentStor
     run = _start(conn, ids)
     claimed = as_worker(conn, jobs.claim, conn, "worker-old")
     assert claimed is not None and claimed.run_id == run
+    conn.execute(text("RESET ROLE"))
     conn.execute(
         text("UPDATE workflow_jobs SET lease_owner = 'someone-else' WHERE job_id = :j"),
         {"j": claimed.job_id},
     )
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
     with pytest.raises(RunError) as exc:
         as_worker(conn, jobs._finish_job, conn, claimed, "worker-old", "completed")
     assert exc.value.reason == "lease_lost"

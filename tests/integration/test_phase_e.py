@@ -179,9 +179,11 @@ def test_a_changed_upstream_marks_the_dependent_run_stale_once(
     ids = _setup(conn)
     version = _ingest(conn, store, ids).source_version_id
     run = _start(conn, ids)
-    affected = mark_downstream_stale(conn, "source_version", version, "source_reparsed")
+    affected = as_worker(
+        conn, mark_downstream_stale, conn, "source_version", version, "source_reparsed"
+    )
     assert affected == [run]
-    assert mark_downstream_stale(conn, "source_version", version, "again") == []
+    assert as_worker(conn, mark_downstream_stale, conn, "source_version", version, "again") == []
     status, stale, reason = _run_state(conn, run)
     assert (stale, reason) == (True, "source_reparsed")
     with pytest.raises(RunError) as exc:
@@ -209,7 +211,8 @@ def test_staleness_follows_edges_transitively_through_intermediate_nodes(
         {"p": ids["project"], "v": upstream, "s": segment, "r": run},
     )
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    assert mark_downstream_stale(conn, "source_version", upstream, "chain") == [run]
+    marked = as_worker(conn, mark_downstream_stale, conn, "source_version", upstream, "chain")
+    assert marked == [run]
 
 
 def test_a_stale_run_is_refused_at_the_gate_while_a_fresh_one_passes(
@@ -219,7 +222,7 @@ def test_a_stale_run_is_refused_at_the_gate_while_a_fresh_one_passes(
     version = _ingest(conn, store, ids).source_version_id
     run = _start(conn, ids)
     require_fresh(conn, run)  # fresh: passes
-    mark_downstream_stale(conn, "source_version", version, "changed")
+    as_worker(conn, mark_downstream_stale, conn, "source_version", version, "changed")
     with pytest.raises(RunError):
         require_fresh(conn, run)
 

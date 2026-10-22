@@ -49,12 +49,15 @@ def _project(conn: Connection, user: uuid.UUID, classification: str = "internal"
     """A project created through the project-creation service by an Administrator."""
     admin, _second = administrators_for(conn)
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
-    return create_project(
+    project = create_project(
         conn,
         prove(conn, admin, "project.create"),
         name="intake project",
         data_classification=classification,
     )
+    # These tests exercise the schema guards with direct statements, so they return to the owner.
+    conn.execute(text("RESET ROLE"))
+    return project
 
 
 def _source(
