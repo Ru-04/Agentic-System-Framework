@@ -84,3 +84,101 @@ Recorded from WDS's direction for the Phase 1 closure. This entry does not edit 
     reading proposed here is: pathway B triggers delivery only, with no secret, no password choice and no viewing.
   - The approved production transport for reset delivery does not exist yet. Pathway A cannot be enabled in production
     until it does.
+
+## P-INC3-PHASE1-CLOSE-08 — WDS decisions 1-5 (2026-10-22): implemented status
+
+1. **Active account owners may initiate their own password resets.** Implemented in the authority
+   (`POST /v1/reset/request`, migration 0028). Neutral reply; rate-limited (5 per contact and 100 per IP in 15
+   minutes); token only for an active account with a verified delivery transport; delivered to the approved contact.
+2. **Administrators may trigger notification only.** Implemented through the operation-proof path
+   (`account.reset.issue`). The Administrator never receives the secret and cannot choose the password.
+3. **Provider-independent private transport; SMTP first.** `EmailTransport` is provider-independent. `SmtpTransport`
+   exists and is disabled by default (`WEBDESK_RESET_DELIVERY=disabled`). It refuses to run until
+   `WEBDESK_SMTP_VERIFIED=true`, which must be set only after delivery to the approved contact is tested. The capture
+   sink exists only in the test profile. **No delivery is enabled in this repository.**
+4. **Exactly-once committed-operation semantics.** A rolled-back mutation may be retried with the same unexpired proof;
+   a committed privileged mutation consumes its proof permanently. Tests: `tests/hardening/test_proof_rollback.py`.
+5. **Continue remaining Phase 1 security work.** The run and intake authorization work (source upload, run start,
+   cancel, retry, resume, reparse, job scheduling) is NOT complete. See the evidence file for the verified state.
+
+**Narrowings applied (migration 0029):** `webdesk_ceremony` lost UPDATE on `users.normalized_email` and
+`users.revision`, and EXECUTE on `fn_advance_contact_revision`, `fn_revoke_tokens` and `fn_revoke_user_sessions`.
+`fn_consume_appointment` stays: the appointment trigger on `role_assignments` calls it with the caller's rights.
+
+**Outbox:** the application role's UPDATE on `outbox_notices` is limited to delivery-state columns (status, lease,
+attempts, timestamps, error class). It cannot change recipients, purposes, payloads or ciphertext, and cannot create
+notices. A separate worker role was NOT created; this is recorded as a residual.
+
+**Privilege audit (fresh hardening database, final code):**
+
+```
+## table writes by role (table level)
+webdesk_app|audit_events|INSERT
+webdesk_app|audit_tombstones|INSERT
+webdesk_app|dependency_edges|INSERT
+webdesk_app|idempotency_keys|INSERT
+webdesk_app|rate_limit_events|INSERT
+webdesk_app|run_input_snapshots|INSERT
+webdesk_app|source_segments|INSERT
+webdesk_app|source_versions|INSERT
+webdesk_app|sources|INSERT
+webdesk_app|workflow_checkpoints|INSERT
+webdesk_app|workflow_jobs|INSERT
+webdesk_app|workflow_runs|INSERT
+webdesk_authority|audit_events|INSERT
+webdesk_authority|credentials|INSERT,UPDATE
+webdesk_authority|operation_proofs|INSERT
+webdesk_authority|rate_limit_events|INSERT
+webdesk_authority|sessions|INSERT,UPDATE
+webdesk_ceremony|audit_events|INSERT
+webdesk_ceremony|contact_reservations|INSERT
+webdesk_ceremony|role_assignments|INSERT
+webdesk_ceremony|setup_trust_ceremonies|INSERT,UPDATE
+webdesk_ceremony|user_contact_approvals|INSERT
+webdesk_ceremony|user_withdrawals|INSERT
+webdesk_ceremony|users|INSERT
+## column-level UPDATE/INSERT by role
+webdesk_app|outbox_notices|attempt_count,available_at,delivered_at,last_error_class,lease_expires_at,lease_owner,status
+webdesk_app|projects|revision,updated_at
+webdesk_app|source_versions|extraction_version,parse_error,parse_status,revision,unprocessed_attachments
+webdesk_app|sources|revision
+webdesk_app|workflow_jobs|attempts,available_at,job_status,last_error_class,lease_expires_at,lease_owner,updated_at
+webdesk_app|workflow_runs|failure_class,input_revision_hash,is_stale,parked_at,revision,stale_at,stale_reason,state,status,updated_at
+webdesk_authority|credentials|password_hash,updated_at,user_id
+webdesk_authority|sessions|expires_at,issued_at,last_seen_at,revoked_at,session_epoch_at_issue,session_id,session_token_hash,user_id
+webdesk_authority|users|revision,session_epoch,status
+webdesk_ceremony|setup_trust_ceremonies|activation_deadline,authorized_user_ids,ceremony_id,closed_at,completed_at,deployment_operator_id,effective_admin_count_at_start,independent_verifier_id,kind,owner_approval_ref,owner_identity_ref,signed_authorization_digest,started_at,status
+webdesk_ceremony|user_contact_approvals|approved_at,approved_by_user_id,proof_ref,revision,status
+webdesk_ceremony|users|status
+## SECURITY DEFINER functions executable by app / ceremony / authority
+webdesk_authority.fn_issue_operation_proof|webdesk_authority|webdesk_authority
+webdesk_guard.fn_add_membership_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_approve_change_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_approve_create_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_archive_project_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_assign_role_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_cancel_change_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_consume_appointment|webdesk_guard_owner|webdesk_ceremony
+webdesk_guard.fn_consume_token|webdesk_guard_owner|webdesk_app webdesk_authority
+webdesk_guard.fn_create_project_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_disable_user_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_grant_access_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_grant_restricted_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_issue_activation_token|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_issue_owner_reset_token|webdesk_guard_owner|webdesk_authority
+webdesk_guard.fn_issue_reset_token_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_mark_token_sent|webdesk_guard_owner|webdesk_app webdesk_authority
+webdesk_guard.fn_proof_actor|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_reassess_classification_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_reject_create_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_release_reservations|webdesk_guard_owner|webdesk_app webdesk_ceremony
+webdesk_guard.fn_request_change_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_request_create_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_request_replacement_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_revoke_expired_activation_tokens|webdesk_guard_owner|webdesk_app webdesk_ceremony
+webdesk_guard.fn_revoke_membership_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_revoke_role_with_proof|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_revoke_user_sessions|webdesk_guard_owner|webdesk_app
+webdesk_guard.fn_withdraw_with_proof|webdesk_guard_owner|webdesk_app
+
+```
