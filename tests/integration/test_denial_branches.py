@@ -109,6 +109,7 @@ def _plain(conn: Connection, status: str = "active") -> uuid.UUID:
 
 
 def _audit(conn: Connection, event: str, reason: str | None = None) -> int:
+    conn.execute(text("SET LOCAL ROLE NONE"))  # verification read, as the owner
     sql = "SELECT count(*) FROM audit_events WHERE event_type = :e AND outcome = 'denied'"
     params: dict[str, Any] = {"e": event}
     if reason is not None:

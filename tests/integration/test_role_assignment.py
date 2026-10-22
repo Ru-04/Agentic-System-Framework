@@ -140,6 +140,7 @@ def test_self_assignment_is_refused_and_audited(conn: Connection) -> None:
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, prove(conn, admin, "role.assign", admin), admin, Role.ANALYST)
     assert (exc.value.status, exc.value.reason) == (403, "self_assignment")
+    conn.execute(text("SET LOCAL ROLE NONE"))
     denied = conn.execute(
         text(
             """SELECT count(*) FROM audit_events
@@ -155,6 +156,7 @@ def test_non_administrator_cannot_assign_roles(conn: Connection) -> None:
     # The authority issues no role.assign proof to a non-Administrator, and it audits the refusal.
     with pytest.raises(ProofNotIssued):
         prove(conn, staff, "role.assign", other)
+    conn.execute(text("SET LOCAL ROLE NONE"))
     assert (
         conn.execute(
             text(
@@ -195,6 +197,7 @@ def test_recovery_is_refused_with_coverage_sufficient_and_audited(conn: Connecti
             clock=SystemClock(),
         )
     assert exc.value.reason == "coverage_sufficient"
+    conn.execute(text("SET LOCAL ROLE NONE"))
     denied = conn.execute(
         text(
             """SELECT count(*) FROM audit_events

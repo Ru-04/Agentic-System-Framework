@@ -127,6 +127,7 @@ def test_install_is_recorded_in_the_audit_log(conn: Connection) -> None:
         verifier_id="verifier-1",
         clock=SystemClock(),
     )
+    conn.execute(text("SET LOCAL ROLE NONE"))
     count = conn.execute(
         text(
             """SELECT count(*) FROM audit_events

@@ -104,6 +104,7 @@ def test_the_sweep_revokes_tokens_of_an_install_contact_that_missed_its_deadline
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         counts = sweep_expired(conn)
         assert counts["tokens_revoked"] >= 1
+        conn.execute(text("SET LOCAL ROLE NONE"))
         reason = conn.execute(
             text("SELECT revocation_reason FROM account_activation_tokens WHERE user_id = :u"),
             {"u": second},
