@@ -580,3 +580,13 @@ No AI access is implemented, and Phase 2 work has not started.
 
 Docker Desktop stopped during this stage. It was restarted, and the Postgres container was brought up again. The
 intermittent socket aborts seen on the Windows host were environmental and did not reproduce after the restart.
+
+## Closure status (commit 267c934)
+
+- Full regression on fresh databases at 267c934: 464 passed, 0 failed, 0 xfailed.
+- Restricted-login hardening folder: 75 passed (includes N1–N32, N26, EVAL-F11j 17, EVAL-F11j extended 20, rollback 5).
+- Alembic: 0022 through 0027 upgrade, downgrade to 0022 and upgrade again verified on a fresh database.
+- Ruff and strict mypy: clean on src, tests and migrations.
+- Verdict: NOT READY. Release-blocking findings are listed in docs/PHASE1_INDEPENDENT_REVIEW_HANDOFF.md section 7.
+  The principal one: source upload, run start and control, and reparse still take caller-supplied actors, and the application
+  role can write their tables directly.
