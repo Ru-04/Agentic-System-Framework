@@ -1,5 +1,7 @@
 # M1 Sprint 1 — Shared Specialist Foundation: Sprint Completion Report
 
+> **Correction (QA closure):** Sections 4 and 6 below are superseded. Independent QA on `cce425f` found 11 in-scope defects, and one design defect (QA-07) remains open. Sprint 1 status is **BLOCKED**. See [M1_S1_QA_CLOSURE_REPORT.md](M1_S1_QA_CLOSURE_REPORT.md) for the current status, findings and fixes.
+
 **Baseline:** Specialist Delivery Implementation Baseline v1.0 (frozen)
 **Branch/worktree:** `claude/webdesk-specialist-baseline-v1-3b21b1`
 **Status:** Implementation complete and tested by the implementer. **Not signed off.** QA sign-off is required before the sprint can be marked Completed (Definition of Done).
