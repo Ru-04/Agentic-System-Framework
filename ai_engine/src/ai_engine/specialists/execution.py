@@ -169,10 +169,13 @@ def run_specialist(
             raise PermissionDeniedError(
                 "evidence search outside the task's project is not permitted"
             )
-        if not set(allowed_collections) <= allowed:
+        # Snapshot once: a caller iterable may yield different items on each pass, so the check and
+        # the search must read the same list (AI-S01 reviewer P0-1).
+        requested = list(allowed_collections)
+        if not set(requested) <= allowed:
             raise PermissionDeniedError("evidence search outside the task's collection allowlist")
         records = context.evidence.search(
-            project_id=task.project_id, allowed_collections=list(allowed_collections), query=query
+            project_id=task.project_id, allowed_collections=requested, query=query
         )
         # The wrapper keeps the lookup's own records; the agent receives independent copies (F1).
         for record in records:

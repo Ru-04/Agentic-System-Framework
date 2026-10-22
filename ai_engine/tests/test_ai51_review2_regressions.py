@@ -224,3 +224,105 @@ def test_printable_operator_identity_is_still_accepted() -> None:
         rationale="r",
     )
     assert selection.operator_label == "Operator One"
+
+
+class _TwoFacedCollections:
+    """An iterable whose first pass yields the allowed collection and later passes a foreign one."""
+
+    def __init__(self) -> None:
+        self.passes = 0
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        self.passes += 1
+        allowed = SHOPIFY_EVIDENCE_COLLECTION
+        return iter([allowed] if self.passes == 1 else ["foreign_collection"])
+
+
+def test_collection_allowlist_is_read_once_so_a_foreign_collection_cannot_be_searched() -> None:
+    """Reviewer P0-1: the check and the search must use the same snapshot of the allowlist."""
+    from ai_engine.evidence.lookup import CollectedEvidence
+
+    bundle = build_bundle()
+    items = list(synthetic_shopify_evidence(bundle.project.project_id))
+    foreign = items[0].record.model_copy(update={"evidence_id": "EVD-FOREIGN-0009"})
+    items.append(CollectedEvidence(collection="foreign_collection", record=foreign))
+    context = SpecialistContext(
+        project=bundle.project,
+        requirements=bundle.context.requirements,
+        evidence=MockEvidenceLookup(items),
+    )
+    task = make_task(bundle, allowed_evidence_collections=[SHOPIFY_EVIDENCE_COLLECTION])
+    seen: dict[str, Any] = {}
+
+    def probe(agent_task: Any, agent_context: SpecialistContext) -> Any:
+        records = agent_context.evidence.search(
+            project_id=agent_task.project_id, allowed_collections=_TwoFacedCollections(), query=""
+        )
+        seen["ids"] = {record.evidence_id for record in records}
+        return result_for(agent_task)
+
+    execute(Custom(probe), task, context, bundle)
+    assert "EVD-FOREIGN-0009" not in seen["ids"]
+
+
+def test_decision_against_an_earlier_project_revision_is_stale() -> None:
+    """Reviewer P1-2: a project revision change makes an earlier decision stale."""
+    from ai_engine.demo.workflow import REGISTRY_PATH, probe_project_boundary, run_investigation
+    from ai_engine.selection.operator import StaleSelectionError
+    from ai_engine.specialists.registry import AgentRegistry
+
+    adapter = MockFoundationAdapter.from_file(FIXTURE_PATH)
+    project = adapter.get_project(adapter.project_id)
+    segments = adapter.list_source_segments(project.project_id, DataClass.INTERNAL)
+    analysis = RequirementAnalysisAgent(
+        registry_version=REGISTRY_VERSION, catalog_version=CATALOG_VERSION
+    ).analyze(project, segments)
+    selection = build_operator_selection(
+        operator_label="op",
+        actor_id="actor-1",
+        decided_at=NOW,
+        analysis=analysis,
+        confirm=["CAND-005"],
+        rationale="r",
+    )
+    newer = project.model_copy(update={"project_revision": project.project_revision + 1})
+    with pytest.raises(StaleSelectionError):
+        run_investigation(
+            fixture_id="SYN-BRIEF-001",
+            project=newer,
+            segments=segments,
+            analysis=analysis,
+            registry=AgentRegistry.from_yaml(REGISTRY_PATH),
+            catalog_version=CATALOG_VERSION,
+            agent=_NoopAgent(),
+            evidence_records=[],
+            allowed_collections=[],
+            boundary=probe_project_boundary(adapter),
+            selection=selection,
+        )
+
+
+class _NoopAgent:
+    capability_id = "CAP-ECOMMERCE"
+    specialist_category_id = "shopify_specialist"
+
+    def run(self, task: Any, context: SpecialistContext) -> Any:
+        raise AssertionError("the agent must not run for a stale decision")
+
+
+def test_empty_rationale_is_a_selection_error_not_a_traceback() -> None:
+    """Reviewer P1-4: an invalid rationale is refused as a SelectionError."""
+    adapter = MockFoundationAdapter.from_file(FIXTURE_PATH)
+    project = adapter.get_project(adapter.project_id)
+    analysis = RequirementAnalysisAgent(
+        registry_version=REGISTRY_VERSION, catalog_version=CATALOG_VERSION
+    ).analyze(project, adapter.list_source_segments(project.project_id, DataClass.INTERNAL))
+    with pytest.raises(SelectionError):
+        build_operator_selection(
+            operator_label="op",
+            actor_id="actor-1",
+            decided_at=NOW,
+            analysis=analysis,
+            confirm=["CAND-005"],
+            rationale="",
+        )

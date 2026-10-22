@@ -50,6 +50,20 @@
 
 **Not proven by this work.** These fixes protect the wrapper boundary against code that uses the public interfaces. They do not stop in-process Python code from reaching objects through closures, `gc` or `object.__setattr__`. That limit is an architectural decision, recorded in section 3.
 
+## 2B. Independent review of commit 39199d2 (AI-S01 baseline)
+
+An independent reviewer exported `39199d2` to a scratch directory and reran the suite (385 passed; ruff, format and strict mypy clean) and the adversarial files (59 passed). The reviewer then probed the public interfaces. Findings and dispositions:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| R3-P0-1 | Allowlist check-then-use: a caller iterable that yields different collections on each pass passed the check and then searched a foreign collection, returning its record to the agent | **Reproduced and fixed.** The allowlist is snapshotted once and the same list is checked and searched (`specialists/execution.py`). Regression test `test_collection_allowlist_is_read_once_so_a_foreign_collection_cannot_be_searched`. Pre-fix reproduction: the probe returned the foreign record; post-fix it returns only the eight allowed records |
+| R3-P1-2 | A decision survived a project revision change | **Fixed.** `run_investigation` raises `StaleSelectionError` when the analysis revision differs from the project revision. Test `test_decision_against_an_earlier_project_revision_is_stale` |
+| R3-P1-4 | An empty rationale raised a raw `ValidationError` and a CLI traceback | **Fixed.** Refused as `SelectionError`. Test `test_empty_rationale_is_a_selection_error_not_a_traceback` |
+| R3-P1-1 | With a non-empty allowlist that matches no collection, the Shopify agent returns no evidence and the run reports `completed_with_unresolved_items`, not `specialist_not_completed` | **Open.** The agent reports `EVIDENCE_UNAVAILABLE` only for an empty allowlist. Changing this is an agent-policy decision (what counts as an evidence source). Deferred to WDS |
+| R3-P1-3 | `decided_at` in the demo is a constant (`DEMO_TIMESTAMP`), so the decision time is not the real decision time | **Open, by design for the demo.** A real decision time needs the Foundation clock and actor authority (S-1 residual) |
+
+Architectural (not counted, documented): closure access to the original context (`view._search.__closure__`), as in section 3.
+
 ## 3. Remaining issues (not fixed, with reasons)
 
 | ID | Issue | Why not fixed | Required to close |

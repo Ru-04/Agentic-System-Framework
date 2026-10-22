@@ -54,6 +54,7 @@ from ai_engine.selection.operator import (
     OperatorDecisionKind,
     OperatorSelection,
     SelectionError,
+    StaleSelectionError,
     build_operator_selection,
     verify_selection,
 )
@@ -210,6 +211,12 @@ def run_investigation(
 ) -> DemonstrationReport:
     assigned, id_records = assign_mock_ids(analysis.requirements)
     if selection is not None:
+        # A decision made against an earlier project revision is stale (reviewer P1-2).
+        if analysis.project_revision != project.project_revision:
+            raise StaleSelectionError(
+                f"analysis is for project revision {analysis.project_revision} but the project is "
+                f"at revision {project.project_revision}; analyse and decide again"
+            )
         # Only the checked instance is used after verification; the caller's object is not (F1).
         selection = verify_selection(selection, analysis)
     confirmed = set(selection.confirmed_keys()) if selection is not None else set()

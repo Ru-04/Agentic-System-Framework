@@ -123,7 +123,13 @@ def build_operator_selection(
         for key in keys:
             if key not in known:
                 raise SelectionError(f"unknown proposal {key} in this analysis")
-            decisions.append(OperatorDecision(proposal_key=key, decision=kind, rationale=rationale))
+            try:
+                decisions.append(
+                    OperatorDecision(proposal_key=key, decision=kind, rationale=rationale)
+                )
+            except ValueError as exc:
+                # An invalid rationale is a refused decision, not a raw traceback (review P1-4).
+                raise SelectionError(f"decision for {key} refused: {exc}") from exc
     try:
         return OperatorSelection(
             operator_label=operator_label.strip() or "none",
