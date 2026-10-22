@@ -399,3 +399,33 @@ def test_quarantined_passages_never_become_usable() -> None:
     usable, quarantined = split_by_trust(result.passages)
     assert all("Ignore" not in passage.text for passage in usable)
     assert any("Ignore" in passage.text for passage in quarantined)
+
+
+def test_min_term_hits_requires_distinct_meaningful_terms() -> None:
+    text = "FIXTURE: Pickup slots are configured in the admin.\nFIXTURE: The admin is open.\n"
+    retriever = InMemoryRetriever([_source(text=text)])
+    one = RetrievalQuery(workspace_id="ws-a", text="pickup holiday", kinds=frozenset(SourceKind))
+    two = RetrievalQuery(
+        workspace_id="ws-a",
+        text="pickup slots admin",
+        kinds=frozenset(SourceKind),
+        min_term_hits=2,
+    )
+    assert retriever.search(one).status is RetrievalStatus.HITS
+    result = retriever.search(two)
+    assert [p.text.strip() for p in result.passages] == [
+        "FIXTURE: Pickup slots are configured in the admin."
+    ]
+
+
+def test_stopwords_do_not_create_matches() -> None:
+    retriever = InMemoryRetriever([_source(text="FIXTURE: the and with for from.\n")])
+    query = RetrievalQuery(
+        workspace_id="ws-a", text="the and with for from", kinds=frozenset(SourceKind)
+    )
+    assert retriever.search(query).status is RetrievalStatus.NO_EVIDENCE
+
+
+def test_min_term_hits_must_be_positive() -> None:
+    with pytest.raises(ValueError):
+        RetrievalQuery(workspace_id="ws-a", text="x", kinds=frozenset(SourceKind), min_term_hits=0)
