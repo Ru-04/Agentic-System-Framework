@@ -112,3 +112,21 @@ The QA agent's work was reviewed for accuracy against the code. Its findings are
 4. Approve a live retrieval test window, or confirm that the Sprint 2 real-investigation acceptance is deferred.
 5. Provide approved realistic Shopify cases from WDS projects (D11), sanitized.
 6. Provide the independent human QA signatory for Sprint 2 (D04).
+
+## 9. Update after management answers (22 October 2026)
+
+| Item | Status |
+|---|---|
+| 1. Shopify allowlist | Working selection: `shopify.dev`, `help.shopify.com`. Formal approval as official vendor domains still to be confirmed. |
+| 2. QA2-07 origin enforcement | Proposal P1 written (`docs/governance/PROPOSALS_PENDING_APPROVAL_QA2.md`). **Not implemented**, awaiting approval. |
+| 3. QA2-13 proxy policy | Proposal P2 written (same file). **Not implemented**, awaiting approval. |
+| 4. Live retrieval window | Approved. One live fetch done: `https://shopify.dev/docs/api/storefront/latest`, success, 32,212 characters. Metadata only in `docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`. |
+| 5. Real Shopify cases | Four sanitized briefs in `docs/evaluation/SHOPIFY_CASE_BRIEFS_SANITIZED.md`. Client approval for use is not recorded. |
+| 6. Human QA signatory | Designated: **AS**. No sign-off recorded. |
+
+Findings from the live step:
+- The specialist ran on the live page for three tasks. It produced cited topic findings, all declared incomplete. These are topic mentions, not an investigation, so they are not acceptance evidence.
+- `shopify.dev` redirects same-host to `/latest`. The fetch refuses redirects, so the canonical URL is needed. That is a usability limit, not a bypass.
+- `help.shopify.com` returned HTTP 403 to a plain client. No bypass was attempted.
+
+Sprint 2 acceptance is still **NOT ACCEPTED**. The real Shopify investigation still needs the approved evaluation runs on the briefs, the open proposals P1 and P2, and the QA signature.

@@ -45,3 +45,16 @@
 - This record and the amendment are committed to the feature branch, which is the source of truth for the decision text.
 - Approval evidence (signatures, sign-off forms) is stored as a separate file per approval under `docs/governance/approvals/`, referenced here by file name and commit SHA. No approval file has been created by this record.
 - Sprint-level evidence lives in `docs/M1_S1_*` and `docs/M1_S2_*` reports, with CI run identifiers recorded from the GitHub Actions API.
+
+## 5. Management answers to open items (22 October 2026)
+
+Recorded from the decision-maker's written answers. These are decisions made by the authorized WDS decision-maker, effective 22 October 2026, not historical approvals.
+
+| # | Item | Answer | Recorded effect |
+|---|---|---|---|
+| 1 | Shopify vendor allowlist | Lead architect to suggest one | Working allowlist set to `shopify.dev` and `help.shopify.com`, exact hosts, HTTPS, default port. Recorded as a working selection. Not a formal approval of official-domain status under D08 until the decision-maker confirms it. |
+| 2 | Where origin is enforced for evidence sources (QA2-07) | Suggest, then get approval before implementing | Proposal written: `docs/governance/PROPOSALS_PENDING_APPROVAL_QA2.md`. No code change until approved. |
+| 3 | Proxy policy for vendor fetches (QA2-13) | Suggest, then get approval before implementing | Same proposal file. No code change until approved. |
+| 4 | Live retrieval window and real Shopify acceptance | Approved (live retrieval window) | One bounded live fetch of an allowlisted Shopify page was made on 22 Oct 2026. Metadata only is recorded in `docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`. Acceptance is NOT granted by this approval. |
+| 5 | Shopify real cases | Find them from WDS case studies and portfolio | Four sanitized briefs in `docs/evaluation/SHOPIFY_CASE_BRIEFS_SANITIZED.md`. Client-approval for use of the scenarios is not yet recorded. |
+| 6 | Human QA signatory for Sprint 2 | "AS" | Designated signatory: **AS**. No sign-off has been recorded or simulated. The signature and approval reference are to be supplied by AS. |
