@@ -20,6 +20,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.parsers import ParseResult
@@ -201,14 +202,14 @@ def test_an_analyst_starts_a_run_and_its_snapshot_holds_the_eligible_version(
 
 def test_an_administrator_alone_cannot_start_a_run(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
-    with pytest.raises(RunError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         runs.start_run(
             conn,
             prove(conn, ids["admin"], "run.start", ids["project"]),
             ids["project"],
             expected_project_revision=_revision(conn, ids["project"]),
         )
-    assert (exc.value.status, exc.value.reason) == (403, "role_missing")
+    assert exc.value.reason == "proof_permission_not_held"
 
 
 def test_a_second_run_is_refused_while_one_is_active(conn: Connection) -> None:

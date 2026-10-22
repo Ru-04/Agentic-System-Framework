@@ -21,6 +21,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.intake import parse_service
@@ -182,9 +183,9 @@ def test_a_user_without_membership_cannot_upload(conn: Connection, store: Conten
     ids = _setup(conn)
     stranger = _active_user(conn)
     assign_role(conn, prove(conn, ids["admin"], "role.assign", stranger), stranger, Role.ANALYST)
-    with pytest.raises(IngestError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         _ingest(conn, store, stranger, ids["project"])
-    assert (exc.value.status, exc.value.reason) == (403, "membership_missing")
+    assert exc.value.reason == "proof_permission_not_held"
 
 
 def test_a_stale_project_revision_is_refused_without_a_row(

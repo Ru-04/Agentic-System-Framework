@@ -21,6 +21,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.identity import contacts
@@ -161,11 +162,11 @@ def test_non_administrator_cannot_request_or_approve(
 ) -> None:
     creator, approver = admins
     plain = _plain_user(conn)
-    with pytest.raises(ContactServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         contacts.request_create(
             conn, prove(conn, plain, "contact.request.create"), POLICY, _email(), "Nope"
         )
-    assert exc.value.status == 403
+    assert exc.value.reason == "proof_permission_not_held"
     _as_app(conn)
     _, approval_id = contacts.request_create(
         conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Pending"
@@ -174,7 +175,7 @@ def test_non_administrator_cannot_request_or_approve(
     with pytest.raises(ProofNotIssued):
         prove(conn, plain, "contact.approve.create", approval_id)
     assert _audit_count(conn, "authority.proof.refused") >= 1
-    assert _audit_count(conn, "contact.create.denied") == 1
+    assert _audit_count(conn, "authority.proof.refused") >= 1
 
 
 def test_duplicate_contact_is_refused_while_reserved(
@@ -395,8 +396,8 @@ def test_non_administrator_cannot_withdraw(
         conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Keep"
     )
     plain = _plain_user(conn)
-    with pytest.raises(ContactServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         contacts.withdraw(
             conn, prove(conn, plain, "contact.withdraw", user_id), user_id, "not mine", 1
         )
-    assert exc.value.status == 403
+    assert exc.value.reason == "proof_permission_not_held"

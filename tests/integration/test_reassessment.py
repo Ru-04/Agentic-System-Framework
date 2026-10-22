@@ -21,6 +21,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.reassess import ReassessError, reassess_source_classification
@@ -175,7 +176,7 @@ def test_an_analyst_cannot_reassess_and_the_refusal_is_audited(
 ) -> None:
     ids = _setup(conn)
     result = _source(conn, store, ids)
-    with pytest.raises(ReassessError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         reassess_source_classification(
             conn,
             prove(conn, ids["analyst"], "classification.reassess", result.source_id),
@@ -184,10 +185,10 @@ def test_an_analyst_cannot_reassess_and_the_refusal_is_audited(
             justification="try",
             expected_source_revision=_rev(conn, result.source_id),
         )
-    assert (exc.value.status, exc.value.reason) == (403, "role_missing")
+    assert exc.value.reason == "proof_permission_not_held"
     denied = conn.execute(
         text(
-            "SELECT count(*) FROM audit_events WHERE event_type = 'classification.reassess.denied'"
+            "SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'"
         )
     ).scalar_one()
     assert denied == 1

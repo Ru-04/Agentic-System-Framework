@@ -15,13 +15,13 @@ from sqlalchemy.engine import Connection, Engine
 from tests.support.people import committed_active_user
 from tests.support.proofs import prove
 from webdesk.api.transactions import run_in_transaction
+from webdesk.authority.proofs import ProofRefused
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import TransportUnavailable
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.outbox.worker import OutboxWorker
-from webdesk.projects.service import ProjectServiceError
 
 pytestmark = pytest.mark.integration
 
@@ -73,12 +73,12 @@ def test_a_refused_operation_keeps_its_denial_audit(
     # Administrator-only operation), and the service refuses it and audits the denial.
     admin, second = admins
     plain = committed_active_user(committed_engine, admin, second, "plain account")
-    with pytest.raises(ProjectServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         run_in_transaction(
             committed_engine,
             lambda conn: projects_create(conn, plain),
         )
-    assert exc.value.status == 403
+    assert exc.value.reason == "proof_permission_not_held"
     denials = _count(
         committed_engine,
         """SELECT count(*) FROM audit_events

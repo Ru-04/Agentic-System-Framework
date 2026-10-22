@@ -217,7 +217,7 @@ def test_an_administrator_cannot_start_a_run_over_http(http: dict[str, object]) 
         json={"expected_project_revision": _revision(engine, str(http["project"]))},
     )
     assert response.status_code == 403
-    assert response.json() == {"error": "role_missing"}
+    assert response.json() == {"error": "request_refused"}
 
 
 def test_run_controls_and_reparse_follow_the_role_rules_over_http(

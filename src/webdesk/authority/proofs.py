@@ -27,6 +27,7 @@ REFUSAL_REASONS = (
     "proof_resource_mismatch",
     "proof_session_not_live",
     "proof_role_not_held",
+    "proof_permission_not_held",
 )
 
 
@@ -46,11 +47,21 @@ def refusal_reason(exc: DBAPIError) -> str:
     return "proof_refused"
 
 
-def audit_refusal(conn: Connection, operation: str, reason: str) -> None:
+def refusal_actor(exc: DBAPIError) -> str | None:
+    """The account the proof was issued to, when the database names it (WDS decision 4 audit).
+
+    The permission refusal carries the actor in DETAIL, so the refusal audit can name who tried.
+    """
+    diag = getattr(exc.orig, "diag", None)
+    detail = getattr(diag, "message_detail", None)
+    return str(detail) if detail else None
+
+
+def audit_refusal(conn: Connection, operation: str, reason: str, actor: str | None = None) -> None:
     record_event(
         conn,
-        actor_type="system",
-        actor_id="anonymous",
+        actor_type="human" if actor else "system",
+        actor_id=actor or "anonymous",
         event_type="authority.proof.refused",
         outcome="denied",
         error_class=reason,
@@ -72,7 +83,7 @@ def actor_for(
         reason = refusal_reason(exc)
         if reason == "proof_refused":
             raise
-        audit_refusal(conn, operation, reason)
+        audit_refusal(conn, operation, reason, refusal_actor(exc))
         raise ProofRefused(reason) from exc
     return uuid.UUID(str(value))
 
@@ -89,7 +100,7 @@ def consume_with(conn: Connection, operation: str, call: str, params: dict[str, 
         reason = refusal_reason(exc)
         if reason == "proof_refused":
             raise
-        audit_refusal(conn, operation, reason)
+        audit_refusal(conn, operation, reason, refusal_actor(exc))
         raise ProofRefused(reason) from exc
 
 
@@ -117,5 +128,5 @@ def consume_row(conn: Connection, operation: str, call: str, params: dict[str, o
         reason = refusal_reason(exc)
         if reason == "proof_refused":
             raise
-        audit_refusal(conn, operation, reason)
+        audit_refusal(conn, operation, reason, refusal_actor(exc))
         raise ProofRefused(reason) from exc

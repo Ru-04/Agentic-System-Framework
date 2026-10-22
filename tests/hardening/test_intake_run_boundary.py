@@ -299,9 +299,9 @@ def test_an_upload_takes_its_actor_from_the_proof_and_a_non_member_is_refused(
     staff = _analyst(conn, world, app_engine)
     project = _project(conn, world, "Boundary non-member")
     before = _count(conn, "SELECT count(*) FROM sources WHERE project_id = :p", {"p": project})
-    with pytest.raises(IngestError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         _ingest(conn, _store(), remote_prove(conn, staff, "source.upload", project), project)
-    assert exc.value.status == 403
+    assert exc.value.reason == "proof_permission_not_held"
     after = _count(conn, "SELECT count(*) FROM sources WHERE project_id = :p", {"p": project})
     assert after == before
 
@@ -393,14 +393,14 @@ def test_run_start_refuses_a_non_member_and_a_stale_revision_without_spending_th
     _join(conn, world, project, staff)
     store = _store()
     _ingest(conn, store, remote_prove(conn, staff, "source.upload", project), project)
-    with pytest.raises(RunError) as not_member:
+    with pytest.raises(ProofRefused) as not_member:
         runs.start_run(
             conn,
             remote_prove(conn, outsider, "run.start", project),
             project,
             expected_project_revision=_revision(conn, project),
         )
-    assert not_member.value.status == 403
+    assert not_member.value.reason == "proof_permission_not_held"
     proof = remote_prove(conn, staff, "run.start", project)
     with pytest.raises(RunError) as stale:
         runs.start_run(conn, proof, project, expected_project_revision=0)

@@ -22,6 +22,7 @@ from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
 from webdesk.delivery.transport import CaptureTransport
@@ -160,11 +161,11 @@ def test_approving_an_unknown_request_is_refused_and_audited(conn: Connection) -
 def test_a_non_administrator_cannot_cancel_a_contact_change(conn: Connection) -> None:
     admin, _ = _admins(conn)
     plain = _plain(conn)
-    with pytest.raises(ContactServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         missing = uuid.uuid4()
         contacts.cancel_change(conn, prove(conn, plain, "contact.cancel.change", missing), missing)
-    assert exc.value.status == 403
-    assert _audit(conn, "contact.change.denied", "role_missing") == 1
+    assert exc.value.reason == "proof_permission_not_held"
+    assert _audit(conn, "authority.proof.refused", "proof_permission_not_held") == 1
     assert admin is not None
 
 

@@ -19,6 +19,7 @@ from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.projects import service as projects
 from webdesk.projects.service import ProjectServiceError
@@ -126,11 +127,11 @@ def test_analyst_creates_a_project_with_exactly_one_system_created_membership(
 def test_user_without_a_creating_role_cannot_create_a_project(conn: Connection) -> None:
     _two_admins(conn)
     plain = _active_user(conn)
-    with pytest.raises(ProjectServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         projects.create_project(
             conn, prove(conn, plain, "project.create"), name="Nope", data_classification="internal"
         )
-    assert (exc.value.status, exc.value.reason) == (403, "role_missing")
+    assert exc.value.reason == "proof_permission_not_held"
 
 
 def test_project_input_is_validated(conn: Connection) -> None:
@@ -273,12 +274,12 @@ def test_only_an_administrator_may_archive(conn: Connection) -> None:
         conn, prove(conn, admin, "project.create"), name="P", data_classification="internal"
     )
     analyst = _analyst(conn, admin)
-    with pytest.raises(ProjectServiceError) as exc:
+    with pytest.raises(ProofRefused) as exc:
         projects.archive_project(conn, prove(conn, analyst, "project.archive", project), project)
-    assert exc.value.status == 403
+    assert exc.value.reason == "proof_permission_not_held"
     denied = _count(
         conn,
-        "SELECT count(*) FROM audit_events WHERE event_type = 'project.archive.denied'",
+        "SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'",
         {},
     )
     assert denied == 1

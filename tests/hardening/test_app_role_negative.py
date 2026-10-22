@@ -21,10 +21,11 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import DBAPIError
 
 from webdesk.authority.client import AuthorityClient
+from webdesk.authority.proofs import ProofRefused
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.intake.ingest import ingest_source
-from webdesk.intake.reassess import ReassessError, reassess_source_classification
+from webdesk.intake.reassess import reassess_source_classification
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
@@ -367,7 +368,7 @@ def test_n19_a_non_administrator_cannot_reassess_classification(
 ) -> None:
     staff, source = _staff_with_source(conn, world, app_engine, "N19")
     revision = _scalar(conn, ("SELECT revision FROM sources WHERE source_id = :s", {"s": source}))
-    with pytest.raises(ReassessError) as refusal:
+    with pytest.raises(ProofRefused) as refusal:
         reassess_source_classification(
             conn,
             remote_prove(conn, staff, "classification.reassess", source),
@@ -376,7 +377,9 @@ def test_n19_a_non_administrator_cannot_reassess_classification(
             justification="hardening N19",
             expected_source_revision=int(revision),
         )
-    assert "403" in str(refusal.value)  # authorization refusal, not a server error
+    assert (
+        refusal.value.reason == "proof_permission_not_held"
+    )  # authorization refusal, not a server error
     # The same change through the raw path is covered by N11 (session-variable trust).
     _refused(
         conn,
