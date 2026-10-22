@@ -46,3 +46,41 @@ supersedes it. Decisions do not alter the approved v0.3.10 Foundation specificat
 The eight tests in the Phase 1 evidence (zero-Administrator recovery, recovery appointments (4), the sweep of an
 unconsumed appointment, the reserved-contact installation, and the install contact past its deadline) are
 restored and must pass under GD-001 to GD-003. None is waived.
+
+## P-INC3-PHASE1-CLOSE-07 — proof rollback semantics and password-reset policy (WDS direction, recorded; not an approved spec change)
+
+Recorded from WDS's direction for the Phase 1 closure. This entry does not edit the approved baseline or Amendment A2.
+
+### 1. Operation proofs: exactly-once committed semantics (adopted)
+
+- A proof is consumed by a privileged mutation inside the same database transaction. A successfully committed
+  privileged operation consumes its proof permanently.
+- If the transaction rolls back, the mutation rolls back with it, and the proof may be used again while it is unexpired
+  and the session is still valid and authorized.
+- Concurrent attempts cannot produce more than one committed operation (row lock on the proof).
+- Denial audit events are written in a savepoint and committed by the transaction runner, so they survive refusal.
+- No detached (independently committed) consumption is implemented.
+- **Interpretation check against Amendment A2:** A2 requires single-use operation proofs. This entry reads "single-use" as
+  "one committed privileged operation per proof". If WDS intends "burn the proof even when the transaction rolls back",
+  that is a conflict. It would require a detached commit, which this entry excludes. WDS should confirm the reading.
+
+### 2. Password reset (conformance gap identified; correction required)
+
+- **Approved policy (GOVERNANCE.md, secure credential activation and reset):** "Approved active account owners may request
+  reset" through a privately delivered random single-use 30-minute token stored as a hash. No Administrator can view a
+  token. Onboarding stays disabled without tested transport.
+- **Current implementation (up to 0027):** reset-token issuance requires an Administrator-issued proof. That is stricter
+  than the approved policy, which allows self-service. It does not provide the self-service pathway, so it does not
+  conform.
+- **Required correction (not yet implemented):**
+  - **A. Self-service:** the trusted authentication authority, and only the authority, issues a reset token for an active
+    account, delivered to the approved contact. The response is neutral and does not reveal whether the account exists.
+    Rate limits and replay protection apply. The application role cannot generate a usable token. This pathway needs a
+    tested transport. Until one is approved, it stays disabled outside the test profile.
+  - **B. Administrator-assisted:** an Administrator may trigger the same delivery, through an operation-specific proof and
+    audit. The Administrator never sees or sets the secret.
+- **WDS confirmation needed:**
+  - The governance phrase "Administrators MUST NOT ... reset user credentials" must be reconciled with pathway B. The
+    reading proposed here is: pathway B triggers delivery only, with no secret, no password choice and no viewing.
+  - The approved production transport for reset delivery does not exist yet. Pathway A cannot be enabled in production
+    until it does.
