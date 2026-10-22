@@ -1,7 +1,8 @@
-"""Application-side client for the authentication authority process (R4, stage 2).
-The application never reads or writes credentials or sessions. It asks the authority to log in,
-validate a session, log out, activate, reset, or issue an operation proof. Every reply is either the
-requested value or a neutral refusal."""
+"""
+Application-side client for the authentication authority process (R4, stage 2). The application
+never reads or writes credentials or sessions. It asks the authority to log in, validate a session,
+log out, activate, reset, or issue an operation proof. Every reply is either the requested value or
+a neutral refusal."""
 
 from __future__ import annotations
 
@@ -77,3 +78,7 @@ class AuthorityClient:
             },
         )
         return uuid.UUID(str(reply["proof_id"]))
+
+    def request_owner_reset(self, email: str) -> None:
+        """Owner-initiated reset. The reply carries no information about the account or delivery."""
+        self._post("/v1/reset/request", {"email": email})

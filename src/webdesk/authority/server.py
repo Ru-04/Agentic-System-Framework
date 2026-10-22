@@ -1,21 +1,16 @@
-"""Authentication authority process (R4, stage 2).
-Run as a separate operating-system process: ``python -m webdesk.authority.server``. It connects with
-its own restricted login role (``WEBDESK_AUTHORITY_DATABASE_URL``, a member of ``webdesk_authority``
-only) and serves only the authentication and operation-proof operations over loopback HTTP.
+"""
+Authentication authority process (R4, stage 2). Run as a separate operating-system process: ``python
+-m webdesk.authority.server``. It connects with its own restricted login role
+(``WEBDESK_AUTHORITY_DATABASE_URL``, a member of ``webdesk_authority`` only) and serves only the
+authentication and operation-proof operations over loopback HTTP.
 
-Boundaries enforced here:
-- Refuses to start when ``WEBDESK_ENV`` is ``production``. This process and its shared secret are
-for local,
-  non-production integration only; a production authority needs its own approved deployment and
-  keys.
-- Refuses any bind address other than loopback.
-- Every request must carry the shared bearer secret (``WEBDESK_AUTHORITY_SECRET``, at least 32
-characters).
+Boundaries enforced here: - Refuses to start when ``WEBDESK_ENV`` is ``production``. This process
+and its shared secret are for local, non-production integration only; a production authority needs
+its own approved deployment and keys. - Refuses any bind address other than loopback. - Every
+request must carry the shared bearer secret (``WEBDESK_AUTHORITY_SECRET``, at least 32 characters).
 - Accepts no user identifier from the caller. Identity is derived from the credential, the session
-token or
-  the proof, never from a supplied user ID.
-- Refusals are neutral (HTTP 401, ``{"error": "refused"}``). Denial audits are committed; other work
-rolls back.
+token or the proof, never from a supplied user ID. - Refusals are neutral (HTTP 401, ``{"error":
+"refused"}``). Denial audits are committed; other work rolls back.
 
 This is a local integration transport. It is not a production authentication service."""
 
@@ -26,17 +21,19 @@ import json
 import os
 import sys
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, Engine
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from webdesk.auth.service import AuthError
 from webdesk.authority import service as authority
+from webdesk.delivery.smtp import SmtpTransport, smtp_config_from_env
+from webdesk.delivery.transport import CaptureTransport, EmailTransport, TransportUnavailable
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.ratelimit.limiter import Limit
 
@@ -48,6 +45,12 @@ DEFAULT_BIND = "127.0.0.1:8766"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost"})
 MAX_BODY_BYTES = 4096
 MIN_SECRET_LENGTH = 32
+
+RESET_REQUEST_PATH = "/v1/reset/request"
+RESET_LIMITS = authority.ResetLimits(
+    contact=Limit("reset:contact", 5, timedelta(minutes=15)),
+    ip=Limit("reset:ip", 100, timedelta(minutes=15)),
+)
 
 LOGIN_LIMITS = authority.LoginLimits(
     account_ip_failures=Limit("login:account_ip", 10, timedelta(minutes=15)),
@@ -136,10 +139,18 @@ ROUTES: dict[str, Callable[[Connection, dict[str, Any], str], dict[str, Any]]] =
 class AuthorityServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], engine: Engine, secret: str) -> None:
+    def __init__(
+        self,
+        address: tuple[str, int],
+        engine: Engine,
+        secret: str,
+        reset_transport: EmailTransport | None = None,
+    ) -> None:
         super().__init__(address, _Handler)
         self.engine = engine
         self.secret = secret
+        # None (the default) means owner-initiated reset is disabled: no token is issued.
+        self.reset_transport = reset_transport
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -156,11 +167,41 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _reset_request(self) -> None:
+        """Owner-initiated reset. The reply is identical whatever the outcome."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = (
+                json.loads(self.rfile.read(length) or b"{}")
+                if 0 <= length <= MAX_BODY_BYTES
+                else None
+            )
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not isinstance(body.get("email"), str):
+            self._reply(400, {"error": "refused"})
+            return
+        try:
+            _run_reset(
+                self.server.engine,
+                body["email"],
+                self.client_address[0],
+                self.server.reset_transport,
+            )
+        except (SQLAlchemyError, TransportUnavailable):
+            # Delivery failed: the transaction rolled back and no token survives. The reply stays
+            # neutral.
+            _diagnose(RESET_REQUEST_PATH, "delivery or database refusal; reply unchanged")
+        self._reply(200, {"accepted": True})
+
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming
         expected = f"Bearer {self.server.secret}"
         supplied = self.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied.encode(), expected.encode()):
             self._reply(401, {"error": "refused"})
+            return
+        if self.path == RESET_REQUEST_PATH:
+            self._reset_request()
             return
         route = ROUTES.get(self.path)
         if route is None:
@@ -204,15 +245,15 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def _diagnose(path: str, detail: str) -> None:
-    """Operator diagnostics on stderr: the route and the refusal class only, never credentials or
+    """
+    Operator diagnostics on stderr: the route and the refusal class only, never credentials or
     tokens."""
     sys.stderr.write(f"authority {path} {detail}\n")
     sys.stderr.flush()
 
 
 def _run(engine: Engine, operation: Callable[[Connection], dict[str, Any]]) -> dict[str, Any]:
-    """Commit on success and on a neutral refusal (so denial audits persist); roll back
-    otherwise."""
+    """Commit on success and on a neutral refusal (denial audits persist); roll back otherwise."""
     connection = engine.connect()
     transaction = connection.begin()
     try:
@@ -230,14 +271,60 @@ def _run(engine: Engine, operation: Callable[[Connection], dict[str, Any]]) -> d
         connection.close()
 
 
-def build_server(bind: str, database_url: str, secret: str) -> AuthorityServer:
+def _run_reset(
+    engine: Engine, email: str, client_ip: str, transport: EmailTransport | None
+) -> None:
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        authority.request_owner_reset(
+            connection,
+            email=email,
+            client_ip=client_ip,
+            policy=_policy(),
+            transport=transport,
+            limits=RESET_LIMITS,
+        )
+    except BaseException:
+        transaction.rollback()
+        raise
+    else:
+        transaction.commit()
+    finally:
+        connection.close()
+
+
+def reset_transport_from_env(env: Mapping[str, str]) -> EmailTransport | None:
+    """The owner-reset delivery transport, or None when delivery is disabled (the default).
+
+    ``capture`` is a non-production sink for isolated tests only. ``smtp`` needs every SMTP gate,
+    including the verified flag. Anything else is disabled."""
+    mode = env.get("WEBDESK_RESET_DELIVERY", "disabled")
+    if mode == "disabled":
+        return None
+    if mode == "capture":
+        if env.get("WEBDESK_ENV", "").lower() != "test":
+            raise ConfigurationError("the capture sink is available only in the test profile")
+        return CaptureTransport()
+    if mode == "smtp":
+        config = smtp_config_from_env(dict(env))
+        return None if config is None else SmtpTransport(config)
+    raise ConfigurationError("WEBDESK_RESET_DELIVERY must be disabled, capture or smtp")
+
+
+def build_server(
+    bind: str,
+    database_url: str,
+    secret: str,
+    reset_transport: EmailTransport | None = None,
+) -> AuthorityServer:
     host, _, port_text = bind.rpartition(":")
     if host not in LOOPBACK_HOSTS:
         raise ConfigurationError("the authority binds to loopback only in this increment")
     if len(secret) < MIN_SECRET_LENGTH:
         raise ConfigurationError(f"{ENV_SECRET} must be at least {MIN_SECRET_LENGTH} characters")
     engine = create_engine(database_url)
-    return AuthorityServer((host, int(port_text)), engine, secret)
+    return AuthorityServer((host, int(port_text)), engine, secret, reset_transport)
 
 
 def main() -> None:
@@ -247,7 +334,12 @@ def main() -> None:
     secret = os.environ.get(ENV_SECRET)
     if not database_url or not secret:
         raise ConfigurationError(f"{ENV_DATABASE} and {ENV_SECRET} are required")
-    server = build_server(os.environ.get(ENV_BIND, DEFAULT_BIND), database_url, secret)
+    server = build_server(
+        os.environ.get(ENV_BIND, DEFAULT_BIND),
+        database_url,
+        secret,
+        reset_transport_from_env(os.environ),
+    )
     sys.stdout.write(f"authority listening on {server.server_address}\n")
     sys.stdout.flush()
     try:

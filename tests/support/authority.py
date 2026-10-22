@@ -67,10 +67,14 @@ class InProcessAuthority:
         self.server.engine.dispose()
 
 
-def start_in_process_authority(database_url: str) -> InProcessAuthority:
+def start_in_process_authority(
+    database_url: str, reset_transport: Any = None
+) -> InProcessAuthority:
     owner_url = os.environ["WEBDESK_TEST_DATABASE_URL"]
     password = provision_login_password(owner_url)
-    server = build_server("127.0.0.1:0", authority_database_url(database_url, password), SECRET)
+    server = build_server(
+        "127.0.0.1:0", authority_database_url(database_url, password), SECRET, reset_transport
+    )
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = server.server_address[1]
     return InProcessAuthority(server, AuthorityClient(f"http://127.0.0.1:{port}", SECRET))
