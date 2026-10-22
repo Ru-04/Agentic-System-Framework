@@ -590,3 +590,35 @@ intermittent socket aborts seen on the Windows host were environmental and did n
 - Verdict: NOT READY. Release-blocking findings are listed in docs/PHASE1_INDEPENDENT_REVIEW_HANDOFF.md section 7.
   The principal one: source upload, run start and control, and reparse still take caller-supplied actors, and the application
   role can write their tables directly.
+
+## Phase 1 security closure round (WDS decisions 2026-10-22)
+
+Verified at commit e615eff on freshly created databases:
+
+- Full suite: **486 passed, 0 failed, 0 xfailed**.
+- Restricted-login hardening folder: includes N1-N32, N26, EVAL-F11j 17, EVAL-F11j extended 20, rollback 5,
+  privilege hardening 17, owner reset (integration) 5.
+- Ruff and strict mypy: clean (src, tests, migrations).
+- Alembic: upgrade, downgrade to 0022 and upgrade again, 0023 through 0029, on a fresh database.
+
+Changes in this round:
+- Owner-initiated reset in the authority (0028) with neutral replies, rate limits, and no token without a verified
+  transport. Administrator-triggered notification keeps the proof path and never returns the secret.
+- Provider-independent transport; SMTP adapter disabled until verified. No real delivery is enabled.
+- Ceremony least privilege (0029).
+- Outbox: column-level privileges limited to delivery state (verified by test PV-05/PV-06).
+
+Open release-blocking findings (not resolved in this round):
+1. Run and intake authorization. Source upload (ingest_source), run start, cancel, retry, resume, reparse and job
+   scheduling still take caller-supplied actors. The application role has INSERT on sources, source_versions,
+   workflow_runs, workflow_jobs, workflow_checkpoints, run_input_snapshots, source_segments and dependency_edges, and
+   UPDATE on the state columns of workflow_runs, workflow_jobs, source_versions and sources. These writes bypass the
+   operation-proof boundary. No restricted-login spoofing test exists for them yet: adding one would fail today.
+2. No separate outbox worker role. The application role keeps UPDATE on delivery-state columns of outbox_notices.
+3. The authority is a local integration process. No production deployment or key management exists.
+4. Ceremony still holds INSERT on users and UPDATE on user_contact_approvals and setup_trust_ceremonies. These are
+   installation, recovery and sweep flows; narrowing needs an audit of each column against those flows.
+5. Rollback semantics are adopted per WDS (exactly-once committed); the decision is recorded.
+6. Independent review has not occurred.
+
+Verdict: **NOT READY FOR INDEPENDENT PHASE 1 REVIEW.** Blocker 1 is the release blocker.

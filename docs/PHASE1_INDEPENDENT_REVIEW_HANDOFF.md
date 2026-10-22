@@ -119,3 +119,13 @@ mypy --strict src/webdesk
 Last verified run on fresh databases at commit 267c934: **464 passed, 0 failed**. Ruff and strict mypy clean.
 Do not run other suites against the same databases concurrently; a concurrent run produced 54 spurious failures that
 disappeared on a clean run.
+
+## 9. Update for WDS decisions 2026-10-22 (commits 875059d, 32407ab, e615eff)
+
+- Owner-initiated reset is implemented in the authority (migration 0028). Administrator-triggered notification keeps the
+  operation-proof path. Reset delivery is disabled by default; the SMTP adapter is refused until verified.
+- Ceremony least privilege (migration 0029). Outbox is limited to delivery-state columns; no worker role exists.
+- Exactly-once committed-operation proof semantics are recorded in `docs/GOVERNANCE_DECISION_REGISTER.md`.
+- Release blocker unchanged and still open: run and intake authorization (section 7, item 1). The verdict remains
+  **NOT READY**.
+- Reproduction is unchanged from section 8. Last full verification: 486 passed, 0 failed on fresh databases.
