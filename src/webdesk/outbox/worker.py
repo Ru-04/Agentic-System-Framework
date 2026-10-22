@@ -24,7 +24,7 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
-from webdesk.audit.service import record_event
+from webdesk.audit.service import record_worker_event
 from webdesk.config import ConfigurationError
 from webdesk.crypto.contact_box import ContactBox, ContactBoxError, outbox_aad
 from webdesk.delivery.transport import EmailTransport, TransportUnavailable
@@ -76,21 +76,11 @@ class OutboxWorker:
 
     def claim(self, limit: int = 10) -> list[Claimed]:
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
             rows = conn.execute(
                 text(
-                    """UPDATE outbox_notices
-                       SET status = 'leased', lease_owner = :owner,
-                           lease_expires_at = now() + CAST(:lease AS interval),
-                           attempt_count = attempt_count + 1
-                       WHERE notice_id IN (
-                           SELECT notice_id FROM outbox_notices
-                           WHERE ((status = 'queued' AND available_at <= now())
-                                  OR (status = 'leased' AND lease_expires_at < now()))
-                           ORDER BY created_at
-                           LIMIT :n
-                           FOR UPDATE SKIP LOCKED)
-                       RETURNING notice_id, user_id, attempt_count"""
+                    "SELECT * FROM webdesk_guard.fn_outbox_claim("
+                    ":owner, CAST(:lease AS interval), :n)"
                 ),
                 {"owner": self._owner, "n": limit, "lease": self._lease},
             ).all()
@@ -98,55 +88,46 @@ class OutboxWorker:
 
     def renew(self, notice_id: uuid.UUID) -> bool:
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
-            result = conn.execute(
-                text(
-                    """UPDATE outbox_notices
-                       SET lease_expires_at = now() + CAST(:lease AS interval)
-                       WHERE notice_id = :n AND status = 'leased' AND lease_owner = :owner"""
-                ),
-                {"n": notice_id, "owner": self._owner, "lease": self._lease},
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+            return bool(
+                conn.execute(
+                    text(
+                        "SELECT webdesk_guard.fn_outbox_renew(:n, :owner, CAST(:lease AS interval))"
+                    ),
+                    {"n": notice_id, "owner": self._owner, "lease": self._lease},
+                ).scalar_one()
             )
-            return result.rowcount == 1
 
     def _open_destination(self, notice: Claimed) -> str | None:
         """Return the prior address, or None if the row cannot be opened. Never logs it."""
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
-            row = conn.execute(
-                text(
-                    """SELECT old_contact_ciphertext FROM outbox_notices
-                       WHERE notice_id = :n AND purpose = 'prior_contact_change'"""
-                ),
-                {"n": notice.notice_id},
-            ).one_or_none()
-        if row is None or row[0] is None:
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+            sealed = conn.execute(
+                text("SELECT webdesk_guard.fn_outbox_open_ciphertext(:n, :owner)"),
+                {"n": notice.notice_id, "owner": self._owner},
+            ).scalar_one()
+        if sealed is None:
             return None
         try:
             return self._box.open(
-                bytes(row[0]), aad=outbox_aad("prior_contact_change", notice.user_id)
+                bytes(sealed), aad=outbox_aad("prior_contact_change", notice.user_id)
             )
         except ContactBoxError:
             return None
 
     def _mark_sent(self, notice: Claimed) -> bool:
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
-            result = conn.execute(
-                text(
-                    """UPDATE outbox_notices
-                       SET status = 'sent', delivered_at = now(), lease_owner = NULL,
-                           lease_expires_at = NULL, last_error_class = NULL
-                       WHERE notice_id = :n AND status = 'leased' AND lease_owner = :owner"""
-                ),
-                {"n": notice.notice_id, "owner": self._owner},
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+            return bool(
+                conn.execute(
+                    text("SELECT webdesk_guard.fn_outbox_mark_sent(:n, :owner)"),
+                    {"n": notice.notice_id, "owner": self._owner},
+                ).scalar_one()
             )
-            return result.rowcount == 1
 
     def _alert(self, conn: Connection, notice: Claimed, reason: str) -> None:
-        record_event(
+        record_worker_event(
             conn,
-            actor_type="system",
             actor_id="outbox-worker",
             event_type="ops.alert.delivery_failed",
             outcome="error",
@@ -156,44 +137,40 @@ class OutboxWorker:
 
     def _dead_letter(self, notice: Claimed, reason: str) -> bool:
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
             changed = conn.execute(
-                text(
-                    """UPDATE outbox_notices
-                       SET status = 'dead_letter', last_error_class = :reason,
-                           lease_owner = NULL, lease_expires_at = NULL
-                       WHERE notice_id = :n AND status = 'leased' AND lease_owner = :owner"""
-                ),
+                text("SELECT webdesk_guard.fn_outbox_dead_letter(:n, :owner, :reason)"),
                 {"n": notice.notice_id, "owner": self._owner, "reason": reason},
-            ).rowcount
-            if changed == 1:
+            ).scalar_one()
+            if changed:
                 self._alert(conn, notice, reason)
-            return changed == 1
+            return bool(changed)
 
     def _retry_or_dead_letter(self, notice: Claimed, reason: str) -> bool:
         if notice.attempt_count >= self._threshold:
             return self._dead_letter(notice, reason)
         with self._engine.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_app"))
-            changed = conn.execute(
-                text(
-                    """UPDATE outbox_notices
-                       SET status = 'queued', last_error_class = :reason,
-                           available_at = now() + CAST(:delay AS interval),
-                           lease_owner = NULL, lease_expires_at = NULL
-                       WHERE notice_id = :n AND status = 'leased' AND lease_owner = :owner"""
-                ),
-                {
-                    "n": notice.notice_id,
-                    "owner": self._owner,
-                    "reason": reason,
-                    "delay": f"{backoff_seconds(notice.attempt_count)} seconds",
-                },
-            ).rowcount
-            return changed == 1
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+            return bool(
+                conn.execute(
+                    text(
+                        "SELECT webdesk_guard.fn_outbox_retry(:n, :owner, :reason,"
+                        " CAST(:delay AS interval))"
+                    ),
+                    {
+                        "n": notice.notice_id,
+                        "owner": self._owner,
+                        "reason": reason,
+                        "delay": f"{backoff_seconds(notice.attempt_count)} seconds",
+                    },
+                ).scalar_one()
+            )
 
     def deliver(self, notice: Claimed) -> str:
         """Deliver one claimed notice. Returns the outcome."""
+        # Fence first: a worker whose lease was reclaimed reports lease_lost and writes nothing.
+        if not self.renew(notice.notice_id):
+            return "lease_lost"
         destination = self._open_destination(notice)
         if destination is None:
             self._dead_letter(notice, "destination_unavailable")
