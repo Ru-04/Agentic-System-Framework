@@ -294,7 +294,7 @@ def test_contact_rate_limit_refuses_the_sixth_request_in_the_window(conn: Connec
 
 def test_reset_is_refused_while_a_contact_change_is_pending(conn: Connection) -> None:
     user = _user(conn, "active")
-    # A pending change row, created as the guard owner (the application role cannot insert approvals).
+    # A pending change row, created as the guard owner (the application role cannot insert).
     guard_insert(
         conn,
         """INSERT INTO user_contact_approvals (user_id, request_type,

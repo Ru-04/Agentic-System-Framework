@@ -1,8 +1,9 @@
 """EVAL-F11j: operation-proof and session-binding release tests (R4 stage 3, M4).
 
-Every test runs as the restricted application login (``webdesk_app_login``) against the hardening database.
-Proofs come from the separately running authentication authority process (``remote_prove``). A refused
-operation must leave the protected state unchanged and must leave a refusal audit row.
+Every test runs as the restricted application login (``webdesk_app_login``) against the hardening
+database. Proofs come from the separately running authentication authority process
+(``remote_prove``). A refused operation must leave the protected state unchanged and must leave a
+refusal audit row.
 
 Cases marked "legitimate" prove that the same operation works with valid authority-issued authority.
 """
@@ -195,7 +196,8 @@ def test_f11j_08_a_proof_issued_to_one_administrator_is_refused_for_another_acto
     audit_actor = conn.execute(
         text(
             """SELECT actor_id_or_service FROM audit_events
-               WHERE event_type = 'user.disabled' AND record_refs @> jsonb_build_array(CAST(:t AS text))
+               WHERE event_type = 'user.disabled'
+                 AND record_refs @> jsonb_build_array(CAST(:t AS text))
                ORDER BY occurred_at DESC LIMIT 1"""
         ),
         {"t": str(target)},
@@ -397,7 +399,8 @@ def test_f11j_17_a_legitimate_administrator_disable_succeeds_and_is_audited(
         conn.execute(
             text(
                 """SELECT count(*) FROM audit_events
-               WHERE event_type = 'user.disabled' AND record_refs @> jsonb_build_array(CAST(:t AS text))"""
+               WHERE event_type = 'user.disabled'
+                 AND record_refs @> jsonb_build_array(CAST(:t AS text))"""
             ),
             {"t": str(target)},
         ).scalar_one()
