@@ -137,3 +137,34 @@ Sprint 2 acceptance is still **NOT ACCEPTED**. The real Shopify investigation st
 - QA2-13 (P2, approved): vendor fetches install no proxy handler, so environment proxies are ignored.
 - Unit tests: 336 passed. Ruff, format and strict mypy are clean.
 - Sprint 2 acceptance is still NOT ACCEPTED. The real investigation runs on the four briefs are still outstanding, and so is the QA signature.
+
+## 10. Update: Shopify functionality and real run (22 October 2026, commit `45df73c`)
+
+**Approval basis:** P1 and P2 approved and implemented (commit `2b0cef2`). The specification package is committed for formal review, not as an approved specification. Continuation under the non-production authorization.
+
+### What the Shopify specialist now does
+
+| Area | Status | Notes |
+|---|---|---|
+| Option classes (native configuration, app or extension, custom API) | Implemented | Keyword-based, cited, with coverage per class |
+| Solution comparison | **Partial** | Coverage per option class for the retrieved evidence only. No client-fit or cost comparison. |
+| Feasibility analysis | **Not implemented, by design** | Always reported as `not_determined`, with a clarification question. A keyword rule cannot make this judgement, and a live model call is not authorized (D09). |
+| Gaps and clarification questions | Implemented | Each uncovered option class gives a gap line and a CLARIFY question. Every output asks for the plan tier. |
+| Relevance | Improved | A match needs two distinct meaningful terms after stopwords are removed |
+| Real investigation on the four briefs | **Executed** | 17 requirements, one run each, against 16 live allowlisted `shopify.dev` pages |
+
+### Real run results (from `docs/evaluation/SHOPIFY_REAL_INVESTIGATION_2026-10-22.md`)
+
+- Corpus: 16 of 16 pages retrieved live. Help-centre pages were not reachable (HTTP 403).
+- Requirements with at least one cited finding: **7 of 17**.
+- Requirements with no cited finding: **10 of 17**. These are gaps. The approved corpus does not cover them: Canadian address and province rules, customer account creation after purchase, guest renewal, campaign tracking, partner stores, staff roles, search and autocomplete, pickup blackout dates, dashboards, and workflow automation.
+- Every output is `incomplete`. None reports `completed`.
+- Spot-checks showed that some matches are relevant (for example, local pickup through Shopify Functions) and others are tangential. The record makes no relevance claim beyond the matched-term rule.
+
+### Acceptance status
+
+**Still NOT ACCEPTED.** The run is an executed record, not acceptance evidence. Acceptance needs:
+1. Independent QA of the new code and the run record. An independent QA agent has been run on commit `45df73c`; its result is recorded in section 11 when received.
+2. Additional approved official sources for the ten uncovered requirements, or a decision that those requirements are out of scope for the Shopify acceptance.
+3. An approved evaluation method for relevance. The current keyword rule is not a relevance judgement.
+4. Human QA sign-off by the designated signatory **AS**. Not given. No sign-off is recorded in this repository.
