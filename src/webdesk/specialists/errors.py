@@ -24,9 +24,16 @@ RETRYABLE_CODES = frozenset({SpecialistErrorCode.PROVIDER_FAILURE})
 
 class SpecialistError(Exception):
     def __init__(self, code: SpecialistErrorCode, message: str) -> None:
-        super().__init__(f"{code.value}: {message}")
+        super().__init__(code, message)
         self.code = code
         self.message = message
+
+    def __str__(self) -> str:
+        return f"{self.code.value}: {self.message}"
+
+    def __reduce__(self) -> tuple[type[SpecialistError], tuple[SpecialistErrorCode, str]]:
+        # Rebuild from (code, message) so the error survives pickling across worker boundaries.
+        return (SpecialistError, (self.code, self.message))
 
     @property
     def retryable(self) -> bool:
