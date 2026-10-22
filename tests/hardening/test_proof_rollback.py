@@ -15,6 +15,7 @@ All cases run as the restricted login (``webdesk_app_login``) against committed 
 from __future__ import annotations
 
 import threading
+import time
 
 import pytest
 from sqlalchemy import text
@@ -202,3 +203,43 @@ def _rev(conn, user) -> int:
 def remote_prove_for(engine: Engine, user, operation: str, resource):
     with engine.begin() as conn:
         return remote_prove(conn, user, operation, resource)
+
+
+def test_rb_06_concurrent_use_when_the_first_attempt_commits_refuses_the_second(
+    app_engine: Engine, world: dict
+) -> None:
+    """WDS decision 1 (exactly-once committed effect).
+
+    Thread A consumes and commits while thread B waits on the proof row. B is refused as spent, and
+    exactly one committed privileged mutation results.
+    """
+    target = make_active_user(app_engine, world)
+    proof = remote_prove_for(app_engine, world["admin"], "user.disable", target)
+    a_consumed = threading.Event()
+    outcomes: dict[str, str] = {}
+
+    def first() -> None:
+        with app_engine.begin() as conn:
+            disable_user(conn, proof, target, reason="A", expected_revision=_rev(conn, target))
+            a_consumed.set()
+            # Hold the transaction open briefly so B reaches the proof row while A still owns it.
+            time.sleep(0.5)
+        outcomes["A"] = "committed"
+
+    def second() -> None:
+        a_consumed.wait(timeout=30)
+        try:
+            with app_engine.begin() as conn:
+                disable_user(conn, proof, target, reason="B", expected_revision=_rev(conn, target))
+            outcomes["B"] = "committed"
+        except (ProofRefused, DisableError) as exc:
+            outcomes["B"] = getattr(exc, "reason", "refused")
+
+    t1 = threading.Thread(target=first)
+    t2 = threading.Thread(target=second)
+    t1.start()
+    t2.start()
+    t1.join(timeout=60)
+    t2.join(timeout=60)
+    assert outcomes == {"A": "committed", "B": "proof_spent"}, outcomes
+    assert _committed_disables(app_engine, target) == 1
