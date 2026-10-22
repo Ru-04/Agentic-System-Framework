@@ -29,6 +29,7 @@ from webdesk.evidence.retrieval import (
     RetrievalQuery,
     RetrievalStatus,
     Retriever,
+    content_terms,
     search_with_retry,
 )
 from webdesk.evidence.sources import Freshness, SourceKind, SourceRecord, assess_freshness
@@ -74,6 +75,10 @@ MAX_FINDINGS: Final[int] = 20
 # A single shared word is not relevance. Two distinct meaningful terms are required.
 MIN_TERM_HITS: Final[int] = 2
 
+# Retrieve a wider candidate set, then rank it. Ranking by term overlap alone pushed passages that
+# carry Shopify topic terms out of the top five (QA-review of 22 October 2026).
+CANDIDATE_LIMIT: Final[int] = 20
+
 
 def _topics(text: str) -> tuple[str, ...]:
     lowered = text.lower()
@@ -86,6 +91,16 @@ def _topics(text: str) -> tuple[str, ...]:
 
 def is_fresh(passage: Passage, now: datetime, max_age: timedelta) -> bool:
     return assess_freshness(passage.source, now, max_age) is Freshness.FRESH
+
+
+def _rank_key(task: str, passage: Passage) -> tuple[int, int, int, str, int]:
+    # Direct before partial; passages with a topic or option term before those without;
+    # then more shared task terms first. Ties break deterministically on identity.
+    grade = judge_relevance(task, passage.text)
+    grade_order = 0 if grade is Relevance.DIRECT else 1 if grade is Relevance.PARTIAL else 2
+    has_signal = bool(_topics(passage.text) or classify_options(passage.text))
+    overlap = len(content_terms(task) & content_terms(passage.text))
+    return (grade_order, 0 if has_signal else 1, -overlap, passage.source.source_id, passage.start)
 
 
 def _mentions_plan_or_version(text: str) -> bool:
@@ -127,6 +142,7 @@ class ShopifySpecialist:
             text=request.task,
             kinds=frozenset(SourceKind),
             min_term_hits=MIN_TERM_HITS,
+            limit=CANDIDATE_LIMIT,
         )
         try:
             result = search_with_retry(
@@ -164,6 +180,7 @@ class ShopifySpecialist:
             if passage.source.workspace_id == request.workspace_id
         )
         usable, quarantined = split_by_trust(in_workspace)
+        usable = tuple(sorted(usable, key=lambda p: _rank_key(request.task, p)))
         unknowns: list[str] = []
         if quarantined:
             unknowns.append(

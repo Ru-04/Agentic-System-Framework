@@ -142,3 +142,13 @@ Earlier runs on the same branch, for reference: `45df73c` run 39804483161 (succe
 - Signature or approval reference: ______________________
 
 *This package records no sign-off. AS's decision is recorded only in this section, once completed by AS.*
+
+## Update 22 October 2026 — decisions S2-D07 to S2-D12 (supersedes the figures above where they differ)
+
+- Relevance: PARTIAL floor tightened to three terms. Plural and hyphen folding added. Candidate ranking added (top 20, ranked by grade, then topic or option signal, then shared terms). Independent label check (AI agent, not human; 55 pairs): agreement 46 of 55 with the three-term floor, versus 29 of 55 with two terms. The floor was tuned on the same labels, so this is not validation.
+- Current evaluation (17 requirements): **0 DIRECT, 15 PARTIAL, 31 IRRELEVANT passages**. **3 requirements** have a cited finding; **14** have none; 3 have partial evidence only.
+- Sources: 16 shopify.dev pages and 2 CRA pages retrieved. The 2 Shopify plan pages (`shopify.com/pricing` and `/plus`, via `www`) returned HTTP 403 to the fetch client and were not retrieved. `help.shopify.com` returns HTTP 403 to the fetch client. A browser read of one help page succeeded, but its text was not ingested.
+- Citations: 13 findings, 0 citation failures, 0 stale findings.
+- Tests: unit suite passing (see the report for the count after this change).
+- CI: run `39806794237` for `99c4325` succeeded (S2-D12). The commit that follows this update is verified separately.
+- Sign-off: **AS's review and sign-off are still pending.** None is recorded.

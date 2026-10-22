@@ -140,9 +140,24 @@ def content_terms(text: str) -> set[str]:
     return _terms(text)
 
 
+def _singular(word: str) -> str:
+    # Simple plural folding: "filters" -> "filter". Words ending in "ss" are kept.
+    if len(word) > 4 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
 def _terms(text: str) -> set[str]:
+    lowered = text.lower()
+    # Hyphenated compounds count both as separate words and as one joined word ("cut-off" also
+    # gives "cutoff"), so a hyphen does not hide a match.
+    joined = re.sub(r"(?<=[a-z0-9])-(?=[a-z0-9])", "", lowered)
+    words = {match.group(0) for match in _TERM.finditer(lowered)}
+    words |= {match.group(0) for match in _TERM.finditer(joined)}
     return {
-        match.group(0) for match in _TERM.finditer(text.lower()) if match.group(0) not in _STOPWORDS
+        _singular(word)
+        for word in words
+        if word not in _STOPWORDS and _singular(word) not in _STOPWORDS
     }
 
 
