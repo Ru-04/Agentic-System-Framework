@@ -19,7 +19,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
-from tests.support.privileged import ceremony_insert
+from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity.email import ContactEmailPolicy
@@ -283,7 +283,7 @@ def test_restricted_upload_is_quarantined_and_its_bytes_cannot_be_read(
         read_source_content(conn, store, ids["analyst"], result.source_version_id)
     assert (exc.value.status, exc.value.reason) == (409, "quarantined")
     with pytest.raises(ParseRefused) as refused:
-        parse_service.parse_version(conn, store, result.source_version_id)
+        as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
     assert refused.value.reason == "quarantined"
 
 
@@ -425,7 +425,7 @@ def test_a_text_version_parses_into_one_segment_per_line(
 ) -> None:
     ids = _setup(conn)
     result, _ = _ingest(conn, store, ids["analyst"], ids["project"])
-    status = parse_service.parse_version(conn, store, result.source_version_id)
+    status = as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
     assert status == "succeeded"
     assert _segment_count(conn, result.source_version_id) == 2
 
@@ -433,9 +433,9 @@ def test_a_text_version_parses_into_one_segment_per_line(
 def test_a_version_is_parsed_only_while_pending(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
     result, _ = _ingest(conn, store, ids["analyst"], ids["project"])
-    parse_service.parse_version(conn, store, result.source_version_id)
+    as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
     with pytest.raises(ParseRefused) as exc:
-        parse_service.parse_version(conn, store, result.source_version_id)
+        as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
     assert exc.value.reason == "not_pending"
 
 
@@ -458,10 +458,16 @@ def test_a_parser_exception_fails_only_that_version_and_writes_no_segments(
         raise RuntimeError("parser crashed mid-way")
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", explode)
-    assert parse_service.parse_version(conn, store, broken.source_version_id) == "failed"
+    assert (
+        as_worker(conn, parse_service.parse_version, conn, store, broken.source_version_id)
+        == "failed"
+    )
     assert _segment_count(conn, broken.source_version_id) == 0
     monkeypatch.undo()
-    assert parse_service.parse_version(conn, store, healthy.source_version_id) == "succeeded"
+    assert (
+        as_worker(conn, parse_service.parse_version, conn, store, healthy.source_version_id)
+        == "succeeded"
+    )
 
 
 def test_a_failed_segment_write_rolls_back_every_segment_of_that_attempt(
@@ -480,7 +486,10 @@ def test_a_failed_segment_write_rolls_back_every_segment_of_that_attempt(
         )
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", two_drafts)
-    assert parse_service.parse_version(conn, store, result.source_version_id) == "failed"
+    assert (
+        as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
+        == "failed"
+    )
     assert _segment_count(conn, result.source_version_id) == 0
     error = conn.execute(
         text("SELECT parse_error ->> 'class' FROM source_versions WHERE source_version_id = :v"),
@@ -511,7 +520,10 @@ def test_an_email_with_an_attachment_lists_it_and_does_not_ingest_it(
         mime="message/rfc822",
         data=message.as_bytes(),
     )
-    assert parse_service.parse_version(conn, store, result.source_version_id) == "succeeded"
+    assert (
+        as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
+        == "succeeded"
+    )
     attachments = conn.execute(
         text(
             "SELECT jsonb_array_length(unprocessed_attachments) FROM source_versions "

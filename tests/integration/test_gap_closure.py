@@ -21,7 +21,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
-from tests.support.privileged import ceremony_insert
+from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake import parse_service
@@ -210,7 +210,7 @@ def test_an_unlisted_transition_is_refused(conn: Connection) -> None:
     ids = _setup(conn)
     run = _start(conn, ids)
     with pytest.raises(RunError) as exc:
-        runs.transition(conn, run, "created", "parsing", "running")
+        as_worker(conn, jobs._transition, conn, run, "created", "parsing", "running")
     assert exc.value.reason == "illegal_transition"
 
 
@@ -225,7 +225,7 @@ def test_an_archived_project_refuses_retry_of_a_failed_run(
         raise RunError(422, "schema_invalid")
 
     monkeypatch.setattr(jobs, "parse_version", refused)
-    assert jobs.process_one(conn, store, "worker-gap") == "failed"
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-gap") == "failed"
     monkeypatch.undo()
     projects.archive_project(
         conn, prove(conn, ids["admin"], "project.archive", ids["project"]), ids["project"]
@@ -249,7 +249,7 @@ def test_intake_writes_a_checkpoint_with_identifiers_and_flags_only(
     ids = _setup(conn)
     version = _ingest(conn, store, ids)
     run = _start(conn, ids)
-    jobs.process_one(conn, store, "worker-ckpt")
+    as_worker(conn, jobs.process_one, conn, store, "worker-ckpt")
     row = conn.execute(
         text(
             """SELECT node, refs::text, flags::text FROM workflow_checkpoints
@@ -268,7 +268,7 @@ def test_resume_is_refused_for_a_parked_run_in_gate_1(
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    jobs.process_one(conn, store, "worker-resume")
+    as_worker(conn, jobs.process_one, conn, store, "worker-resume")
     with pytest.raises(RunError) as exc:
         runs.resume_run(
             conn,
@@ -412,7 +412,7 @@ def test_a_repeated_parse_reuses_the_same_segment_identities_without_duplicates(
 ) -> None:
     ids = _setup(conn)
     version = _ingest(conn, store, ids)
-    parse_service.parse_version(conn, store, version.source_version_id)
+    as_worker(conn, parse_service.parse_version, conn, store, version.source_version_id)
     first = conn.execute(
         text(
             "SELECT segment_id::text, locator_key FROM source_segments "
@@ -425,7 +425,7 @@ def test_a_repeated_parse_reuses_the_same_segment_identities_without_duplicates(
         "UPDATE source_versions SET parse_status = 'pending' " "WHERE source_version_id = :v",
         {"v": version.source_version_id},
     )
-    parse_service.parse_version(conn, store, version.source_version_id)
+    as_worker(conn, parse_service.parse_version, conn, store, version.source_version_id)
     second = conn.execute(
         text(
             "SELECT segment_id::text, locator_key FROM source_segments "

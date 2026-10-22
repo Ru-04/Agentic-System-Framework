@@ -106,12 +106,15 @@ def _audit(
     )
 
 
-def load_run(conn: Connection, run_id: uuid.UUID, *, lock: bool = True) -> RunRef:
-    """Read one run. ``lock`` takes the row lock (the worker path owns its writes)."""
-    select = """SELECT run_id, project_id, state, status, failure_class, revision
-                FROM workflow_runs WHERE run_id = :r"""
-    statement = text(select + " FOR UPDATE" if lock else select)
-    row = conn.execute(statement, {"r": run_id}).one_or_none()
+def load_run(conn: Connection, run_id: uuid.UUID) -> RunRef:
+    """Read one run. A plain read: the guard takes the lock when it writes."""
+    row = conn.execute(
+        text(
+            """SELECT run_id, project_id, state, status, failure_class, revision
+               FROM workflow_runs WHERE run_id = :r"""
+        ),
+        {"r": run_id},
+    ).one_or_none()
     if row is None:
         raise RunError(404, "run_not_found")
     return RunRef(
@@ -127,40 +130,6 @@ def load_run(conn: Connection, run_id: uuid.UUID, *, lock: bool = True) -> RunRe
 def _check_revision(run: RunRef, expected: int) -> None:
     if run.revision != expected:
         raise RunError(409, "revision_conflict")
-
-
-def transition(
-    conn: Connection,
-    run_id: uuid.UUID,
-    expected_state: str,
-    new_state: str,
-    status: str,
-    *,
-    failure_class: str | None = None,
-    parked: bool = False,
-) -> None:
-    """Apply one allowed transition. The expected-state guard refuses a concurrent change."""
-    if new_state not in ALLOWED_TRANSITIONS.get(expected_state, frozenset()):
-        raise RunError(409, "illegal_transition")
-    result = conn.execute(
-        text(
-            """UPDATE workflow_runs
-               SET state = :new, status = :status, failure_class = :fc,
-                   parked_at = CASE WHEN :parked THEN now() ELSE parked_at END,
-                   revision = revision + 1, updated_at = now()
-               WHERE run_id = :r AND state = :expected"""
-        ),
-        {
-            "new": new_state,
-            "status": status,
-            "fc": failure_class,
-            "parked": parked,
-            "r": run_id,
-            "expected": expected_state,
-        },
-    )
-    if result.rowcount != 1:
-        raise RunError(409, "state_changed")
 
 
 def _deny(conn: Connection, actor: uuid.UUID, event: str, reason: str, status: int) -> None:
@@ -355,7 +324,7 @@ def resume_run(
     """
     actor = actor_for(conn, proof, "run.resume", run_id)
     _authorize(conn, actor, Permission.RUN_RESUME, None, "run.resume.denied")
-    run = load_run(conn, run_id, lock=False)
+    run = load_run(conn, run_id)
     _check_revision(run, expected_run_revision)
     if run.status == "blocked_pending_decision":
         _deny(conn, actor, "run.resume.denied", "parked_run_not_resumable", 409)

@@ -88,3 +88,42 @@ def record_event(
         },
     ).one()
     return uuid.UUID(str(row[0]))
+
+
+def record_worker_event(
+    conn: Connection,
+    *,
+    actor_id: str,
+    event_type: str,
+    outcome: str,
+    error_class: str | None = None,
+    record_refs: Iterable[str] = (),
+    details: Mapping[str, Any] | None = None,
+) -> uuid.UUID:
+    """Insert one system audit event through the worker guard.
+
+    The worker role has no table insert. Redaction and the audit columns are the same as
+    ``record_event``. Only system events use this path.
+    """
+    if outcome not in OUTCOMES:
+        raise ValueError(f"unknown outcome: {outcome!r}")
+    if not actor_id or not event_type:
+        raise ValueError("actor_id and event_type are required")
+
+    payload = json.dumps(redact(dict(details or {})), default=str)
+    refs = json.dumps(list(record_refs), default=str)
+    row = conn.execute(
+        text(
+            """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
+                   :error, CAST(:refs AS jsonb), CAST(:details AS jsonb))"""
+        ),
+        {
+            "actor": actor_id,
+            "event": event_type,
+            "outcome": outcome,
+            "error": error_class,
+            "refs": refs,
+            "details": payload,
+        },
+    ).scalar_one()
+    return uuid.UUID(str(row))

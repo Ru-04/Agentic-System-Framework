@@ -9,6 +9,11 @@
   active-run slot is released.
 - Every state change checks the lease owner, so a worker whose lease was reclaimed cannot write.
 
+The worker runs as ``webdesk_worker``. It holds no table write. Every write is a ``webdesk_guard``
+worker function (migration 0031), and the worker reads only the tables it needs. Transition legality
+stays here, against ``ALLOWED_TRANSITIONS``. The guard applies a transition only when the expected
+state still holds.
+
 Callers commit each step. Tests run the same functions on a rolled-back connection.
 """
 
@@ -16,15 +21,18 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
-from webdesk.audit.service import record_event
+from webdesk.audit.service import record_worker_event
+from webdesk.authority.proofs import wrapper_refusal
 from webdesk.intake.parse_service import ParseRefused, parse_version
 from webdesk.outbox.worker import backoff_seconds
 from webdesk.runs.errors import RunError
-from webdesk.runs.service import load_run, transition
+from webdesk.runs.service import ALLOWED_TRANSITIONS, RunRef
 from webdesk.storage.content_store import ContentStore
 
 MAX_ATTEMPTS = 3
@@ -39,73 +47,102 @@ class JobClaim:
     attempts: int
 
 
+def _guard(conn: Connection, call: str, params: dict[str, Any]) -> Any:
+    """Run one worker guard call. A named refusal from the guard becomes a 409 run refusal."""
+    try:
+        return conn.execute(text(call), params)
+    except DBAPIError as exc:
+        reason = wrapper_refusal(exc)
+        if reason is None:
+            raise
+        raise RunError(409, reason) from exc
+
+
 def claim(conn: Connection, owner: str) -> JobClaim | None:
-    row = conn.execute(
-        text(
-            """UPDATE workflow_jobs
-               SET job_status = 'leased', lease_owner = :owner,
-                   lease_expires_at = now() + CAST(:lease AS interval),
-                   attempts = attempts + 1, updated_at = now()
-               WHERE job_id = (
-                   SELECT job_id FROM workflow_jobs
-                   WHERE ((job_status = 'queued' AND available_at <= now())
-                          OR (job_status = 'leased' AND lease_expires_at < now()))
-                     AND attempts < :max
-                   ORDER BY available_at
-                   LIMIT 1
-                   FOR UPDATE SKIP LOCKED)
-               RETURNING job_id, run_id, project_id, attempts"""
-        ),
-        {"owner": owner, "lease": f"{LEASE_SECONDS} seconds", "max": MAX_ATTEMPTS},
+    row = _guard(
+        conn,
+        "SELECT * FROM webdesk_guard.fn_worker_claim_job(:owner, :lease, :max)",
+        {"owner": owner, "lease": LEASE_SECONDS, "max": MAX_ATTEMPTS},
     ).one_or_none()
     if row is None:
         return None
-    claimed = JobClaim(
+    return JobClaim(
         job_id=uuid.UUID(str(row[0])),
         run_id=uuid.UUID(str(row[1])),
         project_id=uuid.UUID(str(row[2])),
         attempts=int(row[3]),
     )
-    conn.execute(
-        text(
-            """UPDATE workflow_runs SET status = 'running', updated_at = now()
-               WHERE run_id = :r AND status = 'queued'"""
-        ),
-        {"r": claimed.run_id},
-    )
-    return claimed
 
 
 def renew(conn: Connection, job_id: uuid.UUID, owner: str) -> bool:
-    result = conn.execute(
-        text(
-            """UPDATE workflow_jobs
-               SET lease_expires_at = now() + CAST(:lease AS interval)
-               WHERE job_id = :j AND lease_owner = :owner AND job_status = 'leased'"""
-        ),
-        {"j": job_id, "owner": owner, "lease": f"{LEASE_SECONDS} seconds"},
+    return bool(
+        _guard(
+            conn,
+            "SELECT webdesk_guard.fn_worker_renew_lease(:j, :owner, :lease)",
+            {"j": job_id, "owner": owner, "lease": LEASE_SECONDS},
+        ).scalar_one()
     )
-    return result.rowcount == 1
+
+
+def _lock_run(conn: Connection, run_id: uuid.UUID) -> RunRef:
+    row = _guard(
+        conn,
+        "SELECT * FROM webdesk_guard.fn_worker_lock_run(:r)",
+        {"r": run_id},
+    ).one_or_none()
+    if row is None:
+        raise RunError(404, "run_not_found")
+    return RunRef(
+        run_id=uuid.UUID(str(row[0])),
+        project_id=uuid.UUID(str(row[1])),
+        state=str(row[2]),
+        status=str(row[3]),
+        failure_class=None if row[4] is None else str(row[4]),
+        revision=int(row[5]),
+    )
+
+
+def _transition(
+    conn: Connection,
+    run_id: uuid.UUID,
+    expected_state: str,
+    new_state: str,
+    status: str,
+    *,
+    failure_class: str | None = None,
+    parked: bool = False,
+) -> None:
+    """Apply one allowed transition (ARCH section 7). The guard refuses a concurrent change."""
+    if new_state not in ALLOWED_TRANSITIONS.get(expected_state, frozenset()):
+        raise RunError(409, "illegal_transition")
+    _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_transition_run(:r, :expected, :new, :status, :fc, :parked)",
+        {
+            "r": run_id,
+            "expected": expected_state,
+            "new": new_state,
+            "status": status,
+            "fc": failure_class,
+            "parked": parked,
+        },
+    )
 
 
 def _finish_job(conn: Connection, job: JobClaim, owner: str, status: str) -> None:
-    result = conn.execute(
-        text(
-            """UPDATE workflow_jobs
-               SET job_status = :status, lease_owner = NULL, lease_expires_at = NULL,
-                   updated_at = now()
-               WHERE job_id = :j AND lease_owner = :owner AND job_status = 'leased'"""
-        ),
-        {"status": status, "j": job.job_id, "owner": owner},
-    )
-    if result.rowcount != 1:
+    finished = _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_finish_job(:j, :owner, :status)",
+        {"j": job.job_id, "owner": owner, "status": status},
+    ).scalar_one()
+    if not finished:
         raise RunError(409, "lease_lost")
 
 
 def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: str) -> None:
-    run = load_run(conn, job.run_id)
+    run = _lock_run(conn, job.run_id)
     if run.state == "intake_pending":
-        transition(conn, run.run_id, "intake_pending", "parsing", "running")
+        _transition(conn, run.run_id, "intake_pending", "parsing", "running")
     elif run.state != "parsing":
         raise RunError(409, "state_mismatch")
 
@@ -150,8 +187,8 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         {"r": job.run_id},
     ).scalar_one()
 
-    transition(conn, job.run_id, "parsing", "intake_complete", "running")
-    transition(
+    _transition(conn, job.run_id, "parsing", "intake_complete", "running")
+    _transition(
         conn,
         job.run_id,
         "intake_complete",
@@ -160,12 +197,9 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         parked=True,
     )
     if stale:
-        conn.execute(
-            text(
-                """UPDATE workflow_runs
-                   SET is_stale = true, stale_at = now(), stale_reason = 'inputs_changed_during_run'
-                   WHERE run_id = :r"""
-            ),
+        _guard(
+            conn,
+            "SELECT webdesk_guard.fn_worker_mark_inputs_changed(:r)",
             {"r": job.run_id},
         )
     # F-8 checkpoint: identifiers and flags only, never text (trigger enforces the key set).
@@ -173,24 +207,17 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         text("SELECT source_version_id::text FROM run_input_snapshots WHERE run_id = :r"),
         {"r": job.run_id},
     ).all()
-    conn.execute(
-        text(
-            """INSERT INTO workflow_checkpoints (run_id, project_id, node, refs, flags)
-               VALUES (:r, :p, 'intake_complete', CAST(:refs AS jsonb), CAST(:flags AS jsonb))"""
-        ),
-        {
-            "r": job.run_id,
-            "p": job.project_id,
-            "refs": '{"source_version_ids": ['
-            + ", ".join(f'"{row[0]}"' for row in snapshot_versions)
-            + "]}",
-            "flags": '{"parked": true, "stale": ' + ("true" if stale else "false") + "}",
-        },
+    refs = '{"source_version_ids": [' + ", ".join(f'"{row[0]}"' for row in snapshot_versions) + "]}"
+    flags = '{"parked": true, "stale": ' + ("true" if stale else "false") + "}"
+    _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_insert_checkpoint(:r, :p, 'intake_complete',"
+        " CAST(:refs AS jsonb), CAST(:flags AS jsonb))",
+        {"r": job.run_id, "p": job.project_id, "refs": refs, "flags": flags},
     )
     _finish_job(conn, job, owner, "completed")
-    record_event(
+    record_worker_event(
         conn,
-        actor_type="system",
         actor_id=owner,
         event_type="run.parked",
         outcome="success",
@@ -213,11 +240,10 @@ def record_failure(
     """Requeue with backoff, or fail the run. Returns 'requeued' or 'failed'."""
     if not retryable or job.attempts >= MAX_ATTEMPTS:
         _finish_job(conn, job, owner, "failed")
-        run = load_run(conn, job.run_id)
-        transition(conn, job.run_id, run.state, "failed", "failed", failure_class="system_failure")
-        record_event(
+        run = _lock_run(conn, job.run_id)
+        _transition(conn, job.run_id, run.state, "failed", "failed", failure_class="system_failure")
+        record_worker_event(
             conn,
-            actor_type="system",
             actor_id=owner,
             event_type="run.failed",
             outcome="error",
@@ -225,25 +251,21 @@ def record_failure(
             record_refs=[str(job.run_id)],
         )
         return "failed"
-    result = conn.execute(
-        text(
-            """UPDATE workflow_jobs
-               SET job_status = 'queued', lease_owner = NULL, lease_expires_at = NULL,
-                   available_at = now() + CAST(:delay AS interval), last_error_class = :reason,
-                   updated_at = now()
-               WHERE job_id = :j AND lease_owner = :owner AND job_status = 'leased'"""
-        ),
+    requeued = _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_requeue_job(:j, :owner, :reason, :delay)",
         {
             "j": job.job_id,
             "owner": owner,
             "reason": reason,
-            "delay": f"{backoff_seconds(job.attempts)} seconds",
+            "delay": backoff_seconds(job.attempts),
         },
-    )
-    if result.rowcount != 1:
+    ).scalar_one()
+    if not requeued:
         raise RunError(409, "lease_lost")
-    conn.execute(
-        text("UPDATE workflow_runs SET status = 'queued', updated_at = now() WHERE run_id = :r"),
+    _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_set_run_status(:r, 'queued')",
         {"r": job.run_id},
     )
     return "requeued"

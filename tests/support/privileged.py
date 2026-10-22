@@ -13,6 +13,7 @@ reachable from production code, and they are used nowhere else.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import text
@@ -34,3 +35,18 @@ def ceremony_insert(conn: Connection, sql: str, params: dict[str, Any]) -> None:
 
 def guard_insert(conn: Connection, sql: str, params: dict[str, Any]) -> None:
     _as_role(conn, "webdesk_guard_owner", sql, params)
+
+
+def as_worker(conn: Connection, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Run one worker-path operation as ``webdesk_worker``, then restore the caller's role.
+
+    The worker path (claim, renew, process_one, parse_version) writes only through
+    ``webdesk_guard`` worker functions (migration 0031). Its ``webdesk_worker`` role holds no table
+    write, so the tests run it under that role, as the worker login does in production.
+    """
+    previous = conn.execute(text("SELECT current_user")).scalar_one()
+    conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+    try:
+        return operation(*args, **kwargs)
+    finally:
+        conn.execute(text(f'SET LOCAL ROLE "{previous}"'))

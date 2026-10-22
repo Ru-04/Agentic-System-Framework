@@ -17,7 +17,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
-from tests.support.privileged import ceremony_insert
+from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
@@ -242,7 +242,7 @@ def test_archive_is_allowed_once_the_run_is_parked(conn: Connection, store: Cont
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    assert jobs.process_one(conn, store, "worker-archive") == "completed"
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-archive") == "completed"
     assert _run_state(conn, run)[0] == "blocked_pending_decision"
     projects.archive_project(
         conn, prove(conn, ids["admin"], "project.archive", ids["project"]), ids["project"]

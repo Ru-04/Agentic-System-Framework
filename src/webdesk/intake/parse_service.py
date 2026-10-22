@@ -6,11 +6,15 @@ Declared unextractable regions give ``partial``
 with the good segments kept. Valid files with no text give ``unsupported``. Quarantined content is
 never parsed. Segments are immutable and keyed by (version, extraction version, locator), so a
 repeated parse reuses the same segment IDs.
+
+The parser runs as ``webdesk_worker``. Its reads come from the guard's version lock. Every write
+is a ``webdesk_guard`` worker function (migration 0031).
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from typing import Any
 
@@ -19,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
-from webdesk.audit.service import record_event
+from webdesk.audit.service import record_worker_event
 from webdesk.intake.parsers import (
     EXTRACTION_VERSION,
     PARSERS,
@@ -50,12 +54,8 @@ def _mark(
 ) -> None:
     conn.execute(
         text(
-            """UPDATE source_versions
-               SET parse_status = :status, parse_error = CAST(:error AS jsonb),
-                   extraction_version = :ev,
-                   unprocessed_attachments = CAST(:att AS jsonb),
-                   revision = revision + 1
-               WHERE source_version_id = :v"""
+            """SELECT webdesk_guard.fn_worker_mark_version(:v, :status,
+                   CAST(:error AS jsonb), :ev, CAST(:att AS jsonb))"""
         ),
         {
             "status": status,
@@ -68,8 +68,6 @@ def _mark(
 
 
 def _json(value: Any) -> str:
-    import json
-
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
@@ -82,10 +80,7 @@ def parse_version(
 ) -> str:
     """Parse one pending version. Returns its resulting parse status."""
     row = conn.execute(
-        text(
-            """SELECT project_id, storage_key, mime_type, scan_status, parse_status
-               FROM source_versions WHERE source_version_id = :v FOR UPDATE"""
-        ),
+        text("SELECT * FROM webdesk_guard.fn_worker_begin_parse(:v)"),
         {"v": version_id},
     ).one_or_none()
     if row is None:
@@ -125,12 +120,8 @@ def parse_version(
             for draft in result.segments:
                 conn.execute(
                     text(
-                        """INSERT INTO source_segments (source_version_id, project_id,
-                               extraction_version, locator_type, locator, locator_key,
-                               text_content, text_content_hash)
-                           VALUES (:v, :p, :ev, :lt, CAST(:loc AS jsonb), :key, :txt, :h)
-                           ON CONFLICT (source_version_id, extraction_version, locator_type,
-                                        locator_key) DO NOTHING"""
+                        """SELECT webdesk_guard.fn_worker_insert_segment(:v, :p, :ev, :lt,
+                               CAST(:loc AS jsonb), :key, :txt, :h)"""
                     ),
                     {
                         "v": version_id,
@@ -167,9 +158,8 @@ def _audit_parse(
     error_class: str | None,
     actor_id: str,
 ) -> None:
-    record_event(
+    record_worker_event(
         conn,
-        actor_type="system",
         actor_id=actor_id,
         event_type=f"source.parse.{status}",
         outcome="success" if status != "failed" else "error",

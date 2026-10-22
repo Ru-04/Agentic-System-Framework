@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from tests.support.people import committed_active_user
+from tests.support.privileged import as_worker
 from tests.support.proofs import prove
 from webdesk.intake.ingest import ingest_source
 from webdesk.projects import service as projects
@@ -83,13 +84,13 @@ def test_a_queued_job_is_claimed_by_exactly_one_worker(
 ) -> None:
     first = committed_engine.connect()
     first_tx = first.begin()
-    claimed = jobs.claim(first, "worker-one")
+    claimed = as_worker(first, jobs.claim, first, "worker-one")
     assert claimed is not None and claimed.run_id == committed_run
 
     second = committed_engine.connect()
     second_tx = second.begin()
     # The first worker holds the row lock. SKIP LOCKED makes the second worker skip it.
-    assert jobs.claim(second, "worker-two") is None
+    assert as_worker(second, jobs.claim, second, "worker-two") is None
     second_tx.rollback()
     second.close()
 
@@ -98,7 +99,7 @@ def test_a_queued_job_is_claimed_by_exactly_one_worker(
 
     # Once the first claim is released, a worker can take the job again.
     with committed_engine.begin() as conn:
-        again = jobs.claim(conn, "worker-three")
+        again = as_worker(conn, jobs.claim, conn, "worker-three")
         assert again is not None and again.run_id == committed_run
         conn.execute(
             text(
@@ -114,7 +115,7 @@ def test_the_committed_run_parks_and_its_slot_is_released(
 ) -> None:
     store = ContentStore(tmp_path / "root")
     with committed_engine.begin() as conn:
-        outcome = jobs.process_one(conn, store, "worker-park")
+        outcome = as_worker(conn, jobs.process_one, conn, store, "worker-park")
     assert outcome in ("completed", "idle")
     with committed_engine.connect() as conn:
         state = conn.execute(

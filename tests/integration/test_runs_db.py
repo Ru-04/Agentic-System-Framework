@@ -18,7 +18,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
-from tests.support.privileged import ceremony_insert
+from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.intake.ingest import ingest_source
@@ -246,7 +246,7 @@ def test_processing_parks_the_run_and_releases_the_active_slot(
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    assert jobs.process_one(conn, store, "worker-1") == "completed"
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-1") == "completed"
     state, status, failure, parked, _stale = _run_row(conn, run)
     assert (state, status, failure, parked) == (
         "blocked_pending_decision",
@@ -269,7 +269,7 @@ def test_a_failed_version_does_not_fail_the_run_and_is_reparsed_into_the_next_ru
     stored.write_bytes(b"tampered after admission")
 
     run = _start(conn, ids)
-    assert jobs.process_one(conn, store, "worker-2") == "completed"
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-2") == "completed"
     state, status, failure, _parked, _ = _run_row(conn, run)
     assert (state, status, failure) == (
         "blocked_pending_decision",
@@ -392,7 +392,7 @@ def test_system_failures_retry_three_times_then_fail_the_run(
             {"r": run},
         )
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        outcomes.append(jobs.process_one(conn, store, "worker-r"))
+        outcomes.append(as_worker(conn, jobs.process_one, conn, store, "worker-r"))
     assert outcomes == ["requeued", "requeued", "failed"]
     state, status, failure, _p, _s = _run_row(conn, run)
     assert (status, failure) == ("failed", "system_failure")
@@ -420,7 +420,7 @@ def test_an_administrator_retries_only_a_system_failure_and_only_with_no_newer_r
             {"r": run},
         )
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        jobs.process_one(conn, store, "worker-x")
+        as_worker(conn, jobs.process_one, conn, store, "worker-x")
     # An Analyst never receives an Administrator-only proof: the authority refuses it.
     with pytest.raises(ProofNotIssued):
         prove(conn, ids["analyst"], "run.retry", run)
@@ -445,7 +445,7 @@ def test_a_non_retryable_error_fails_the_run_at_once(
         raise RunError(422, "schema_invalid")
 
     monkeypatch.setattr(jobs, "parse_version", schema_refused)
-    assert jobs.process_one(conn, store, "worker-s") == "failed"
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-s") == "failed"
     assert _job_row(conn, run)[1] == 1
     assert _run_row(conn, run)[1] == "failed"
 
@@ -456,9 +456,9 @@ def test_an_expired_lease_is_reclaimed_by_another_worker_with_one_more_attempt(
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    first = jobs.claim(conn, "worker-a")
+    first = as_worker(conn, jobs.claim, conn, "worker-a")
     assert first is not None and first.run_id == run
-    assert jobs.claim(conn, "worker-b") is None  # the lease is live
+    assert as_worker(conn, jobs.claim, conn, "worker-b") is None  # the lease is live
     conn.execute(
         text(
             "UPDATE workflow_jobs SET lease_expires_at = now() - interval '1 second' "
@@ -466,10 +466,12 @@ def test_an_expired_lease_is_reclaimed_by_another_worker_with_one_more_attempt(
         ),
         {"j": first.job_id},
     )
-    second = jobs.claim(conn, "worker-b")
+    second = as_worker(conn, jobs.claim, conn, "worker-b")
     assert second is not None and second.job_id == first.job_id
     assert second.attempts == 2
-    assert jobs.renew(conn, second.job_id, "worker-a") is False  # the old owner is fenced out
+    assert (
+        as_worker(conn, jobs.renew, conn, second.job_id, "worker-a") is False
+    )  # the old owner is fenced out
 
 
 # --- Controls: cancel, retry and resume --------------------------------------------------------
@@ -497,7 +499,7 @@ def test_a_parked_run_can_be_cancelled_but_never_resumed(
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    jobs.process_one(conn, store, "worker-p")
+    as_worker(conn, jobs.process_one, conn, store, "worker-p")
     with pytest.raises(RunError) as exc:
         runs.resume_run(
             conn,
@@ -521,7 +523,7 @@ def test_an_archived_project_refuses_a_new_run_but_allows_cancelling_a_parked_on
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    jobs.process_one(conn, store, "worker-q")
+    as_worker(conn, jobs.process_one, conn, store, "worker-q")
     projects.archive_project(
         conn, prove(conn, ids["admin"], "project.archive", ids["project"]), ids["project"]
     )
@@ -544,7 +546,7 @@ def test_a_stale_run_is_marked_when_uploads_arrive_during_the_run(
     _ingest(conn, store, ids)
     run = _start(conn, ids)
     _ingest(conn, store, ids, data=b"arrived during the run\n")
-    jobs.process_one(conn, store, "worker-st")
+    as_worker(conn, jobs.process_one, conn, store, "worker-st")
     stale = conn.execute(
         text("SELECT is_stale, stale_reason FROM workflow_runs WHERE run_id = :r"), {"r": run}
     ).one()
@@ -555,14 +557,14 @@ def test_a_lost_lease_cannot_complete_a_job(conn: Connection, store: ContentStor
     ids = _setup(conn)
     _ingest(conn, store, ids)
     run = _start(conn, ids)
-    claimed = jobs.claim(conn, "worker-old")
+    claimed = as_worker(conn, jobs.claim, conn, "worker-old")
     assert claimed is not None and claimed.run_id == run
     conn.execute(
         text("UPDATE workflow_jobs SET lease_owner = 'someone-else' WHERE job_id = :j"),
         {"j": claimed.job_id},
     )
     with pytest.raises(RunError) as exc:
-        jobs._finish_job(conn, claimed, "worker-old", "completed")
+        as_worker(conn, jobs._finish_job, conn, claimed, "worker-old", "completed")
     assert exc.value.reason == "lease_lost"
 
 
