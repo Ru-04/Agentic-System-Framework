@@ -13,7 +13,7 @@ from webdesk.evidence.sources import SourceKind, SourceRecord
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.errors import SpecialistError
 from webdesk.specialists.harness import run_specialist
-from webdesk.specialists.platforms.shopify import NOT_PERFORMED, ShopifySpecialist
+from webdesk.specialists.platforms.shopify import LIMITS, ShopifySpecialist
 
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 WINDOW = timedelta(days=90)
@@ -69,11 +69,14 @@ def test_cited_findings_are_produced_and_output_is_incomplete() -> None:
         assert finding.evidence_status == "cited"
         assert finding.evidence_refs[0].source_id == "fx-1"
         assert finding.evidence_refs[0].workspace_id == "ws-a"
-    assert NOT_PERFORMED in output.unknowns
+    assert LIMITS in output.unknowns
 
 
 def test_plan_restriction_is_reported_as_an_unknown() -> None:
-    output = run_specialist(_specialist(InMemoryRetriever([_source()])), _request())
+    output = run_specialist(
+        _specialist(InMemoryRetriever([_source()])),
+        _request(task="checkout extensibility shopify plus"),
+    )
     assert any("plan or version applicability" in unknown for unknown in output.unknowns)
 
 

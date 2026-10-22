@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
+from typing import Final, Protocol
 
 from webdesk.evidence.sources import SourceKind, SourceRecord
 
@@ -35,12 +35,16 @@ class RetrievalQuery:
     text: str
     kinds: frozenset[SourceKind]
     limit: int = 5
+    # A passage must share at least this many distinct meaningful terms with the query.
+    min_term_hits: int = 1
 
     def __post_init__(self) -> None:
         if not self.workspace_id.strip():
             raise ValueError("workspace_id must not be blank")
         if self.limit < 1:
             raise ValueError("limit must be at least 1")
+        if self.min_term_hits < 1:
+            raise ValueError("min_term_hits must be at least 1")
 
 
 @dataclass(frozen=True)
@@ -68,8 +72,73 @@ _TERM = re.compile(r"[a-z0-9]{3,}")
 _LINE = re.compile(r"[^\n]+")
 
 
+_STOPWORDS: Final[frozenset[str]] = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "with",
+        "that",
+        "this",
+        "from",
+        "into",
+        "onto",
+        "without",
+        "their",
+        "they",
+        "them",
+        "your",
+        "yours",
+        "should",
+        "would",
+        "could",
+        "will",
+        "can",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "had",
+        "not",
+        "but",
+        "all",
+        "any",
+        "each",
+        "across",
+        "over",
+        "under",
+        "about",
+        "after",
+        "before",
+        "when",
+        "where",
+        "which",
+        "what",
+        "who",
+        "how",
+        "its",
+        "our",
+        "out",
+        "use",
+        "using",
+        "keep",
+        "let",
+        "make",
+        "per",
+        "via",
+        "than",
+        "then",
+        "also",
+        "such",
+    }
+)
+
+
 def _terms(text: str) -> set[str]:
-    return {match.group(0) for match in _TERM.finditer(text.lower())}
+    return {
+        match.group(0) for match in _TERM.finditer(text.lower()) if match.group(0) not in _STOPWORDS
+    }
 
 
 class InMemoryRetriever:
@@ -88,7 +157,7 @@ class InMemoryRetriever:
                 if not match.group(0).strip():
                     continue
                 hits = len(query_terms & _terms(match.group(0)))
-                if hits:
+                if hits >= query.min_term_hits:
                     scored.append((hits, Passage(source, match.start(), match.end())))
         if not scored:
             return RetrievalResult(RetrievalStatus.NO_EVIDENCE)

@@ -1,14 +1,18 @@
 """Shopify specialist: evidence-bound capability investigation (M1 S2).
 
-Scope of this implementation, stated plainly:
-- It retrieves approved evidence for the task, quarantines instruction-like passages, and maps
-  passages to Shopify capability topics with a fixed keyword table.
+What this implementation does:
+- Retrieves approved evidence for the task, and quarantines instruction-like passages.
+- Maps passages to Shopify capability topics with a fixed keyword table.
+- Classifies which solution option classes the evidence mentions: native configuration, app or
+  extension, custom API (see shopify_options.py).
 - Every finding cites a passage. The citation is verified before the finding is emitted.
 - Stale evidence gives an unverified finding. Plan- or version-sensitive wording gives an unknown.
-- The output is always incomplete. Native, third-party and custom options, feasibility judgement,
-  and comparison are NOT performed here. They are reported as unknowns.
+- Reports, for every option class the evidence does not cover, a clarification question.
 
-The keyword table is deterministic. It is not model reasoning, and no live model is called (D09).
+What it does not do:
+- It does not judge feasibility. Feasibility is always reported as not determined (D07, D09).
+- It does not compare costs or client fit. No live model is called.
+- Its output is always "incomplete", so it cannot be read as an accepted investigation.
 """
 
 from __future__ import annotations
@@ -31,6 +35,14 @@ from webdesk.evidence.untrusted import split_by_trust
 from webdesk.specialists.authority import Action
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, SpecialistInput
+from webdesk.specialists.platforms.shopify_options import (
+    FEASIBILITY_UNKNOWN,
+    OPTION_LABELS,
+    PLAN_CLARIFICATION,
+    OptionClass,
+    clarification_for,
+    classify_options,
+)
 
 CAPABILITY_TOPICS: Final[dict[str, tuple[str, ...]]] = {
     "Storefront API": ("storefront api",),
@@ -51,12 +63,15 @@ PLAN_OR_VERSION_TERMS: Final[tuple[str, ...]] = (
     "will be removed",
 )
 
-NOT_PERFORMED: Final[str] = (
-    "native, third-party and custom option comparison and feasibility judgement were not "
-    "performed; the investigation is limited to the supplied evidence"
+LIMITS: Final[str] = (
+    "findings are limited to the retrieved approved evidence; client-specific comparison and "
+    "feasibility were not performed"
 )
 
 MAX_FINDINGS: Final[int] = 20
+
+# A single shared word is not relevance. Two distinct meaningful terms are required.
+MIN_TERM_HITS: Final[int] = 2
 
 
 def _topics(text: str) -> tuple[str, ...]:
@@ -95,10 +110,18 @@ class ShopifySpecialist:
         self._sleep = sleep
 
     def run(self, request: SpecialistInput) -> dict[str, Any]:
+        output, _ = self.investigate(request)
+        return output
+
+    def investigate(
+        self, request: SpecialistInput
+    ) -> tuple[dict[str, Any], frozenset[OptionClass]]:
+        """Return the contract output and the option classes the evidence covers."""
         query = RetrievalQuery(
             workspace_id=request.workspace_id,
             text=request.task,
             kinds=frozenset(SourceKind),
+            min_term_hits=MIN_TERM_HITS,
         )
         try:
             result = search_with_retry(
@@ -106,18 +129,22 @@ class ShopifySpecialist:
             )
         except Exception:
             # Any retrieval fault is a failed assessment. Its text is not echoed to the caller.
-            return self._output(
-                request,
-                status="failed",
-                findings=[],
-                unknowns=["evidence retrieval failed; nothing was assessed"],
+            return (
+                self._output(
+                    request,
+                    status="failed",
+                    findings=[],
+                    unknowns=["evidence retrieval failed; nothing was assessed"],
+                ),
+                frozenset(),
             )
         if result.status is RetrievalStatus.NO_EVIDENCE:
-            return self._output(
-                request,
-                status="incomplete",
-                findings=[],
-                unknowns=["no approved evidence was found for the task", NOT_PERFORMED],
+            gap_unknowns = ["no approved evidence was found for the task"]
+            gap_unknowns += [_gap(option) for option in OptionClass]
+            gap_unknowns += [PLAN_CLARIFICATION, FEASIBILITY_UNKNOWN, LIMITS]
+            return (
+                self._output(request, status="incomplete", findings=[], unknowns=gap_unknowns),
+                frozenset(),
             )
 
         # Passages from another workspace are dropped without being named in any output.
@@ -133,11 +160,15 @@ class ShopifySpecialist:
                 f"{len(quarantined)} passage(s) contained instruction-like text and were excluded"
             )
         sources = {passage.source.source_id: passage.source for passage in usable}
-        findings = self._findings(request, usable, sources, unknowns)
+        findings, coverage = self._findings(request, usable, sources, unknowns)
         if not findings:
             unknowns.append("no Shopify capability topic was found in the cited evidence")
-        unknowns.append(NOT_PERFORMED)
-        return self._output(request, status="incomplete", findings=findings, unknowns=unknowns)
+        for option in OptionClass:
+            if option not in coverage:
+                unknowns.append(_gap(option))
+        unknowns += [PLAN_CLARIFICATION, FEASIBILITY_UNKNOWN, LIMITS]
+        output = self._output(request, status="incomplete", findings=findings, unknowns=unknowns)
+        return output, frozenset(coverage)
 
     def _findings(
         self,
@@ -145,24 +176,29 @@ class ShopifySpecialist:
         passages: tuple[Passage, ...],
         sources: dict[str, SourceRecord],
         unknowns: list[str],
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], set[OptionClass]]:
         now = self._clock()
         findings: list[dict[str, Any]] = []
+        coverage: set[OptionClass] = set()
         for passage in passages:
             topics = _topics(passage.text)
-            if not topics:
+            options = classify_options(passage.text)
+            if not topics and not options:
                 continue
             source = passage.source
             citation = Citation.from_passage(passage)
-            statement_for = {
-                topic: f"Source addresses {topic}; see the cited passage." for topic in topics
-            }
-            for topic in topics:
+            statements: list[tuple[str, str | OptionClass]] = [
+                (f"Source addresses {topic}; see the cited passage.", topic) for topic in topics
+            ] + [
+                (f"Source describes {OPTION_LABELS[option]}; see the cited passage.", option)
+                for option in sorted(options, key=str)
+            ]
+            for statement, _key in statements:
                 if len(findings) >= MAX_FINDINGS:
-                    return findings
-                claim = Claim(statement_for[topic], (citation,))
+                    return findings, coverage
+                claim = Claim(statement, (citation,))
                 if check_claim(claim, sources, request.workspace_id) is not None:
-                    unknowns.append(f"citation for {topic} in {source.source_id} did not verify")
+                    unknowns.append(f"citation in {source.source_id} did not verify")
                     continue
                 freshness = assess_freshness(source, now, self._max_age)
                 stale = freshness is not Freshness.FRESH
@@ -173,12 +209,14 @@ class ShopifySpecialist:
                     )
                 if _mentions_plan_or_version(passage.text):
                     unknowns.append(
-                        f"{topic} in {source.source_id}: plan or version applicability is not "
-                        "established by the evidence"
+                        f"{source.source_id}: plan or version applicability is not established "
+                        "by the evidence"
                     )
+                if isinstance(_key, OptionClass) and not stale:
+                    coverage.add(_key)
                 findings.append(
                     {
-                        "statement": statement_for[topic],
+                        "statement": statement,
                         "evidence_status": "unverified" if stale else "cited",
                         "evidence_refs": [
                             {
@@ -189,7 +227,7 @@ class ShopifySpecialist:
                         ],
                     }
                 )
-        return findings
+        return findings, coverage
 
     def _output(
         self,
@@ -208,3 +246,10 @@ class ShopifySpecialist:
             "findings": findings,
             "unknowns": list(dict.fromkeys(unknowns)),
         }
+
+
+def _gap(option: OptionClass) -> str:
+    return (
+        f"{OPTION_LABELS[option]}: no current evidence in the retrieved set for this task. "
+        + clarification_for(option)
+    )
