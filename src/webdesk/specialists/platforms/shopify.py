@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from typing import Any, Final
 
 from webdesk.evidence.citations import Citation, Claim, check_claim
-from webdesk.evidence.relevance import Relevance, judge_relevance
+from webdesk.evidence.relevance import PARTIAL_MIN_TERMS, Relevance, judge_relevance, specific_terms
 from webdesk.evidence.retrieval import (
     Passage,
     RetrievalQuery,
@@ -157,6 +157,24 @@ class ShopifySpecialist:
                     findings=[],
                     unknowns=[
                         "evidence retrieval failed; nothing was assessed",
+                        PLAN_CLARIFICATION,
+                        FEASIBILITY_UNKNOWN,
+                        LIMITS,
+                    ],
+                ),
+                frozenset(),
+            )
+        if len(specific_terms(request.task)) < PARTIAL_MIN_TERMS:
+            # Too few specific words to grade relevance honestly (QA4-16). Ask for a restatement
+            # rather than grade a requirement that cannot be matched on its own terms.
+            return (
+                self._output(
+                    request,
+                    status="incomplete",
+                    findings=[],
+                    unknowns=[
+                        "the requirement has too few specific terms to assess relevance; "
+                        "CLARIFY: restate the requirement with the platform features it involves",
                         PLAN_CLARIFICATION,
                         FEASIBILITY_UNKNOWN,
                         LIMITS,
