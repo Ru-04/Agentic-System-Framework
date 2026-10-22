@@ -622,3 +622,96 @@ Open release-blocking findings (not resolved in this round):
 6. Independent review has not occurred.
 
 Verdict: **NOT READY FOR INDEPENDENT PHASE 1 REVIEW.** Blocker 1 is the release blocker.
+
+## Phase 1 release blocker 1 closure: intake and run proofs (migrations 0030-0032)
+
+Commits (local branch `feature/increment-1-foundation`, not pushed):
+
+| Commit | Content |
+| --- | --- |
+| c2b3e53 | 0030: six operations added to the proof boundary; guard wrappers for upload, reparse, run start, cancel, retry and resume. API obtains proofs from the authority. |
+| bab118a | 0031: `webdesk_worker` identity (NOLOGIN, SELECT only on three tables). Guard worker functions for claim, lease, parse, transition, checkpoint and audit. |
+| d427e6f | 0032: application role loses INSERT and column UPDATE on the eight intake and run tables. Staleness returns the marked runs; worker-only EXECUTE. |
+| 42b4b7b | Restricted-login tests: `tests/hardening/test_intake_run_boundary.py` (28 cases). |
+
+Operations now proof-gated (`operation_proofs` CHECK and `webdesk_authority.fn_issue_operation_proof`):
+`source.upload` (Analyst with membership), `run.start` (Analyst with membership), and the Administrator-only
+`source.reparse`, `run.cancel`, `run.retry` and `run.resume`. Each proof is bound to one account, one operation and one
+resource (the project for upload and start; the version for reparse; the run for control).
+
+Verified on freshly rebuilt databases (`webdesk_integration` and `webdesk_hardening`, both dropped, recreated with owner
+`webdesk_integration_owner`, and migrated to head `0032_app_direct_write_revocation`):
+
+- Full suite: **514 passed, 0 failed, 0 skipped** (`python -m pytest -q`, 3 min 31 s). Baseline before this work at
+  e454b71: 486 passed.
+- `ruff check src tests migrations`: clean. `mypy --strict src/webdesk`: clean (55 source files).
+- Alembic on a fresh scratch database: upgrade head, downgrade to `0029_ceremony_least_privilege`, upgrade head again:
+  all three steps succeed.
+- Each migration was also round-tripped on its own (0030 to 0029, 0031 to 0030, 0032 to 0031) on scratch databases and
+  on both base databases.
+
+What the restricted-login tests establish (all as `webdesk_app_login`):
+
+- Direct INSERT, UPDATE and DELETE on `sources`, `source_versions`, `source_segments`, `run_input_snapshots`,
+  `dependency_edges`, `workflow_runs`, `workflow_jobs` and `workflow_checkpoints` are refused with SQLSTATE 42501 (13
+  statements).
+- The login role cannot `SET ROLE webdesk_worker`. `webdesk_worker` holds no INSERT, UPDATE or DELETE on the intake
+  tables and no EXECUTE on any human wrapper. `webdesk_app` has no EXECUTE on any worker function. A direct call to a
+  worker function as the login role is refused.
+- An upload proof issued to a non-member is refused with 403 and writes no row. A made-up proof is refused
+  (`proof_missing`). A proof for another operation or another project is refused (`proof_operation_mismatch`,
+  `proof_resource_mismatch`).
+- An Analyst cannot obtain an Administrator-only proof (reparse, cancel, retry, resume): the authority refuses issuance.
+- Replay: a spent upload proof and a spent cancel proof are refused (`proof_spent`).
+- Rollback: a supersede refused by the guard on a stale source revision, and a cancel refused by the guard on a stale run
+  revision, both leave their proof unspent. A refusal before the guard (run start on a stale revision; resume on a queued
+  run) does not consume the proof.
+
+Changes in existing tests (disclosed, not weakened):
+
+- Tests that asserted an Analyst's service-level denial for Administrator-only operations (`run.cancel.denied`,
+  `source.reparse.denied`, HTTP 403 for cancel) now assert the authority's refusal at proof issuance
+  (`ProofNotIssued`, and `authority.proof.refused` with `operation_not_permitted`). The HTTP status is still 403. The
+  service-level denial event is no longer reachable for these operations from a proof; the service keeps its check as a
+  second layer.
+- Worker-path calls in tests run under `webdesk_worker` through `tests/support/privileged.as_worker`. Staleness calls run
+  the same way.
+- The HTTP test app connects with a role switch to `webdesk_app` (production uses the restricted login).
+- Schema-trigger tests return to the owner role after the project is created through the service. Lease-expiry fixtures
+  are set by the owner, as a clock would.
+
+Route behaviour: a dead session is 401 (validated by the authority before issuance). A live session that the authority
+will not grant the operation is 403 with the neutral body `request_refused`.
+
+Residual risks (not closed by this change):
+
+1. Reads are not proof-gated. `read_source_content` still takes an actor argument. The route supplies the actor from a
+   session the authority validated. The brief's operation list did not include reads, and a read writes nothing. A
+   `source.read` proof would need a reuse policy, because each read would consume a single-use proof.
+2. Authorization decisions remain in Python. The guard checks the proof, the business invariants and the lock. It does
+   not re-check role or membership. The proof's account is authorized by the service's RBAC check (the model recorded in
+   0024). An attacker who controls the application code, and holds a proof, can skip that check. This is the same
+   residual the earlier operations carry.
+3. The snapshot input digest is computed in Python (RFC 8785). The guard re-derives the selection and refuses a
+   difference, but it does not recompute the digest.
+4. Replay coverage is partial. Reparse replay and resume replay are not tested directly: reparse needs a failed version
+   from a login-role fixture, and Gate 1 cannot reach `waiting_human`, so resume only has the pre-guard refusal path.
+5. No worker login exists. `webdesk_worker` is a NOLOGIN role. `process_one` has no production caller in this repository,
+   and the deployment of a worker login (a member of `webdesk_worker` only) is a deployment item. The worker tests run
+   the worker code as `webdesk_worker` through `SET ROLE` from the owner, not through a worker login.
+6. The downgrade leaves the NOLOGIN role `webdesk_worker` in place with no privileges, because roles are cluster-wide
+   (another database on the same cluster may still hold grants to it). Migration 0021 handles the authority role the
+   same way.
+7. Idempotency keys (`idempotency_keys`) and the outbox remain written by the application role, as before. They are not
+   intake or run tables.
+8. Migration 0031 was reformatted after its commit (whitespace only). Migrations 0030 to 0032 are new in this increment;
+   0001 to 0029 are unchanged.
+
+Verdict for this blocker: **closed** for every write path named in the brief (upload, reparse, run start, cancel, retry,
+resume, and the job, parse and state writes of the worker). The residuals above are recorded.
+
+Verdict for Phase 1: **NOT READY FOR INDEPENDENT PHASE 1 REVIEW.** The other items in section 7 of
+`docs/PHASE1_INDEPENDENT_REVIEW_HANDOFF.md` remain open: no production authority (item 2), the outbox worker role
+(item 3), the ceremony column privileges on `users` (item 4), the rollback decision (item 5, recorded), and the
+reset-initiation policy (section 6). Independent review has not occurred. Residual 1 above (reads) should be decided by
+WDS before review.

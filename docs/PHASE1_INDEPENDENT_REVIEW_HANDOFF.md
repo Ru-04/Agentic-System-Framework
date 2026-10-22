@@ -82,7 +82,7 @@ membership, grants and archive; 0026 proof-guarded contacts; 0027 proof-gated to
 
 ## 7. Release-blocking findings (must be resolved or accepted before READY)
 
-1. **Unverified actor on intake and run paths.** Source upload (`ingest_source`), run start and run control (`start_run`,
+1. **Unverified actor on intake and run paths (resolved for writes; see section 10).** Source upload (`ingest_source`), run start and run control (`start_run`,
    controls), reparse (`reparse_source_version`) and source-content reads take a caller-supplied actor. The application role
    can also insert directly into `sources`, `source_versions`, `workflow_runs`, `workflow_jobs`, `workflow_checkpoints`,
    `run_input_snapshots`, `source_segments` and `dependency_edges`. These are privileged mutations under the approved matrix
@@ -129,3 +129,27 @@ disappeared on a clean run.
 - Release blocker unchanged and still open: run and intake authorization (section 7, item 1). The verdict remains
   **NOT READY**.
 - Reproduction is unchanged from section 8. Last full verification: 486 passed, 0 failed on fresh databases.
+
+## 10. Update: release blocker 1 closed for writes (2026-10-22; commits c2b3e53, bab118a, d427e6f, 42b4b7b)
+
+- **Proofs.** Migration 0030 adds `source.upload`, `source.reparse`, `run.start`, `run.cancel`, `run.retry` and
+  `run.resume` to the proof boundary. Reparse, cancel, retry and resume are Administrator-only at issuance. The services
+  take a proof and derive the actor from it. Each write goes through a `webdesk_guard` wrapper that consumes the proof in
+  the same transaction as the mutation.
+- **Worker identity.** Migration 0031 creates `webdesk_worker` (NOLOGIN). It holds SELECT on three tables and EXECUTE on
+  fourteen guard functions (thirteen worker functions and the staleness function). It holds no table write. Claim, lease, parse, state transitions and worker audit run
+  through those functions.
+- **Direct writes removed.** Migration 0032 removes INSERT and column UPDATE from `webdesk_app` on the eight intake and
+  run tables. The application role keeps SELECT.
+- **Tests.** `tests/hardening/test_intake_run_boundary.py` (28 cases, restricted login) covers direct-write refusal,
+  role isolation, actor spoofing, replay and rollback. The full suite passes on freshly rebuilt databases.
+- **Verified results:** 514 passed, 0 failed, 0 skipped; ruff and strict mypy clean; alembic head, downgrade to 0029 and
+  head again succeed. Detail is in `docs/INCREMENT_3_EVIDENCE.md`, section "Phase 1 release blocker 1 closure".
+- **Still open after this change (recorded, not closed):** source-content reads are not proof-gated (residual 1 of the
+  evidence document); authorization decisions remain in Python behind the proofs; the outbox worker role (item 3),
+  production authority (item 2), ceremony column privileges (item 4), rollback decision (item 5) and the reset-initiation
+  policy (section 6) remain open.
+- **Reproduction.** Section 8 is unchanged. Note that `webdesk_worker` is cluster-wide; the base databases must be
+  migrated to `0032_app_direct_write_revocation`.
+- **Verdict: NOT READY.** Blocker 1 is closed for writes. Blockers 2 to 4 and the decisions in section 6 remain, and
+  independent review has not occurred.
