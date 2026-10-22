@@ -5,6 +5,10 @@ on:
   push:
     branches: [main, "feature/**", "claude/**"]
 
+# Read-only token. Nothing in this workflow publishes, pushes or comments.
+permissions:
+  contents: read
+
 jobs:
   lint-type-unit:
     runs-on: ubuntu-latest
@@ -15,8 +19,55 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src tests
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests migrations
       - name: Type check (mypy strict, src/webdesk)
         run: uv run mypy
       - name: Unit and specialist contract tests
         run: uv run pytest tests/unit -q
+
+  postgres-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.4
+        # Throwaway database for this job only. The password is a CI-only literal and guards
+        # nothing outside this ephemeral container.
+        env:
+          POSTGRES_DB: webdesk
+          POSTGRES_USER: webdesk_owner
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U webdesk_owner" --health-interval 5s --health-retries 20
+    env:
+      PGPASSWORD: ci_only_password
+      WEBDESK_DATABASE_URL: postgresql+psycopg://webdesk_owner:ci_only_password@localhost:5432/webdesk
+      WEBDESK_TEST_DATABASE_URL: postgresql+psycopg://webdesk_owner:ci_only_password@localhost:5432/webdesk
+      WEBDESK_INTEGRATION_OWNER_URL: postgresql+psycopg://webdesk_owner:ci_only_password@localhost:5432/webdesk
+      WEBDESK_HARDENING_OWNER_URL: postgresql+psycopg://webdesk_test_owner:ci_only_password@localhost:5432/webdesk_hardening
+      WEBDESK_HARDENING_APP_URL: postgresql+psycopg://webdesk_app_login:ci_only_password@localhost:5432/webdesk_hardening
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --extra dev --frozen
+      - name: Migrate integration database
+        run: uv run alembic upgrade head
+      - name: Create and migrate hardening database
+        # Same provisioning as the local run recorded in docs/M1_S1_QA_CLOSURE_REPORT.md.
+        # Migration runs as the superuser because migrations grant roles the owner cannot grant.
+        run: |
+          psql -h localhost -U webdesk_owner -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE webdesk_test_owner LOGIN NOSUPERUSER CREATEDB CREATEROLE PASSWORD 'ci_only_password';
+          CREATE DATABASE webdesk_hardening OWNER webdesk_test_owner;
+          CREATE ROLE webdesk_app_login LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD 'ci_only_password';
+          SQL
+          WEBDESK_DATABASE_URL="postgresql+psycopg://webdesk_owner:ci_only_password@localhost:5432/webdesk_hardening" uv run alembic upgrade head
+          psql -h localhost -U webdesk_owner -d webdesk_hardening -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SCHEMA public OWNER TO webdesk_test_owner;
+          GRANT webdesk_app TO webdesk_app_login;
+          GRANT webdesk_ceremony TO webdesk_test_owner;
+          SQL
+      - name: Integration, committed and hardening tests
+        run: uv run pytest tests/integration tests/committed tests/hardening -q -p no:warnings
