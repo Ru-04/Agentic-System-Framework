@@ -1,0 +1,12 @@
+# Sprint 2 decisions — recorded 22 October 2026
+
+**Basis:** the decision-maker's written instruction on 22 October 2026 ("M1 Sprint 2: Final QA Remediation and Acceptance Preparation"). Decisions are effective 22 October 2026 and are not historical approvals. Approver name, role and signature were **not provided in the record** and are left blank.
+
+| # | Decision | Recorded effect | Not authorized |
+|---|---|---|---|
+| 1 | **Live retrieval scope.** The 16 documented Shopify vendor-document fetches of the Sprint 2 real investigation are approved. The approval covers the recorded evaluation run only. | Those fetches are counted as approved. Their records: `docs/evaluation/SHOPIFY_REAL_INVESTIGATION_2026-10-22.md` and `docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`. | Any further fetch needs an approved allowlist, security controls, provenance tracking and a documented scope. This is not unlimited authority to fetch arbitrary sources. |
+| 2 | **Evidence relevance.** Keyword matching alone is insufficient. Implement and evaluate a stronger relevance check. | Implemented as a deterministic grade: DIRECT, PARTIAL, IRRELEVANT (`src/webdesk/evidence/relevance.py`). A semantic validator interface exists and refuses to run (`SemanticValidationDisabled`). | Any model or provider call. Semantic validation needs approval under D09 first. |
+| 3 | **Evidence coverage.** Keep all 17 evaluated requirements. Identify what additional official documentation could cover. Prepare a proposed allowlist expansion. | All 17 retained. Proposal: `docs/governance/PROPOSED_ALLOWLIST_EXPANSION_2026-10-22.md`. No new domain accessed. | Accessing any new or unapproved domain before approval. Removing requirements to improve the figures. |
+| 4 | **Feasibility.** Final technical feasibility stays NOT DETERMINED unless supported by sufficient verified evidence and an authorized technical review. | Feasibility is reported as `not_determined` for all 17 requirements. Option-class coverage is reported separately and is not presented as feasibility. | Representing a keyword match or option-class coverage as proven implementation feasibility. |
+| 5 | **Independent QA.** Prepare the Sprint 2 evidence package for AS. | `docs/evidence/SPRINT2_EVIDENCE_PACKAGE.md`. | Fabricating AS's signature or declaring human QA complete. |
+| 6 | **GitHub CI.** Verify the actual Actions result for `81d7df8`. | Verified and recorded in the evidence package. | — |

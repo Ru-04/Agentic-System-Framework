@@ -77,7 +77,7 @@ def test_truncation_keeps_coverage_and_reports_the_cap() -> None:
         "extensibility metafield customer account shopify app webhook line {i}."
     )
     lines = [dense.format(i=i) for i in range(4)]
-    lines.append("FIXTURE storefront api built-in theme editor setting.")
+    lines.append("FIXTURE storefront api graphql query admin built-in theme editor settings.")
     output, coverage = _specialist(_record("\n".join(lines) + "\n")).investigate(
         _request("storefront api graphql query admin")
     )
