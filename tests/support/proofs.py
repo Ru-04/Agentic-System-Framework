@@ -85,3 +85,16 @@ def prove_over_http(
     token = client.login(str(email), password)
     _remote_tokens[user] = token
     return client.issue_operation_proof(token, operation, resource)
+
+
+def reset_proof(conn: Connection, user: uuid.UUID) -> uuid.UUID:
+    """An ``account.reset.issue`` proof from an active Administrator (the only reset issuer)."""
+    admin = conn.execute(
+        text(
+            """SELECT user_id FROM role_assignments
+               WHERE role = 'Administrator' AND revoked_at IS NULL AND user_id <> :u
+               ORDER BY created_at LIMIT 1"""
+        ),
+        {"u": user},
+    ).scalar_one()
+    return prove(conn, uuid.UUID(str(admin)), "account.reset.issue", user)

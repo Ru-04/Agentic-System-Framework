@@ -27,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import ProofRefused, audit_refusal, consume_with
 from webdesk.delivery.transport import EmailTransport
 from webdesk.ratelimit.limiter import Limit, RateLimitExceeded, enforce, subject_hash
 
@@ -80,8 +81,14 @@ def issue(
     limits: TokenLimits,
     client_ip: str,
     actor: uuid.UUID | None,
+    proof: uuid.UUID | None = None,
 ) -> None:
-    """Issue a token and deliver it to the approved contact. Returns nothing (no Admin access)."""
+    """Issue a token and deliver it to the approved contact. Returns nothing (no Admin access).
+
+    A reset token is issued only with an operation proof (``account.reset.issue``, an Administrator
+    operation) for the target account. An activation token needs no proof: it is a system flow that
+    the database already requires to be backed by a live approved contact approval.
+    """
     if purpose not in PURPOSES:
         raise TokenError("invalid_request")
     user = conn.execute(
@@ -140,21 +147,46 @@ def issue(
 
     # Issuance and supersession are written only by the guard-owner function (H-01).
     token = secrets.token_urlsafe(32)
-    token_id = uuid.UUID(
-        str(
-            conn.execute(
-                text("SELECT webdesk_guard.fn_issue_token(:u, :p, :h, :dest, :ttl, :actor)"),
-                {
-                    "u": user_id,
-                    "p": purpose,
-                    "h": token_hash(token),
-                    "dest": subject_hash(email),
-                    "ttl": int(TOKEN_TTL.total_seconds()),
-                    "actor": actor,
-                },
-            ).scalar_one()
+    ttl = int(TOKEN_TTL.total_seconds())
+    if purpose == "reset":
+        if proof is None:
+            audit_refusal(conn, "account.reset.issue", "proof_missing")
+            raise ProofRefused("proof_missing")
+        token_id = uuid.UUID(
+            str(
+                consume_with(
+                    conn,
+                    "account.reset.issue",
+                    "SELECT webdesk_guard.fn_issue_reset_token_with_proof("
+                    ":p, :u, :h, :dest, :ttl)",
+                    {
+                        "p": proof,
+                        "u": user_id,
+                        "h": token_hash(token),
+                        "dest": subject_hash(email),
+                        "ttl": ttl,
+                    },
+                )
+            )
         )
-    )
+    else:
+        token_id = uuid.UUID(
+            str(
+                conn.execute(
+                    text(
+                        "SELECT webdesk_guard.fn_issue_activation_token("
+                        ":u, :h, :dest, :ttl, :actor)"
+                    ),
+                    {
+                        "u": user_id,
+                        "h": token_hash(token),
+                        "dest": subject_hash(email),
+                        "ttl": ttl,
+                        "actor": actor,
+                    },
+                ).scalar_one()
+            )
+        )
     subject = "WDS account activation" if purpose == "activate" else "WDS password reset"
     body = f"Use this single-use code within 30 minutes: {token}"
     # Raises if the transport is unavailable. The caller's transaction then rolls back.

@@ -18,7 +18,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.people import POLICY, administrators_for, user_in_state
 from tests.support.privileged import guard_insert
-from tests.support.proofs import prove
+from tests.support.proofs import prove, reset_proof
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import CaptureTransport, TransportUnavailable
 from webdesk.identity import contacts
@@ -197,6 +197,7 @@ def test_token_is_refused_after_a_contact_revision_change(conn: Connection) -> N
     tokens.issue(
         conn,
         user_id=user,
+        proof=reset_proof(conn, user),
         purpose="reset",
         transport=transport,
         limits=LIMITS,
@@ -307,6 +308,7 @@ def test_reset_is_refused_while_a_contact_change_is_pending(conn: Connection) ->
         tokens.issue(
             conn,
             user_id=user,
+            proof=reset_proof(conn, user),
             purpose="reset",
             transport=CaptureTransport(),
             limits=LIMITS,
@@ -324,6 +326,7 @@ def test_active_user_can_request_a_reset_and_pending_user_cannot(conn: Connectio
     tokens.issue(
         conn,
         user_id=active,
+        proof=reset_proof(conn, active),
         purpose="reset",
         transport=transport,
         limits=LIMITS,
@@ -336,6 +339,7 @@ def test_active_user_can_request_a_reset_and_pending_user_cannot(conn: Connectio
         tokens.issue(
             conn,
             user_id=pending,
+            proof=reset_proof(conn, pending),
             purpose="reset",
             transport=transport,
             limits=LIMITS,

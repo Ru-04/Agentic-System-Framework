@@ -17,6 +17,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.authority import authority_call
 from tests.support.people import user_in_state
+from tests.support.proofs import reset_proof
 from webdesk.auth import service as auth
 from webdesk.auth.service import AuthError, LoginLimits
 from webdesk.delivery.transport import CaptureTransport
@@ -247,6 +248,7 @@ def test_reset_sets_a_new_password_and_revokes_existing_sessions(conn: Connectio
     tokens.issue(
         conn,
         user_id=user,
+        proof=reset_proof(conn, user),
         purpose="reset",
         transport=transport,
         limits=TOKEN_LIMITS,
