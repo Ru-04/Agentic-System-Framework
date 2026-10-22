@@ -15,7 +15,7 @@ Type: **Code** = a defect in the implementation. **Governance** = a decision WDS
 |---|---|---|---|---|
 | Critical | 0 | — | 0 | 0 |
 | High | 0 | H-1 (verified resolved) and earlier High items | 0 | 0 |
-| Medium | 0 code | several | 1 (strict typing of AI-1 baseline tests, see T-1) | 3 (listed below) |
+| Medium | 0 code | several, including T-1 (typing, fixed) | 0 | 3 (listed below) |
 | Low | 0 code | several | 0 | 2 (listed below) |
 
 ## Consolidated findings (this round)
@@ -27,7 +27,7 @@ Type: **Code** = a defect in the implementation. **Governance** = a decision WDS
 | M-3 | Medium | Code | No explicit per-segment disposition; context and unclassified handling was implicit. | No disposition field existed. | **Fixed.** Each segment gets ANALYSED, UNCLASSIFIED, UNRESOLVED or NOT_ANALYSED. `covers()` checks the full input ID set. An accepted reply with an uncovered segment is refused. | `test_ai_s02_provenance_final.py` (disposition group) |
 | L-5 | Low | Code | Import guard did not cover yaml loaders through aliases, from-imports, star-imports or `getattr`. | Pre-round scan: the from-import and `getattr` forms were not checked against yaml names. (Recorded from reading the scan; the pre-round scan was not run in isolation.) | **Fixed** by alias tracking for yaml and sys, plus name checks. The scan is **not** a sandbox. | `test_ai_s02_provenance_final.py::test_unsafe_yaml_form_is_flagged` (16 forms), `test_safe_yaml_forms_are_allowed`, `test_first_party_source_uses_only_safe_yaml`; `test_ai_s02_guard.py` |
 | L-6 | Low | Code | Quote matching could match inside a longer word. | Fixed in the prior round; re-verified. | **Fixed.** One shared boundary rule (`bounded_pattern`) for quotes and statements. | `test_ai_s02_provenance_final.py::test_whole_word_quotes_are_verbatim`, `test_embedded_word_quotes_are_not_verbatim`, `test_embedded_word_summary_is_refused_by_the_contract` |
-| T-1 | Medium | Governance (blocked) | Strict `mypy` over `src tests` reports 26 errors in 9 AI-1 baseline test files. | `uv run mypy --strict src tests`: 26 errors. | **Blocked.** Fixing requires editing frozen AI-1 test files. The AI-S02 test files are typed; `src` and all AI-S02 test files pass strict `mypy`. WDS decision needed. | Gate: `uv run mypy --strict src $(AI-S02 files)` clean |
+| T-1 | Medium | Code (typing) | Strict `mypy` over `src tests` reported 26 errors in 9 AI-1 baseline test files. | `uv run mypy --strict src tests`: 26 errors (before). | **Fixed** by a typing-only change to the nine files (annotations, `cast`, typed accessor, enum and tuple constructions, one non-None assertion). Strict `mypy` over `src tests` is clean. Independent review verdict: PASS, no blocking findings (implementation report, section 10). | Gate: `uv run mypy --strict src tests` clean (82 files); `pytest` 958 passed (no test removed or reworded) |
 | D-1 | Low | Code (docs) | Documentation claimed exact traceability and a 849 baseline; the statement was partly wrong. | Read from the record. | **Fixed.** Sections 3, 4, 8, 9, 10 and 11 corrected. Counts: 949 total, 385 baseline, 564 AI-S02. | Review of the record |
 
 ## Earlier findings (rounds 1 to 4): status carried forward
@@ -103,7 +103,6 @@ Type: **Code** = a defect in the implementation. **Governance** = a decision WDS
 
 ## Commit record
 
-- Local commit on `feature/ai-s02` after the gate passed. Not pushed. Not merged.
-- Open residual recorded in the commit message and here: `uv run mypy --strict src tests` reports 26 errors
-  in 9 pre-existing tracked AI-1 test files outside the AI-S02 modules. Open pending a WDS decision on the
-  typing gate (T-1). Those tracked tests were not edited in this commit.
+- Local commit `e7cfe43` on `feature/ai-s02` (AI-S02 work). Not pushed. Not merged.
+- Typing remediation (T-1): working-tree change to nine tracked AI-1 test files, uncommitted at the time of
+  this entry. Its commit awaits WDS approval.

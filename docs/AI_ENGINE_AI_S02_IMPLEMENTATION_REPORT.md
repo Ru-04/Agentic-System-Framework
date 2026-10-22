@@ -51,7 +51,7 @@ Full register: `docs/AI_S02_QA_FINDINGS_REGISTER.md`.
 | **H-1 statement provenance (High)** | **Resolved** (independent verification).  Implemented as exact bounded span with offsets. Reproduced before the change: a dropped "not" and reorderings traced. Symbol-only additions were refused before this round. |
 | M-2 invisible and combining characters (Medium) | Fixed. `"Aṕprove"` detected after the change; was not detected before. |
 | M-3 unresolved accountability (Medium) | Fixed. Per-segment dispositions; no segment is silently analysed. |
-| M-4 strict typing (Medium) | Partly fixed: all AI-S02 files pass strict `mypy`. The 26 AI-1 baseline errors are **blocked** (T-1). |
+| M-4 strict typing (Medium) | Fixed. Strict `mypy` over `src tests` is clean (82 files). The 26 AI-1 baseline errors in 9 tracked test files were fixed by a typing-only change (section 5, T-1). |
 | L-5 import guard, YAML (Low) | Fixed as a scan. Not a sandbox. |
 | L-6 quote boundaries (Low) | Fixed (in the prior round); regression tests added here. |
 | D-1 documentation (Low) | Fixed. Counts and claims corrected. |
@@ -62,16 +62,23 @@ Run from `ai_engine/`. Evidence file: `C:/Users/baps/AppData/Local/Claude-Data/c
 
 | Check | Result |
 |---|---|
-| `uv run pytest -q` | **949 passed** (385 baseline, 564 AI-S02) |
+| `uv run pytest -q` | **958 passed** (385 AI-1 baseline, 573 AI-S02) |
 | `uv run ruff check src tests` | clean |
-| `uv run ruff format --check src tests` | clean (81 files) |
+| `uv run ruff format --check src tests` | clean (82 files) |
 | `uv run mypy` (project config, `src`) | clean |
-| `uv run mypy --strict src` plus all AI-S02 test files | clean (62 files) |
-| `uv run mypy --strict src tests` (all) | **26 errors in 9 AI-1 baseline test files: blocked (T-1)** |
+| `uv run mypy --strict src` plus all AI-S02 test files | clean (63 files) |
+| `uv run mypy --strict src tests` (all) | **clean (82 files)**. Was 26 errors in 9 AI-1 baseline test files; fixed by a typing-only change (T-1). |
 
-The consolidated brief asks for strict `mypy` over `src tests`. That check does not pass, because the
-26 errors are in AI-1 baseline files, outside AI-S02. The AI-S02 files pass. Changing the baseline
-files needs WDS approval.
+WDS decided (typing decision): fix all 26 AI-1 baseline test typing errors; do not relax strict
+settings, do not exclude tests, do not change production code or existing assertions to silence types.
+The typing-only change touched nine tracked AI-1 test files (section 6). Its runtime behaviour is checked
+by an independent review (verdict in section 10).
+
+Typing-only change, summarised. Unused `type: ignore` comments removed (7 at first). Untyped helpers
+annotated (`clock_factory`, `execute`, `shopify_context`, `Scenario.execute`). A tuple literal replaces a
+list literal where the contract takes a tuple. `DataClass.INTERNAL` replaces the string `"internal"`.
+Typed accessors (`output_of`) and `cast` narrow unions the old untyped helpers hid. One non-None assertion
+was added before a `startswith` call. No assertion was removed or reworded.
 
 ## 6. Files changed in this round
 
@@ -94,6 +101,12 @@ Tests (`ai_engine/tests/`):
 - `test_ai_s02_review_final.py`, `test_ai_s02_evaluation.py`, `test_ai_s02_contracts.py`,
   `test_ai_s02_prompts.py`, `test_ai_s02_traceability.py`, `test_ai_s02_agents.py`,
   `test_ai_s02_port_runner.py`, `llm_fixtures.py`: message updates and strict typing only.
+
+Typing-only change (AI-1 tracked test files, WDS typing decision; no production or assertion change):
+- `ai_engine/tests/test_contracts_analysis_integrity.py`, `test_contracts_source_requirement.py`,
+  `test_requirement_analysis.py`, `test_operator_selection.py`, `test_specialist_execution.py`,
+  `test_shopify_agent.py`, `test_ai41_contracts.py`, `test_ai51_p0_regressions.py`,
+  `test_demo_end_to_end.py`.
 
 Docs (`docs/`, repo root): `AI_ENGINE_AI_S02_REMEDIATION.md` (sections 3, 4, 8, 9, 10, 11 corrected),
 `AI_ENGINE_AI_S02_IMPLEMENTATION_REPORT.md` (this file, new), `AI_S02_QA_FINDINGS_REGISTER.md` (new).
@@ -120,17 +133,18 @@ Governance (WDS):
 ## 8. Readiness verdict
 
 **Local commit made; AI-S02 is not closed.** H-1 is resolved and no confirmed High remains. Still open:
-- T-1, the typing gate: strict `mypy` over `src tests` reports 26 errors in 9 tracked AI-1 test files.
-  Open pending a WDS decision (decision 10). Not edited in the commit.
+- T-1, the typing gate: fixed in the working tree (typing-only, nine AI-1 test files). Not yet committed.
+  Strict `mypy` over `src tests` is clean.
 - Foundation and governance dependencies (sections 7 and 9). AI-S03, real provider calls, real client
   data and production Foundation access remain blocked.
+- No real LLM provider evaluation has been performed. Provider testing needs WDS approval.
 
 ## 9. WDS decisions needed
 
 1. **Statement rephrasing.** Accept the exact-span rule (no rephrasing, no case changes), or allow a
    documented, reviewed rephrasing rule with its own provenance check.
-2. **Strict typing of AI-1 baseline tests.** Approve editing the 9 frozen AI-1 test files (typing only,
-   no behaviour change), or exclude them from the strict gate with a recorded reason.
+2. **Strict typing of AI-1 baseline tests.** Decided by WDS: fix all 26 errors (typing only); no relaxed
+   settings and no exclusion. Done in the working tree.
 3. **Approval authority.** Name the role and the Foundation mechanism that records an approval.
 4. **Process isolation.** Approve the separate requirement before any untrusted executable code runs.
 5. **Unresolved clearance.** Decide who clears an unresolved segment, and whether an accepted outcome
@@ -142,5 +156,20 @@ Governance (WDS):
 9. **Commit.** Done locally after the gate passed, as authorised. This was
    the condition WDS has already set: no commit before the QA remediation passes and no confirmed High
    or Critical is open.
-10. **Typing residual (T-1).** Decide the typing gate: either approve editing the 9 tracked AI-1 test files
-    (typing only), or exclude them from the strict gate with a recorded reason. Open pending this decision.
+10. **Typing residual (T-1).** Resolved by WDS decision (fix, no exclusion). Remaining: approve committing
+    the typing-only change, and acceptance of AI-S02 (not given).
+
+## 10. Independent review of the typing-only diff
+
+- Reviewer: a fresh review agent, given the saved patch and the instruction to check hunk by hunk. It did
+  not receive the reasoning behind the change. This is independence of judgement within the session. It is
+  not a separate WDS reviewer, and WDS may still require its own.
+- Verdict: **PASS**. No blocking findings.
+- The reviewer ran `uv run pytest -q` on the current tree: 958 passed. It did not run `mypy`. The strict
+  `mypy` result is from the gate run recorded in section 5.
+- No file under `ai_engine/src` changed (checked by the reviewer and by `git diff --stat`).
+- Non-blocking notes: `DataClass.INTERNAL` replaces `"internal"` (a StrEnum, so equal in value); a list
+  replaced by a tuple where the contract declares a tuple (duplicate-rejection path still exercised); a
+  `cast` in `output_of` returns `None` unchanged, so every caller must assert non-`None` first (they do);
+  one added non-`None` assertion; removed `# type: ignore` comments with no runtime effect.
+

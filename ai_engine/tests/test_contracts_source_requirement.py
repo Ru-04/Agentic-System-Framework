@@ -175,7 +175,7 @@ def test_inferred_requirement_must_state_rationale() -> None:
 def test_requirement_is_immutable() -> None:
     requirement = make_client_requirement()
     with pytest.raises(ValidationError):
-        requirement.priority = Priority.HIGH  # type: ignore[misc]
+        requirement.priority = Priority.HIGH
 
 
 def test_requirement_type_must_come_from_the_schema_enum() -> None:

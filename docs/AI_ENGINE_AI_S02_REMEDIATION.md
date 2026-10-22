@@ -182,20 +182,18 @@ use, not the tests.
 ## 10. Gate
 
 Run from `ai_engine/`. Results on this tree (evidence in the implementation report):
-- `uv run pytest -q`: 949 passed (385 baseline, 564 AI-S02).
+- `uv run pytest -q`: 958 passed (385 AI-1 baseline, 573 AI-S02). Counts refreshed after the typing-only change.
 - `uv run ruff check src tests`: clean. `uv run ruff format --check src tests`: clean.
 - `uv run mypy` (project configuration, `files = ["src/ai_engine"]`): clean.
-- `uv run mypy --strict src` and `uv run mypy --strict src <all AI-S02 test files>`: clean.
-- `uv run mypy --strict src tests`: **not clean**. It reports 26 errors in 9 AI-1 baseline test files
-  (not AI-S02 files). Fixing them means editing frozen AI-1 test files, which needs WDS approval.
-  This is a blocked gate item, not a claim of typed baseline tests.
+- `uv run mypy --strict src tests`: clean (82 files). The 26 AI-1 baseline typing errors were fixed by a
+  typing-only change to nine tracked test files. No strictness setting was relaxed and no test was excluded.
 
 ## 11. AI-S02 completion readiness
 
 Not ready. The code remediation for the consolidated brief is implemented on the uncommitted tree,
-but three things block closure:
+and these items remain before closure:
 1. H-1 (statement provenance) is resolved by independent verification.
-2. Strict `mypy` over `src tests` still fails on 26 AI-1 baseline test errors (a WDS decision).
+2. Strict `mypy` over `src tests` is clean. The typing-only change awaits WDS approval to commit.
 3. The WDS decisions in section 12 and the Foundation items in section 7 are open. Real provider
    calls, real client data, production Foundation access and AI-S03 remain blocked.
 

@@ -573,6 +573,7 @@ def test_unclassified_sentence_is_marked_as_unclassified() -> None:
         [make_segment(text="The warehouse prints pallet labels for every shipment.")],
     )
     assert [s.kind for s in result.statements] == [StatementKind.UNCLASSIFIED]
+    assert result.statements[0].source_refs[0].supporting_quote is not None
     assert result.statements[0].source_refs[0].supporting_quote.startswith("The warehouse")
 
 

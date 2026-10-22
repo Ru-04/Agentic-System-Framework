@@ -48,6 +48,7 @@ from ai_engine.contracts.integrity import (
     check_requirement,
     check_source_refs,
 )
+from ai_engine.contracts.source import SourceSegment
 from ai_engine.contracts.specialist import SpecialistInvestigationResult, SpecialistOutputStatus
 
 
@@ -65,8 +66,8 @@ def analysis(**overrides: object) -> RequirementAnalysisResult:
     return RequirementAnalysisResult(**data)  # type: ignore[arg-type]
 
 
-def index_of(*segment_ids: str) -> dict[str, object]:
-    return build_segment_index(make_segment(segment_id=sid) for sid in segment_ids)  # type: ignore[misc]
+def index_of(*segment_ids: str) -> dict[str, SourceSegment]:
+    return build_segment_index(make_segment(segment_id=sid) for sid in segment_ids)
 
 
 # --- RequirementAnalysisResult ---------------------------------------------------------------
@@ -266,18 +267,18 @@ def test_clean_reference_passes() -> None:
 
 def test_client_wording_must_be_exact_substring_of_cited_segment() -> None:
     requirement = make_client_requirement(original_wording="The store must send all order numbers.")
-    assert check_requirement(requirement, index_of(SEGMENT_ID))  # type: ignore[arg-type]
+    assert check_requirement(requirement, index_of(SEGMENT_ID))
 
 
 def test_exact_client_wording_passes_integrity() -> None:
     requirement = make_client_requirement(
         original_wording="The store must send order numbers to the ERP."
     )
-    assert check_requirement(requirement, index_of(SEGMENT_ID)) == []  # type: ignore[arg-type]
+    assert check_requirement(requirement, index_of(SEGMENT_ID)) == []
 
 
 def test_inferred_requirement_passes_wording_check_without_quote() -> None:
-    assert check_requirement(make_inferred_requirement(), index_of(SEGMENT_ID)) == []  # type: ignore[arg-type]
+    assert check_requirement(make_inferred_requirement(), index_of(SEGMENT_ID)) == []
 
 
 def test_check_analysis_catches_bad_statement_reference() -> None:
@@ -287,7 +288,7 @@ def test_check_analysis_catches_bad_statement_reference() -> None:
         statement="Reduce abandoned carts.",
         source_refs=[make_ref(segment_id="SEG-MISSING-1")],
     )
-    errors = check_analysis(analysis(statements=[statement]), index_of(SEGMENT_ID))  # type: ignore[arg-type]
+    errors = check_analysis(analysis(statements=[statement]), index_of(SEGMENT_ID))
     assert errors and errors[0].startswith("STMT-001")
 
 

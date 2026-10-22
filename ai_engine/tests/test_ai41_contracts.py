@@ -8,10 +8,15 @@ from typing import Any
 import pytest
 from factories import CATALOG_VERSION, NOW, PROJECT_ID, REGISTRY_VERSION
 from pydantic import ValidationError
-from support import PLATFORM, SELECTION, StubSpecialist, build_bundle, make_task
+from support import PLATFORM, SELECTION, Bundle, StubSpecialist, build_bundle, make_task
 
 from ai_engine.contracts.analysis import AnalysisStatus, RequirementAnalysisResult, SourceVersionRef
-from ai_engine.contracts.common import EvidenceStatus, FeasibilityStatus, proposal_key_is_namespaced
+from ai_engine.contracts.common import (
+    DataClass,
+    EvidenceStatus,
+    FeasibilityStatus,
+    proposal_key_is_namespaced,
+)
 from ai_engine.contracts.evidence import Claim, ClaimType, PlatformContext, SubjectRef, SubjectType
 from ai_engine.contracts.execution import AgentExecutionStatus
 from ai_engine.contracts.project import ProjectContext
@@ -20,6 +25,7 @@ from ai_engine.contracts.specialist import (
     SpecialistConflict,
     SpecialistInvestigationResult,
     SpecialistOutputStatus,
+    SpecialistTask,
 )
 from ai_engine.evidence.lookup import MockEvidenceLookup
 from ai_engine.requirement_analysis.agent import RequirementAnalysisAgent
@@ -77,7 +83,7 @@ def conflict(conflict_key: str = "CONF-001", claim_key: str = "CLM-001") -> Spec
     )
 
 
-def shopify_context():  # type: ignore[no-untyped-def]
+def shopify_context() -> tuple[Bundle, SpecialistContext, SpecialistTask]:
     """Bundle whose lookup carries the Shopify synthetic records and their contradiction groups."""
     from ai_engine.evidence.lookup import MockEvidenceLookup as _Lookup
 
@@ -170,7 +176,7 @@ def test_project_status_defaults_to_active_for_existing_records() -> None:
         project_id=PROJECT_ID,
         project_revision=1,
         name="Legacy record",
-        data_classification="internal",
+        data_classification=DataClass.INTERNAL,
         access_boundary_id="AB-1",
     )
     assert project.status == "active"
@@ -182,7 +188,7 @@ def test_unknown_project_status_is_refused() -> None:
             project_id=PROJECT_ID,
             project_revision=1,
             name="Bad status",
-            data_classification="internal",
+            data_classification=DataClass.INTERNAL,
             access_boundary_id="AB-1",
             status="unarchived",  # type: ignore[arg-type]
         )
@@ -432,7 +438,7 @@ def test_agent_building_an_invalid_record_becomes_failed_validation() -> None:
     bundle = build_bundle()
     execution = run_specialist(
         execution_id="EXEC-BAD-0001",
-        agent=_InvalidOutputAgent(),  # type: ignore[arg-type]
+        agent=_InvalidOutputAgent(),
         task=make_task(bundle),
         context=bundle.context,
         registry=bundle.registry,
