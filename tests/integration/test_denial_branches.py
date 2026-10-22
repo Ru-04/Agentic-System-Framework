@@ -124,7 +124,9 @@ def test_a_contact_change_for_an_inactive_account_is_refused_and_audited(conn: C
     admin, _ = _admins(conn)
     pending = _plain(conn, status="pending_activation")
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_change(conn, admin, POLICY, pending, _email())
+        contacts.request_change(
+            conn, prove(conn, admin, "contact.request.change", pending), POLICY, pending, _email()
+        )
     assert (exc.value.status, exc.value.reason) == (409, "user_not_active")
     assert _audit(conn, "contact.request.denied", "user_not_active") == 1
 
@@ -132,9 +134,13 @@ def test_a_contact_change_for_an_inactive_account_is_refused_and_audited(conn: C
 def test_a_replacement_request_while_one_is_live_is_refused_and_audited(conn: Connection) -> None:
     admin, _ = _admins(conn)
     email = _email()
-    user, _ = contacts.request_create(conn, admin, POLICY, email, "Live")
+    user, _ = contacts.request_create(
+        conn, prove(conn, admin, "contact.request.create"), POLICY, email, "Live"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_replacement_create(conn, admin, POLICY, user, email)
+        contacts.request_replacement_create(
+            conn, prove(conn, admin, "contact.request.replace", user), POLICY, user, email
+        )
     assert exc.value.reason == "request_still_pending"
     assert _audit(conn, "contact.request.denied", "request_still_pending") == 1
 
@@ -142,7 +148,10 @@ def test_a_replacement_request_while_one_is_live_is_refused_and_audited(conn: Co
 def test_approving_an_unknown_request_is_refused_and_audited(conn: Connection) -> None:
     _, approver = _admins(conn)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.approve_create(conn, approver, uuid.uuid4(), "proof")
+        missing = uuid.uuid4()
+        contacts.approve_create(
+            conn, prove(conn, approver, "contact.approve.create", missing), missing, "proof"
+        )
     assert exc.value.reason == "approval_not_found"
     assert _audit(conn, "contact.approve.denied", "approval_not_found") == 1
 
@@ -151,7 +160,8 @@ def test_a_non_administrator_cannot_cancel_a_contact_change(conn: Connection) ->
     admin, _ = _admins(conn)
     plain = _plain(conn)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.cancel_change(conn, plain, uuid.uuid4())
+        missing = uuid.uuid4()
+        contacts.cancel_change(conn, prove(conn, plain, "contact.cancel.change", missing), missing)
     assert exc.value.status == 403
     assert _audit(conn, "contact.change.denied", "role_missing") == 1
     assert admin is not None
@@ -160,9 +170,11 @@ def test_a_non_administrator_cannot_cancel_a_contact_change(conn: Connection) ->
 def test_a_withdrawal_without_a_reason_is_refused_and_audited(conn: Connection) -> None:
     admin, _ = _admins(conn)
     email = _email()
-    user, _ = contacts.request_create(conn, admin, POLICY, email, "Reason")
+    user, _ = contacts.request_create(
+        conn, prove(conn, admin, "contact.request.create"), POLICY, email, "Reason"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.withdraw(conn, admin, user, "   ", 1)
+        contacts.withdraw(conn, prove(conn, admin, "contact.withdraw", user), user, "   ", 1)
     assert exc.value.reason == "reason_required"
     assert _audit(conn, "user.withdraw.denied", "reason_required") == 1
 

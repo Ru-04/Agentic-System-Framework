@@ -104,13 +104,19 @@ def _as_app(conn: Connection) -> None:
 def test_sweep_expires_a_change_request_and_releases_its_target_contact(conn: Connection) -> None:
     creator, approver, _ = _two_admins(conn)
     _as_app(conn)
-    user, create = contacts.request_create(conn, creator, POLICY, _email(), "Changer")
-    contacts.approve_create(conn, approver, create, "proof-s")
+    user, create = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Changer"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", create), create, "proof-s"
+    )
     _as_owner(conn)
     activate_user(conn, user)
     _as_app(conn)
     target = _email()
-    change = contacts.request_change(conn, creator, POLICY, user, target)
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user), POLICY, user, target
+    )
     _as_owner(conn)
     conn.execute(
         text(
@@ -138,7 +144,9 @@ def test_sweep_keeps_the_reservation_of_an_expired_create_request(conn: Connecti
     creator, _, _ = _two_admins(conn)
     _as_app(conn)
     email = _email()
-    _, create = contacts.request_create(conn, creator, POLICY, email, "Expiring")
+    _, create = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Expiring"
+    )
     _as_owner(conn)
     conn.execute(
         text(
@@ -167,23 +175,33 @@ def test_replacement_create_is_allowed_only_after_the_previous_request_is_reject
     creator, approver, _ = _two_admins(conn)
     _as_app(conn)
     email = _email()
-    user, first = contacts.request_create(conn, creator, POLICY, email, "Again")
+    user, first = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Again"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_replacement_create(conn, creator, POLICY, user, email)
+        contacts.request_replacement_create(
+            conn, prove(conn, creator, "contact.request.replace", user), POLICY, user, email
+        )
     assert exc.value.reason == "request_still_pending"
 
-    contacts.reject_create(conn, approver, first)
-    replacement = contacts.request_replacement_create(conn, creator, POLICY, user, email)
+    contacts.reject_create(conn, prove(conn, approver, "contact.reject.create", first), first)
+    replacement = contacts.request_replacement_create(
+        conn, prove(conn, creator, "contact.request.replace", user), POLICY, user, email
+    )
     assert replacement is not None
 
 
 def test_replacement_create_refuses_a_different_address(conn: Connection) -> None:
     creator, approver, _ = _two_admins(conn)
     _as_app(conn)
-    user, first = contacts.request_create(conn, creator, POLICY, _email(), "Other")
-    contacts.reject_create(conn, approver, first)
+    user, first = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Other"
+    )
+    contacts.reject_create(conn, prove(conn, approver, "contact.reject.create", first), first)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_replacement_create(conn, creator, POLICY, user, _email())
+        contacts.request_replacement_create(
+            conn, prove(conn, creator, "contact.request.replace", user), POLICY, user, _email()
+        )
     assert exc.value.reason == "contact_mismatch"
 
 

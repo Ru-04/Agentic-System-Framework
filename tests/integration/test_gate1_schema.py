@@ -109,7 +109,9 @@ def new_user(
     if status == "pending_contact_approval":
         admin, _second = administrators_for(conn)
         conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
-        user, _approval = contacts.request_create(conn, admin, POLICY, _email(), "gate1")
+        user, _approval = contacts.request_create(
+            conn, prove(conn, admin, "contact.request.create"), POLICY, _email(), "gate1"
+        )
         return user
     raise ValueError(f"unsupported prerequisite state: {status}")
 
@@ -223,7 +225,7 @@ def test_approved_ordinary_approval_requires_proof_and_distinct_approver(conn: C
                SET status = 'approved', approved_by_user_id = %s, approved_at = now()
                WHERE approval_id = %s""",
             (admin, approval),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
     # The requester cannot also be the approver; the requester here is the Administrator who
     # created the request, so the database refuses the same-person approval.
@@ -235,7 +237,7 @@ def test_approved_ordinary_approval_requires_proof_and_distinct_approver(conn: C
                    approved_at = now()
                WHERE approval_id = %s""",
             (admin, approval),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -281,7 +283,9 @@ def test_active_contact_reservation_is_unique_and_released_history_is_kept(
         )
     revision = _revision(conn, user)
     conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
-    contacts.withdraw(conn, admin, user, "duplicate request", revision)
+    contacts.withdraw(
+        conn, prove(conn, admin, "contact.withdraw", user), user, "duplicate request", revision
+    )
     released = q(
         conn,
         "SELECT count(*) FROM contact_reservations "
@@ -305,7 +309,12 @@ def test_activation_requires_an_approved_contact(conn: Connection) -> None:
             "UPDATE users SET status = 'pending_activation' WHERE user_id = %s",
             (target,),
         )
-    contacts.approve_create(conn, administrators_for(conn)[1], pending_request(conn, target), "p")
+    second_admin = administrators_for(conn)[1]
+    approval = pending_request(conn, target)
+    proof = prove(conn, second_admin, "contact.approve.create", approval)
+    conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
+    contacts.approve_create(conn, proof, approval, "p")
+    conn.exec_driver_sql("RESET ROLE")
     x(conn, "UPDATE users SET status = 'pending_activation' WHERE user_id = %s", (target,))
 
 
@@ -320,7 +329,7 @@ def test_ordinary_approval_refused_when_approver_created_the_user(conn: Connecti
                    approved_at = now()
                WHERE approval_id = %s""",
             (admin, pending_request(conn, target)),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -336,7 +345,7 @@ def test_ordinary_approval_refused_for_non_administrator_approver(conn: Connecti
                    approved_at = now()
                WHERE approval_id = %s""",
             (plain_user, pending_request(conn, target)),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -366,7 +375,7 @@ def test_ordinary_approval_refused_with_a_single_active_administrator(conn: Conn
                    approved_at = now()
                WHERE approval_id = %s""",
             (first, pending_request(conn, target)),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -396,10 +405,19 @@ def test_contact_change_requires_a_matching_approval(conn: Connection) -> None:
             role="webdesk_app",
         )
     # A contact change is requested and approved through the services, then the guard accepts it.
-    change = contacts.request_change(conn, admin, POLICY, user, new_email)
-    contacts.approve_change(
-        conn, administrators_for(conn)[1], change, "proof-change", contact_box=_box()
+    conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
+    change = contacts.request_change(
+        conn, prove(conn, admin, "contact.request.change", user), POLICY, user, new_email
     )
+    second_admin = administrators_for(conn)[1]
+    contacts.approve_change(
+        conn,
+        prove(conn, second_admin, "contact.approve.change", change),
+        change,
+        "proof-change",
+        contact_box=_box(),
+    )
+    conn.exec_driver_sql("RESET ROLE")
     assert email_of(conn, user) == new_email
 
 
@@ -413,24 +431,30 @@ def test_withdrawal_releases_email_only_with_eligible_user_and_same_transaction_
             conn,
             "UPDATE users SET normalized_email = NULL, status = 'disabled' WHERE user_id = %s",
             (target,),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
     revision = _revision(conn, target)
     conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
-    contacts.withdraw(conn, admin, target, "duplicate request", revision)
+    contacts.withdraw(
+        conn, prove(conn, admin, "contact.withdraw", target), target, "duplicate request", revision
+    )
     assert email_of(conn, target) is None
 
 
 def test_withdrawal_refused_once_contact_was_ever_approved(conn: Connection) -> None:
     admin, second = two_admins(conn)
     target = new_user(conn, status="pending_contact_approval")
-    contacts.approve_create(conn, second, pending_request(conn, target), "proof-w")
+    approval = pending_request(conn, target)
+    proof = prove(conn, second, "contact.approve.create", approval)
+    conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
+    contacts.approve_create(conn, proof, approval, "proof-w")
+    conn.exec_driver_sql("RESET ROLE")
     with pytest.raises(CheckViolation):
         x(
             conn,
             "UPDATE users SET normalized_email = NULL, status = 'disabled' WHERE user_id = %s",
             (target,),
-            role="webdesk_app",
+            role="webdesk_guard_owner",
         )
 
 
@@ -591,7 +615,9 @@ def test_one_live_activation_token_per_user_and_purpose(conn: Connection) -> Non
 def _user_request_by(conn: Connection, admin: uuid.UUID) -> uuid.UUID:
     """A pending creation request made by ``admin``, for a single-administrator state."""
     conn.exec_driver_sql("SET LOCAL ROLE webdesk_app")
-    user, _approval = contacts.request_create(conn, admin, POLICY, _email(), "solo-target")
+    user, _approval = contacts.request_create(
+        conn, prove(conn, admin, "contact.request.create"), POLICY, _email(), "solo-target"
+    )
     return user
 
 

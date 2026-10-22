@@ -79,8 +79,12 @@ def new_active_user(
     conn: Connection, creator: uuid.UUID, approver: uuid.UUID, name: str = "Staff"
 ) -> uuid.UUID:
     """A staff account created, approved by a different Administrator, and activated."""
-    user, approval = contacts.request_create(conn, creator, POLICY, _email(), name)
-    contacts.approve_create(conn, approver, approval, "proof-people")
+    user, approval = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), name
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval), approval, "proof-people"
+    )
     activate_user(conn, user)
     return user
 
@@ -144,8 +148,12 @@ def user_in_state(conn: Connection, status: str) -> tuple[uuid.UUID, str]:
             ).scalar_one()
         )
     if status == "pending_activation":
-        user, approval = contacts.request_create(conn, first, POLICY, email, "Pending")
-        contacts.approve_create(conn, second, approval, "proof-people")
+        user, approval = contacts.request_create(
+            conn, prove(conn, first, "contact.request.create"), POLICY, email, "Pending"
+        )
+        contacts.approve_create(
+            conn, prove(conn, second, "contact.approve.create", approval), approval, "proof-people"
+        )
         return user, email
     raise ValueError(f"unsupported test state: {status}")
 
@@ -163,8 +171,15 @@ def committed_active_user(
     assert isinstance(engine, Engine)
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        user, approval = contacts.request_create(conn, creator, POLICY, _email(), name)
-        contacts.approve_create(conn, approver, approval, "proof-committed")
+        user, approval = contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), name
+        )
+        contacts.approve_create(
+            conn,
+            prove(conn, approver, "contact.approve.create", approval),
+            approval,
+            "proof-committed",
+        )
         activate_user(conn, user)
     return user
 

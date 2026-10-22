@@ -239,7 +239,9 @@ def new_pending_contact(conn: Connection, admin: uuid.UUID) -> uuid.UUID:
     """A never-approved pending account, created through the service as the login role."""
     from webdesk.identity import contacts
 
-    user, _approval = contacts.request_create(conn, admin, POLICY, _email(), "Hardening")
+    user, _approval = contacts.request_create(
+        conn, remote_prove(conn, admin, "contact.request.create"), POLICY, _email(), "Hardening"
+    )
     return user
 
 
@@ -247,8 +249,19 @@ def make_active_user(engine: Engine, world: dict[str, uuid.UUID]) -> uuid.UUID:
     """A non-Administrator active account, created and approved through the services (committed)."""
     admin, second = world["admin"], world["second"]
     with engine.begin() as conn:
-        user, approval = contacts.request_create(conn, admin, POLICY, _email(), "Active staff")
-        contacts.approve_create(conn, second, approval, "proof-hardening")
+        user, approval = contacts.request_create(
+            conn,
+            remote_prove(conn, admin, "contact.request.create"),
+            POLICY,
+            _email(),
+            "Active staff",
+        )
+        contacts.approve_create(
+            conn,
+            remote_prove(conn, second, "contact.approve.create", approval),
+            approval,
+            "proof-hardening",
+        )
     _activate_by_token(engine, user)
     return user
 

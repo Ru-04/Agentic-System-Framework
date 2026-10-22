@@ -22,6 +22,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
+from webdesk.authority.proofs import actor_for, consume_row, consume_with
 from webdesk.crypto.contact_box import ContactBox, outbox_aad
 from webdesk.identity.email import ContactEmailPolicy, EmailPolicyError
 from webdesk.rbac.engine import authorize
@@ -94,53 +95,26 @@ def _audit(
 
 def request_create(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     policy: ContactEmailPolicy,
     raw_email: str,
     display_name: str,
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """Administrator creates a pending account and asks for contact approval (no token)."""
+    actor = actor_for(conn, proof, "contact.request.create", None)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.create.denied")
     normalized = _normalize(policy, raw_email)
     if _contact_is_reserved(conn, normalized):
         raise _refusal(conn, actor, "contact.request.denied", 409, "contact_reserved")
     try:
-        with conn.begin_nested():
-            user_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO users (display_name, email, normalized_email, status,
-                                   created_by_user_id)
-                               VALUES (:name, :e, :e, 'pending_contact_approval', :actor)
-                               RETURNING user_id"""
-                        ),
-                        {"name": display_name, "e": normalized, "actor": actor},
-                    ).scalar_one()
-                )
-            )
-            approval_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO user_contact_approvals (user_id, request_type,
-                                   requested_email_normalized, requested_by_user_id, status,
-                                   expires_at)
-                               VALUES (:u, 'create', :e, :actor, 'pending',
-                                   now() + interval '24 hours')
-                               RETURNING approval_id"""
-                        ),
-                        {"u": user_id, "e": normalized, "actor": actor},
-                    ).scalar_one()
-                )
-            )
-            conn.execute(
-                text(
-                    """INSERT INTO contact_reservations (normalized_email, user_id, approval_id)
-                       VALUES (:e, :u, :a)"""
-                ),
-                {"e": normalized, "u": user_id, "a": approval_id},
-            )
+        row = consume_row(
+            conn,
+            "contact.request.create",
+            "SELECT out_user_id, out_approval_id FROM "
+            "webdesk_guard.fn_request_create_with_proof(:p, :name, :e)",
+            {"p": proof, "name": display_name, "e": normalized},
+        )
+        user_id, approval_id = uuid.UUID(str(row[0])), uuid.UUID(str(row[1]))
     except SQLAlchemyError as exc:
         raise ContactServiceError(409, "contact_reserved") from exc
     _audit(
@@ -154,7 +128,7 @@ def request_create(
 
 def request_replacement_create(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     policy: ContactEmailPolicy,
     user_id: uuid.UUID,
     raw_email: str,
@@ -164,6 +138,7 @@ def request_replacement_create(
     Allowed only after the previous create request expired or was rejected. The address must be the
     account's current contact, which is held by its retained reservation (SCHEMA §3.1 C3).
     """
+    actor = actor_for(conn, proof, "contact.request.replace", user_id)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.create.denied")
     normalized = _normalize(policy, raw_email)
     current = conn.execute(
@@ -174,7 +149,7 @@ def request_replacement_create(
                       EXISTS (SELECT 1 FROM user_contact_approvals a
                               WHERE a.user_id = u.user_id AND a.request_type = 'create'
                                 AND a.status = 'pending' AND a.expires_at > now()) AS live
-               FROM users u WHERE user_id = :u FOR UPDATE"""
+               FROM users u WHERE user_id = :u"""
         ),
         {"u": user_id},
     ).one_or_none()
@@ -188,16 +163,12 @@ def request_replacement_create(
         raise _refusal(conn, actor, "contact.request.denied", 409, "request_still_pending")
     approval_id = uuid.UUID(
         str(
-            conn.execute(
-                text(
-                    """INSERT INTO user_contact_approvals (user_id, request_type,
-                           requested_email_normalized, requested_by_user_id, status, expires_at)
-                       VALUES (:u, 'create', :e, :actor, 'pending',
-                           now() + interval '24 hours')
-                       RETURNING approval_id"""
-                ),
-                {"u": user_id, "e": normalized, "actor": actor},
-            ).scalar_one()
+            consume_with(
+                conn,
+                "contact.request.replace",
+                "SELECT webdesk_guard.fn_request_replacement_with_proof(:p, :u, :e)",
+                {"p": proof, "u": user_id, "e": normalized},
+            )
         )
     )
     _audit(
@@ -217,7 +188,7 @@ def _pending_approval(
             text(
                 """SELECT user_id, requested_by_user_id, status, request_type,
                           expires_at > now() AS live
-                   FROM user_contact_approvals WHERE approval_id = :a FOR UPDATE"""
+                   FROM user_contact_approvals WHERE approval_id = :a"""
             ),
             {"a": approval_id},
         )
@@ -236,9 +207,10 @@ def _pending_approval(
 
 
 def approve_create(
-    conn: Connection, approver: uuid.UUID, approval_id: uuid.UUID, proof_ref: str
+    conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID, proof_ref: str
 ) -> None:
     """A different active Administrator approves the contact, with an opaque proof reference."""
+    approver = actor_for(conn, proof, "contact.approve.create", approval_id)
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.approve.denied")
     if not proof_ref.strip():
         raise _refusal(conn, approver, "contact.approve.denied", 422, "proof_ref_required")
@@ -247,23 +219,12 @@ def approve_create(
         _audit_denial(conn, approver, "contact.approve.denied", "self_approval")
         raise ContactServiceError(403, "self_approval")
     try:
-        with conn.begin_nested():
-            conn.execute(
-                text(
-                    """UPDATE user_contact_approvals
-                       SET status = 'approved', approved_by_user_id = :approver,
-                           proof_ref = :proof, approved_at = now(), revision = revision + 1
-                       WHERE approval_id = :a"""
-                ),
-                {"approver": approver, "proof": proof_ref.strip(), "a": approval_id},
-            )
-            conn.execute(
-                text(
-                    "UPDATE users SET status = 'pending_activation', revision = revision + 1 "
-                    "WHERE user_id = :u"
-                ),
-                {"u": approval["user_id"]},
-            )
+        consume_with(
+            conn,
+            "contact.approve.create",
+            "SELECT webdesk_guard.fn_approve_create_with_proof(:p, :a, :ref)",
+            {"p": proof, "a": approval_id, "ref": proof_ref.strip()},
+        )
     except SQLAlchemyError as exc:
         _audit_denial(conn, approver, "contact.approve.denied", "approval_refused")
         raise ContactServiceError(409, "approval_refused") from exc
@@ -275,13 +236,16 @@ def approve_create(
     )
 
 
-def reject_create(conn: Connection, approver: uuid.UUID, approval_id: uuid.UUID) -> None:
+def reject_create(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) -> None:
     """Reject a create request. The account stays pending and the reservation is kept (C3)."""
+    approver = actor_for(conn, proof, "contact.reject.create", approval_id)
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.reject.denied")
     approval = _pending_or_refuse(conn, approver, approval_id, "create", "contact.reject.denied")
-    conn.execute(
-        text("UPDATE user_contact_approvals SET status = 'rejected' WHERE approval_id = :a"),
-        {"a": approval_id},
+    consume_with(
+        conn,
+        "contact.reject.create",
+        "SELECT webdesk_guard.fn_reject_create_with_proof(:p, :a)",
+        {"p": proof, "a": approval_id},
     )
     _audit(
         conn,
@@ -293,16 +257,17 @@ def reject_create(conn: Connection, approver: uuid.UUID, approval_id: uuid.UUID)
 
 def request_change(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     policy: ContactEmailPolicy,
     user_id: uuid.UUID,
     raw_email: str,
 ) -> uuid.UUID:
     """Ask for an active account's contact to change. An independent admin must approve."""
+    actor = actor_for(conn, proof, "contact.request.change", user_id)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
     normalized = _normalize(policy, raw_email)
     current = conn.execute(
-        text("SELECT status, normalized_email FROM users WHERE user_id = :u FOR UPDATE"),
+        text("SELECT status, normalized_email FROM users WHERE user_id = :u"),
         {"u": user_id},
     ).one_or_none()
     if current is None:
@@ -312,29 +277,16 @@ def request_change(
     if _contact_is_reserved(conn, normalized):
         raise _refusal(conn, actor, "contact.request.denied", 409, "contact_reserved")
     try:
-        with conn.begin_nested():
-            approval_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO user_contact_approvals (user_id, request_type,
-                                   requested_email_normalized, previous_email_normalized,
-                                   requested_by_user_id, status, expires_at)
-                               VALUES (:u, 'change', :e, :prev, :actor, 'pending',
-                                   now() + interval '24 hours')
-                               RETURNING approval_id"""
-                        ),
-                        {"u": user_id, "e": normalized, "prev": current[1], "actor": actor},
-                    ).scalar_one()
+        approval_id = uuid.UUID(
+            str(
+                consume_with(
+                    conn,
+                    "contact.request.change",
+                    "SELECT webdesk_guard.fn_request_change_with_proof(:p, :u, :e, :prev)",
+                    {"p": proof, "u": user_id, "e": normalized, "prev": current[1]},
                 )
             )
-            conn.execute(
-                text(
-                    """INSERT INTO contact_reservations (normalized_email, user_id, approval_id)
-                       VALUES (:e, :u, :a)"""
-                ),
-                {"e": normalized, "u": user_id, "a": approval_id},
-            )
+        )
     except SQLAlchemyError as exc:
         raise ContactServiceError(409, "contact_reserved") from exc
     _audit(
@@ -348,13 +300,14 @@ def request_change(
 
 def approve_change(
     conn: Connection,
-    approver: uuid.UUID,
+    proof: uuid.UUID,
     approval_id: uuid.UUID,
     proof_ref: str,
     *,
     contact_box: ContactBox,
 ) -> None:
     """Approve a contact change: revoke tokens and sessions, release the old contact, notify."""
+    approver = actor_for(conn, proof, "contact.approve.change", approval_id)
     _actor_can(conn, approver, Permission.USER_APPROVE, event="contact.change.denied")
     if not proof_ref.strip():
         raise _refusal(conn, approver, "contact.change.denied", 422, "proof_ref_required")
@@ -364,58 +317,24 @@ def approve_change(
         raise ContactServiceError(403, "self_approval")
     user_id = approval["user_id"]
     try:
-        with conn.begin_nested():
-            old_email = conn.execute(
-                text("SELECT normalized_email FROM users WHERE user_id = :u"), {"u": user_id}
-            ).scalar_one()
-            conn.execute(
-                text(
-                    """UPDATE user_contact_approvals
-                       SET status = 'approved', approved_by_user_id = :approver,
-                           proof_ref = :proof, approved_at = now(), revision = revision + 1
-                       WHERE approval_id = :a"""
-                ),
-                {"approver": approver, "proof": proof_ref.strip(), "a": approval_id},
-            )
-            # The contact and its revision change only through the guard-owner function (H-03).
-            conn.execute(
-                text("SELECT webdesk_guard.fn_advance_contact_revision(:u, :a)"),
-                {"a": approval_id, "u": user_id},
-            )
-            conn.execute(
-                text("UPDATE users SET revision = revision + 1 WHERE user_id = :u"),
-                {"u": user_id},
-            )
-            conn.execute(
-                text(
-                    "SELECT webdesk_guard.fn_release_reservations("
-                    ":u, 'contact_change', :a, :old)"
-                ),
-                {"u": user_id, "old": old_email, "a": approval_id},
-            )
-            conn.execute(
-                text("SELECT webdesk_guard.fn_revoke_tokens(:u, 'contact_change')"),
-                {"u": user_id},
-            )
-            conn.execute(
-                text("SELECT webdesk_guard.fn_revoke_user_sessions(:u, :a)"),
-                {"u": user_id, "a": approval_id},
-            )
-            sealed = contact_box.seal(
-                str(old_email), aad=outbox_aad("prior_contact_change", user_id)
-            )
-            conn.execute(
-                text(
-                    """INSERT INTO outbox_notices (purpose, user_id, old_contact_ref,
-                           old_contact_ciphertext, payload_redacted, status)
-                       VALUES ('prior_contact_change', :u, :ref, :sealed, '{}'::jsonb, 'queued')"""
-                ),
-                {
-                    "u": user_id,
-                    "ref": hashlib.sha256(str(old_email).encode("utf-8")).hexdigest(),
-                    "sealed": sealed,
-                },
-            )
+        # The prior address is sealed here (the contact box key is not given to the database). The
+        # guard stores the sealed value and performs the whole change in the same transaction.
+        old_email = conn.execute(
+            text("SELECT normalized_email FROM users WHERE user_id = :u"), {"u": user_id}
+        ).scalar_one()
+        sealed = contact_box.seal(str(old_email), aad=outbox_aad("prior_contact_change", user_id))
+        consume_with(
+            conn,
+            "contact.approve.change",
+            "SELECT webdesk_guard.fn_approve_change_with_proof(:p, :a, :ref, :sealed, :oref)",
+            {
+                "p": proof,
+                "a": approval_id,
+                "ref": proof_ref.strip(),
+                "sealed": sealed,
+                "oref": hashlib.sha256(str(old_email).encode("utf-8")).hexdigest(),
+            },
+        )
     except SQLAlchemyError as exc:
         _audit_denial(conn, approver, "contact.change.denied", "approval_refused")
         raise ContactServiceError(409, "approval_refused") from exc
@@ -427,13 +346,16 @@ def approve_change(
     )
 
 
-def cancel_change(conn: Connection, actor: uuid.UUID, approval_id: uuid.UUID) -> None:
+def cancel_change(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) -> None:
     """Requester or an administrator cancels a pending change and releases its target."""
+    actor = actor_for(conn, proof, "contact.cancel.change", approval_id)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
     approval = _pending_or_refuse(conn, actor, approval_id, "change", "contact.change.denied")
-    conn.execute(
-        text("UPDATE user_contact_approvals SET status = 'cancelled' WHERE approval_id = :a"),
-        {"a": approval_id},
+    consume_with(
+        conn,
+        "contact.cancel.change",
+        "SELECT webdesk_guard.fn_cancel_change_with_proof(:p, :a)",
+        {"p": proof, "a": approval_id},
     )
     conn.execute(
         text("SELECT webdesk_guard.fn_release_reservations(:u, 'approval_terminal', :a, NULL)"),
@@ -449,12 +371,13 @@ def cancel_change(conn: Connection, actor: uuid.UUID, approval_id: uuid.UUID) ->
 
 def withdraw(
     conn: Connection,
-    actor: uuid.UUID,
+    proof: uuid.UUID,
     user_id: uuid.UUID,
     reason: str,
     expected_revision: int,
 ) -> uuid.UUID:
     """Withdraw a never-approved pending account and release its contact (EVAL-F11d)."""
+    actor = actor_for(conn, proof, "contact.withdraw", user_id)
     _actor_can(conn, actor, Permission.USER_WITHDRAW, event="user.withdraw.denied")
     if not reason.strip():
         raise _refusal(conn, actor, "user.withdraw.denied", 422, "reason_required")
@@ -463,7 +386,7 @@ def withdraw(
             """SELECT status, revision,
                       EXISTS (SELECT 1 FROM user_contact_approvals a
                               WHERE a.user_id = u.user_id AND a.status = 'approved') AS approved
-               FROM users u WHERE user_id = :u FOR UPDATE"""
+               FROM users u WHERE user_id = :u"""
         ),
         {"u": user_id},
     ).one_or_none()
@@ -487,41 +410,19 @@ def withdraw(
             )
             withdrawal_id = uuid.UUID(
                 str(
-                    conn.execute(
-                        text(
-                            """INSERT INTO user_withdrawals (user_id, actor_user_id, reason,
-                                   expected_user_revision, audit_event_id)
-                               VALUES (:u, :actor, :reason, :rev, :event)
-                               RETURNING withdrawal_id"""
-                        ),
+                    consume_with(
+                        conn,
+                        "contact.withdraw",
+                        "SELECT webdesk_guard.fn_withdraw_with_proof(" ":p, :u, :r, :rev, :event)",
                         {
+                            "p": proof,
                             "u": user_id,
-                            "actor": actor,
-                            "reason": reason.strip(),
+                            "r": reason.strip(),
                             "rev": expected_revision,
                             "event": event_id,
                         },
-                    ).scalar_one()
+                    )
                 )
-            )
-            conn.execute(
-                text(
-                    """UPDATE user_contact_approvals SET status = 'cancelled'
-                       WHERE user_id = :u AND status = 'pending'"""
-                ),
-                {"u": user_id},
-            )
-            conn.execute(
-                text("SELECT webdesk_guard.fn_release_reservations(:u, 'withdrawal', NULL, NULL)"),
-                {"u": user_id},
-            )
-            conn.execute(
-                text(
-                    """UPDATE users
-                       SET status = 'disabled', normalized_email = NULL, revision = revision + 1
-                       WHERE user_id = :u"""
-                ),
-                {"u": user_id},
             )
     except SQLAlchemyError as exc:
         _audit_denial(conn, actor, "user.withdraw.denied", "database_refused")

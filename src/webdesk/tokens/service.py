@@ -87,7 +87,7 @@ def issue(
     user = conn.execute(
         text(
             """SELECT status, normalized_email, contact_revision
-               FROM users WHERE user_id = :u FOR UPDATE"""
+               FROM users WHERE user_id = :u"""
         ),
         {"u": user_id},
     ).one_or_none()

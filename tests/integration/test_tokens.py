@@ -17,6 +17,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.people import POLICY, administrators_for, user_in_state
+from tests.support.privileged import guard_insert
+from tests.support.proofs import prove
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import CaptureTransport, TransportUnavailable
 from webdesk.identity import contacts
@@ -203,9 +205,19 @@ def test_token_is_refused_after_a_contact_revision_change(conn: Connection) -> N
     )
     token = _token_from(transport)
     change = contacts.request_change(
-        conn, first, POLICY, user, f"{uuid.uuid4().hex}@wds-test.example"
+        conn,
+        prove(conn, first, "contact.request.change", user),
+        POLICY,
+        user,
+        f"{uuid.uuid4().hex}@wds-test.example",
     )
-    contacts.approve_change(conn, second, change, "proof-token", contact_box=BOX)
+    contacts.approve_change(
+        conn,
+        prove(conn, second, "contact.approve.change", change),
+        change,
+        "proof-token",
+        contact_box=BOX,
+    )
     with pytest.raises(TokenError):
         tokens.consume(conn, token=token, purpose="reset")
 
@@ -282,12 +294,12 @@ def test_contact_rate_limit_refuses_the_sixth_request_in_the_window(conn: Connec
 
 def test_reset_is_refused_while_a_contact_change_is_pending(conn: Connection) -> None:
     user = _user(conn, "active")
-    conn.execute(
-        text(
-            """INSERT INTO user_contact_approvals (user_id, request_type,
-                   requested_email_normalized, requested_by_user_id, status, expires_at)
-               VALUES (:u, 'change', :e, :u, 'pending', now() + interval '1 day')"""
-        ),
+    # A pending change row, created as the guard owner (the application role cannot insert approvals).
+    guard_insert(
+        conn,
+        """INSERT INTO user_contact_approvals (user_id, request_type,
+               requested_email_normalized, requested_by_user_id, status, expires_at)
+           VALUES (:u, 'change', :e, :u, 'pending', now() + interval '1 day')""",
         {"u": user, "e": f"{uuid.uuid4().hex}@wds-test.example"},
     )
     _as_app(conn)

@@ -91,3 +91,19 @@ def consume_with(conn: Connection, operation: str, call: str, params: dict[str, 
             raise
         audit_refusal(conn, operation, reason)
         raise ProofRefused(reason) from exc
+
+
+def consume_row(conn: Connection, operation: str, call: str, params: dict[str, object]) -> Any:
+    """Like ``consume_with``, but returns the whole first row.
+
+    Used by guards that return several columns.
+    """
+    try:
+        with conn.begin_nested():
+            return conn.execute(text(call), params).one()
+    except DBAPIError as exc:
+        reason = refusal_reason(exc)
+        if reason == "proof_refused":
+            raise
+        audit_refusal(conn, operation, reason)
+        raise ProofRefused(reason) from exc

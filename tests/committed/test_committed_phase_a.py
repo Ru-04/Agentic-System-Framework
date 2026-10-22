@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
-from sqlalchemy.exc import SQLAlchemyError
 
 from tests.support.people import committed_active_user
 from tests.support.proofs import prove
@@ -131,21 +130,27 @@ def test_approval_and_withdrawal_serialize_and_exactly_one_wins(
     creator, approver = admins
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        user, approval = contacts.request_create(conn, creator, POLICY, _email(), "Race")
+        user, approval = contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Race"
+        )
 
     # Connection X approves and holds the user row until it commits.
     holder = committed_engine.connect()
     holder_tx = holder.begin()
     holder.execute(text("SET LOCAL ROLE webdesk_app"))
-    contacts.approve_create(holder, approver, approval, "proof-race")
+    contacts.approve_create(
+        holder, prove(holder, approver, "contact.approve.create", approval), approval, "proof-race"
+    )
 
     # Connection Y tries to withdraw while X is open. It must wait, then give up.
     waiter = committed_engine.connect()
     waiter_tx = waiter.begin()
     waiter.execute(text("SET LOCAL ROLE webdesk_app"))
     waiter.execute(text("SET LOCAL lock_timeout = '300ms'"))
-    with pytest.raises(SQLAlchemyError):
-        contacts.withdraw(waiter, creator, user, "race", 1)
+    # The waiter blocks on the account lock, times out, and is refused (fail closed).
+    with pytest.raises(ContactServiceError) as waited:
+        contacts.withdraw(waiter, prove(waiter, creator, "contact.withdraw", user), user, "race", 1)
+    assert waited.value.reason == "not_eligible"
     waiter_tx.rollback()
     waiter.close()
 
@@ -156,7 +161,7 @@ def test_approval_and_withdrawal_serialize_and_exactly_one_wins(
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         with pytest.raises(ContactServiceError) as exc:
-            contacts.withdraw(conn, creator, user, "late", 2)
+            contacts.withdraw(conn, prove(conn, creator, "contact.withdraw", user), user, "late", 2)
     assert exc.value.reason in ("not_eligible", "revision_conflict")
 
 
@@ -165,7 +170,9 @@ def _change_request(engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]) -> uuid
     user = _active_user(engine, admins)
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        return contacts.request_change(conn, creator, POLICY, user, _email())
+        return contacts.request_change(
+            conn, prove(conn, creator, "contact.request.change", user), POLICY, user, _email()
+        )
 
 
 def test_a_failing_delivery_leaves_the_contact_change_effective(
@@ -175,7 +182,13 @@ def test_a_failing_delivery_leaves_the_contact_change_effective(
     change = _change_request(committed_engine, admins)
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        contacts.approve_change(conn, approver, change, "proof-outage", contact_box=BOX)
+        contacts.approve_change(
+            conn,
+            prove(conn, approver, "contact.approve.change", change),
+            change,
+            "proof-outage",
+            contact_box=BOX,
+        )
         user = conn.execute(
             text("SELECT user_id FROM user_contact_approvals WHERE approval_id = :a"),
             {"a": change},
@@ -217,7 +230,13 @@ def test_renewal_extends_the_lease_of_the_holder(
     change = _change_request(committed_engine, admins)
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        contacts.approve_change(conn, approver, change, "proof-renew", contact_box=BOX)
+        contacts.approve_change(
+            conn,
+            prove(conn, approver, "contact.approve.change", change),
+            change,
+            "proof-renew",
+            contact_box=BOX,
+        )
     worker = OutboxWorker(
         committed_engine,
         _Failing(),
@@ -264,7 +283,13 @@ def test_an_injected_failure_mid_approval_commits_nothing(
 
     def approve_as_application(conn: Connection) -> None:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        contacts.approve_change(conn, approver, change, "proof-injected", contact_box=BOX)
+        contacts.approve_change(
+            conn,
+            prove(conn, approver, "contact.approve.change", change),
+            change,
+            "proof-injected",
+            contact_box=BOX,
+        )
 
     with pytest.raises(RuntimeError):
         run_in_transaction(committed_engine, approve_as_application)

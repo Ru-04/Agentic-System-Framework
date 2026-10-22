@@ -20,6 +20,7 @@ from sqlalchemy.engine import Connection
 from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
+from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.identity import contacts
@@ -118,13 +119,20 @@ def test_create_then_peer_approval_makes_the_contact_pending_activation(
     creator, approver = admins
     _as_app(conn)
     email = _email()
-    user_id, approval_id = contacts.request_create(conn, creator, POLICY, email, "New staff")
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "New staff"
+    )
     status = conn.execute(
         text("SELECT status FROM users WHERE user_id = :u"), {"u": user_id}
     ).scalar_one()
     assert status == "pending_contact_approval"
 
-    contacts.approve_create(conn, approver, approval_id, "independent-check-42")
+    contacts.approve_create(
+        conn,
+        prove(conn, approver, "contact.approve.create", approval_id),
+        approval_id,
+        "independent-check-42",
+    )
 
     status = conn.execute(
         text("SELECT status FROM users WHERE user_id = :u"), {"u": user_id}
@@ -138,9 +146,13 @@ def test_creator_cannot_approve_their_own_request(
 ) -> None:
     creator, _ = admins
     _as_app(conn)
-    _, approval_id = contacts.request_create(conn, creator, POLICY, _email(), "Self")
+    _, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Self"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.approve_create(conn, creator, approval_id, "proof")
+        contacts.approve_create(
+            conn, prove(conn, creator, "contact.approve.create", approval_id), approval_id, "proof"
+        )
     assert (exc.value.status, exc.value.reason) == (403, "self_approval")
 
 
@@ -150,13 +162,18 @@ def test_non_administrator_cannot_request_or_approve(
     creator, approver = admins
     plain = _plain_user(conn)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_create(conn, plain, POLICY, _email(), "Nope")
+        contacts.request_create(
+            conn, prove(conn, plain, "contact.request.create"), POLICY, _email(), "Nope"
+        )
     assert exc.value.status == 403
     _as_app(conn)
-    _, approval_id = contacts.request_create(conn, creator, POLICY, _email(), "Pending")
-    with pytest.raises(ContactServiceError) as exc:
-        contacts.approve_create(conn, plain, approval_id, "proof")
-    assert exc.value.status == 403
+    _, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Pending"
+    )
+    # The authority issues no approval proof to a non-Administrator, and it audits the refusal.
+    with pytest.raises(ProofNotIssued):
+        prove(conn, plain, "contact.approve.create", approval_id)
+    assert _audit_count(conn, "authority.proof.refused") >= 1
     assert _audit_count(conn, "contact.create.denied") == 1
 
 
@@ -166,9 +183,13 @@ def test_duplicate_contact_is_refused_while_reserved(
     creator, _ = admins
     _as_app(conn)
     email = _email()
-    contacts.request_create(conn, creator, POLICY, email, "First")
+    contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "First"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_create(conn, creator, POLICY, email.upper(), "Second")
+        contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, email.upper(), "Second"
+        )
     assert (exc.value.status, exc.value.reason) == (409, "contact_reserved")
 
 
@@ -178,14 +199,20 @@ def test_rejection_keeps_the_account_pending_and_the_reservation(
     creator, approver = admins
     _as_app(conn)
     email = _email()
-    user_id, approval_id = contacts.request_create(conn, creator, POLICY, email, "Rejected")
-    contacts.reject_create(conn, approver, approval_id)
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Rejected"
+    )
+    contacts.reject_create(
+        conn, prove(conn, approver, "contact.reject.create", approval_id), approval_id
+    )
     status = conn.execute(
         text("SELECT status FROM users WHERE user_id = :u"), {"u": user_id}
     ).scalar_one()
     assert status == "pending_contact_approval"
     with pytest.raises(ContactServiceError) as exc:
-        contacts.request_create(conn, creator, POLICY, email, "Again")
+        contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Again"
+        )
     assert exc.value.reason == "contact_reserved"
 
 
@@ -194,7 +221,9 @@ def test_expired_approval_cannot_be_approved(
 ) -> None:
     creator, approver = admins
     _as_app(conn)
-    _, approval_id = contacts.request_create(conn, creator, POLICY, _email(), "Late")
+    _, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Late"
+    )
     _owner(conn)
     conn.execute(
         text(
@@ -205,7 +234,9 @@ def test_expired_approval_cannot_be_approved(
     )
     _as_app(conn)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.approve_create(conn, approver, approval_id, "proof")
+        contacts.approve_create(
+            conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof"
+        )
     assert exc.value.reason == "expired"
 
 
@@ -215,15 +246,27 @@ def test_contact_change_revokes_sessions_releases_old_contact_and_queues_notice(
     creator, approver = admins
     _as_app(conn)
     old_email = _email()
-    user_id, approval_id = contacts.request_create(conn, creator, POLICY, old_email, "Mover")
-    contacts.approve_create(conn, approver, approval_id, "proof-a")
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, old_email, "Mover"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof-a"
+    )
     _owner(conn)
     activate_user(conn, user_id)
     _as_app(conn)
 
     new_email = _email()
-    change = contacts.request_change(conn, creator, POLICY, user_id, new_email)
-    contacts.approve_change(conn, approver, change, "proof-b", contact_box=BOX)
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user_id), POLICY, user_id, new_email
+    )
+    contacts.approve_change(
+        conn,
+        prove(conn, approver, "contact.approve.change", change),
+        change,
+        "proof-b",
+        contact_box=BOX,
+    )
 
     row = conn.execute(
         text(
@@ -260,14 +303,26 @@ def test_requester_cannot_approve_their_own_contact_change(
 ) -> None:
     creator, approver = admins
     _as_app(conn)
-    user_id, approval_id = contacts.request_create(conn, creator, POLICY, _email(), "Chg")
-    contacts.approve_create(conn, approver, approval_id, "proof")
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Chg"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof"
+    )
     _owner(conn)
     activate_user(conn, user_id)
     _as_app(conn)
-    change = contacts.request_change(conn, creator, POLICY, user_id, _email())
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user_id), POLICY, user_id, _email()
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.approve_change(conn, creator, change, "proof", contact_box=BOX)
+        contacts.approve_change(
+            conn,
+            prove(conn, creator, "contact.approve.change", change),
+            change,
+            "proof",
+            contact_box=BOX,
+        )
     assert exc.value.reason == "self_approval"
 
 
@@ -277,8 +332,12 @@ def test_withdrawal_disables_the_pending_account_and_releases_the_contact(
     creator, _ = admins
     _as_app(conn)
     email = _email()
-    user_id, _ = contacts.request_create(conn, creator, POLICY, email, "Withdrawn")
-    withdrawal = contacts.withdraw(conn, creator, user_id, "duplicate request", 1)
+    user_id, _ = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Withdrawn"
+    )
+    withdrawal = contacts.withdraw(
+        conn, prove(conn, creator, "contact.withdraw", user_id), user_id, "duplicate request", 1
+    )
     assert withdrawal is not None
 
     row = conn.execute(
@@ -287,7 +346,9 @@ def test_withdrawal_disables_the_pending_account_and_releases_the_contact(
     assert row[0] == "disabled"
     assert row[1] is None
     # The released address can be requested again.
-    new_user, _ = contacts.request_create(conn, creator, POLICY, email, "Reissued")
+    new_user, _ = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, email, "Reissued"
+    )
     assert new_user != user_id
 
 
@@ -296,18 +357,32 @@ def test_withdrawal_refuses_revision_conflict_and_approved_history(
 ) -> None:
     creator, approver = admins
     _as_app(conn)
-    user_id, _ = contacts.request_create(conn, creator, POLICY, _email(), "Stale")
+    user_id, _ = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Stale"
+    )
     with pytest.raises(ContactServiceError) as exc:
-        contacts.withdraw(conn, creator, user_id, "wrong revision", 9)
+        contacts.withdraw(
+            conn, prove(conn, creator, "contact.withdraw", user_id), user_id, "wrong revision", 9
+        )
     assert (exc.value.status, exc.value.reason) == (409, "revision_conflict")
 
-    approved_user, approval = contacts.request_create(conn, creator, POLICY, _email(), "Approved")
-    contacts.approve_create(conn, approver, approval, "proof")
+    approved_user, approval = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Approved"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval), approval, "proof"
+    )
     current_revision = conn.execute(
         text("SELECT revision FROM users WHERE user_id = :u"), {"u": approved_user}
     ).scalar_one()
     with pytest.raises(ContactServiceError) as exc:
-        contacts.withdraw(conn, creator, approved_user, "too late", int(current_revision))
+        contacts.withdraw(
+            conn,
+            prove(conn, creator, "contact.withdraw", approved_user),
+            approved_user,
+            "too late",
+            int(current_revision),
+        )
     assert (exc.value.status, exc.value.reason) == (409, "not_eligible")
 
 
@@ -316,8 +391,12 @@ def test_non_administrator_cannot_withdraw(
 ) -> None:
     creator, _ = admins
     _as_app(conn)
-    user_id, _ = contacts.request_create(conn, creator, POLICY, _email(), "Keep")
+    user_id, _ = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Keep"
+    )
     plain = _plain_user(conn)
     with pytest.raises(ContactServiceError) as exc:
-        contacts.withdraw(conn, plain, user_id, "not mine", 1)
+        contacts.withdraw(
+            conn, prove(conn, plain, "contact.withdraw", user_id), user_id, "not mine", 1
+        )
     assert exc.value.status == 403

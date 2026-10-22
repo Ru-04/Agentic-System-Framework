@@ -77,8 +77,19 @@ def _scalar(conn: Connection, probe: Statement) -> Any:
 
 def _pending_approved(conn: Connection, world: dict[str, uuid.UUID]) -> uuid.UUID:
     """A pending account whose contact has been approved by the second Administrator."""
-    user, approval = contacts.request_create(conn, world["admin"], POLICY, _email(), "Hardening")
-    contacts.approve_create(conn, world["second"], approval, "proof-hardening")
+    user, approval = contacts.request_create(
+        conn,
+        remote_prove(conn, world["admin"], "contact.request.create"),
+        POLICY,
+        _email(),
+        "Hardening",
+    )
+    contacts.approve_create(
+        conn,
+        remote_prove(conn, world["second"], "contact.approve.create", approval),
+        approval,
+        "proof-hardening",
+    )
     return user
 
 
@@ -141,7 +152,13 @@ def test_n3_a_disabled_account_cannot_be_reactivated(
 ) -> None:
     user = new_pending_contact(conn, world["admin"])
     revision = _scalar(conn, ("SELECT revision FROM users WHERE user_id = :u", {"u": user}))
-    contacts.withdraw(conn, world["admin"], user, "duplicate request", int(revision))
+    contacts.withdraw(
+        conn,
+        remote_prove(conn, world["admin"], "contact.withdraw", user),
+        user,
+        "duplicate request",
+        int(revision),
+    )
     _refused(
         conn,
         [("UPDATE users SET status = 'active' WHERE user_id = :u", {"u": user})],
@@ -603,7 +620,13 @@ def test_n17_an_activated_user_cannot_be_withdrawn_or_disabled(
     revision = _scalar(conn, ("SELECT revision FROM users WHERE user_id = :u", {"u": staff}))
     # Service path: an activated account is not withdrawable.
     with pytest.raises(ContactServiceError):
-        contacts.withdraw(conn, world["admin"], staff, "hardening N17", int(revision))
+        contacts.withdraw(
+            conn,
+            remote_prove(conn, world["admin"], "contact.withdraw", staff),
+            staff,
+            "hardening N17",
+            int(revision),
+        )
     # Raw path: pending_contact_approval -> disabled is the only permitted disable transition.
     _refused(
         conn,
