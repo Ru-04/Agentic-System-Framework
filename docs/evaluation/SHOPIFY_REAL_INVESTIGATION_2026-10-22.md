@@ -42,23 +42,23 @@ Not retrieved, and not used as evidence: the Shopify plan pages above (HTTP 403 
 |---|---|---|---|---|---|---|---|---|---|---|
 | SH-CASE-01 | 1 | Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses. | 3 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-01 | 2 | Do not rely on IP-based province detection. Province must be captured explicitly. | 1 | 0 | 0 | incomplete | 0 | — | none | 3 |
-| SH-CASE-01 | 3 | Let a customer renew a rate plan from the order status page without creating an account. | 5 | 0 | 5 | incomplete | 7 | shopify-doc-09, shopify-doc-13 | none | 3 |
-| SH-CASE-01 | 4 | Create the customer account after purchase, reusing details already entered at checkout. | 5 | 0 | 5 | incomplete | 3 | shopify-doc-13 | none | 3 |
+| SH-CASE-01 | 3 | Let a customer renew a rate plan from the order status page without creating an account. | 20 | 0 | 0 | incomplete | 0 | — | none | 3 |
+| SH-CASE-01 | 4 | Create the customer account after purchase, reusing details already entered at checkout. | 20 | 0 | 3 | incomplete | 0 | — | none | 3 |
 | SH-CASE-01 | 5 | Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply. | 4 | 0 | 1 | incomplete | 0 | — | none | 3 |
 | SH-CASE-02 | 1 | Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact. | 3 | 0 | 0 | incomplete | 0 | — | none | 3 |
-| SH-CASE-02 | 2 | Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set. | 5 | 0 | 0 | incomplete | 0 | — | none | 3 |
+| SH-CASE-02 | 2 | Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set. | 6 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-02 | 3 | Provide search that handles natural-language phrasing, typos and autocomplete at catalogue scale. | 2 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-02 | 4 | Keep checkout behaviour unchanged. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
-| SH-CASE-03 | 1 | Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser. | 5 | 0 | 1 | incomplete | 0 | — | none | 3 |
+| SH-CASE-03 | 1 | Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser. | 10 | 0 | 1 | incomplete | 0 | — | none | 3 |
 | SH-CASE-03 | 2 | Coexistence of permanent partner stores and campaign-driven stores. | 2 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-03 | 3 | Role-based administration for partners and staff. | 1 | 0 | 0 | incomplete | 0 | — | none | 3 |
-| SH-CASE-03 | 4 | Synchronization of orders and product data with several external systems, some with custom endpoints. | 5 | 0 | 3 | incomplete | 3 | shopify-doc-08 | none | 3 |
-| SH-CASE-04 | 1 | Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout. | 5 | 0 | 0 | incomplete | 0 | — | none | 3 |
+| SH-CASE-03 | 4 | Synchronization of orders and product data with several external systems, some with custom endpoints. | 20 | 0 | 0 | incomplete | 0 | — | none | 3 |
+| SH-CASE-04 | 1 | Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout. | 20 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-04 | 2 | Blackout dates and holidays. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-04 | 3 | Staff dashboard with daily volume, forecasting and reporting. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-04 | 4 | Automated order preparation timelines. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
 
-**Summary:** 17 requirements retained. With a DIRECT passage: **0**. With a cited finding: **3**. With no finding: **14**. Passage grades across the run: {'direct': 0, 'partial': 15, 'irrelevant': 31}.
+**Summary:** 17 requirements retained. With a DIRECT passage: **0**. With a cited finding: **0**. With no finding: **17**. Passage grades across the run: {'direct': 0, 'partial': 5, 'irrelevant': 107}.
 
 ## 4. Relevance diagnosis (S2-D10)
 
@@ -79,18 +79,19 @@ A separate AI agent, not AS and not a human, labelled 55 blind requirement–pas
 
 | PARTIAL floor | Agreement with the 55 agent labels | Rule PARTIAL but label IRRELEVANT |
 |---|---|---|
-| 2 terms (before) | 29 of 55 | 26 |
-| 3 terms (adopted) | 46 of 55 | 5 |
-| 4 terms | 42 of 55 | 3 |
+| 2 terms, generic words excluded | 32 of 55 | 22 |
+| 3 terms, generic words excluded (current) | 44 of 55 | 2 |
 
-**Limits:** the floor was chosen after seeing these same 55 labels, so the 46 of 55 figure is tuned, not validated. A held-out set and human labels (AS or a reviewer) are needed before the rule can be called validated. The agent's labels are not human labels.
+The earlier table (29, 46, 42) was computed before platform-generic words were excluded (QA4-04) and is superseded.
+
+**Limits:** the floor was chosen after seeing these same 55 labels, so the 44 of 55 figure is tuned, not validated. A held-out set and human labels (AS or a reviewer) are needed before the rule can be called validated. The agent's labels are not human labels.
 
 ## 6. Gap register (computed from the run)
 
 | Requirements | Gap | What would close it |
 |---|---|---|
-| SH-CASE-01 #1, SH-CASE-01 #2, SH-CASE-01 #5, SH-CASE-02 #1, SH-CASE-02 #2, SH-CASE-02 #3, SH-CASE-02 #4, SH-CASE-03 #1, SH-CASE-03 #2, SH-CASE-03 #3, SH-CASE-04 #1, SH-CASE-04 #2, SH-CASE-04 #3, SH-CASE-04 #4 (14 requirements) | No passage passes the relevance rule, or none was retrieved | Additional official sources from approved domains (see the allowlist expansion record); a `help.shopify.com` ingestion method |
-| SH-CASE-01 #3, SH-CASE-01 #4, SH-CASE-03 #4 (3 requirements) | Partial evidence only | Direct documentation; human review of partial passages |
+| SH-CASE-01 #1, SH-CASE-01 #2, SH-CASE-01 #3, SH-CASE-01 #4, SH-CASE-01 #5, SH-CASE-02 #1, SH-CASE-02 #2, SH-CASE-02 #3, SH-CASE-02 #4, SH-CASE-03 #1, SH-CASE-03 #2, SH-CASE-03 #3, SH-CASE-03 #4, SH-CASE-04 #1, SH-CASE-04 #2, SH-CASE-04 #3, SH-CASE-04 #4 (17 requirements) | No passage passes the relevance rule, or none was retrieved | Additional official sources from approved domains (see the allowlist expansion record); a `help.shopify.com` ingestion method |
+|  (0 requirements) | Partial evidence only | Direct documentation; human review of partial passages |
 | All 17 | Plan tier and version applicability not verified | Plan documentation from `shopify.com` (blocked, HTTP 403); client clarification |
 | CRA-related requirements (SH-CASE-01 #1, #5) | Tax and address rules need professional review; the CRA pages are regulatory background, not legal or tax advice | Review by a qualified professional |
 

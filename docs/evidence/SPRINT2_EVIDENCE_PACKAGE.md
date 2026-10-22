@@ -152,3 +152,7 @@ Earlier runs on the same branch, for reference: `45df73c` run 39804483161 (succe
 - Tests: unit suite passing (see the report for the count after this change).
 - CI: run `39806794237` for `99c4325` succeeded (S2-D12). The commit that follows this update is verified separately.
 - Sign-off: **AS's review and sign-off are still pending.** None is recorded.
+
+## Superseded by QA4 response (later on 22 October 2026)
+
+The figures in the sections above that give 15 PARTIAL, 3 requirements with findings, 13 findings, 46 of 55 agreement, and 369 or 370 tests are **superseded**. Current figures and dispositions: `docs/evidence/SPRINT2_QA4_RESPONSE.md`. Current: 389 unit tests passing; 0 DIRECT, 5 PARTIAL, 107 IRRELEVANT; 0 requirements with a cited finding.
