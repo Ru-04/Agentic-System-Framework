@@ -135,6 +135,11 @@ _STOPWORDS: Final[frozenset[str]] = frozenset(
 )
 
 
+def content_terms(text: str) -> set[str]:
+    """Distinct lowercase words of three or more characters, minus common stopwords."""
+    return _terms(text)
+
+
 def _terms(text: str) -> set[str]:
     return {
         match.group(0) for match in _TERM.finditer(text.lower()) if match.group(0) not in _STOPWORDS

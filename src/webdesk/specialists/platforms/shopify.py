@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from typing import Any, Final
 
 from webdesk.evidence.citations import Citation, Claim, check_claim
+from webdesk.evidence.relevance import Relevance, judge_relevance
 from webdesk.evidence.retrieval import (
     Passage,
     RetrievalQuery,
@@ -191,11 +192,21 @@ class ShopifySpecialist:
         coverage: set[OptionClass] = set()
         seen: set[tuple[str, str, str, str]] = set()
         truncated = False
+        irrelevant = 0
+        direct_seen = False
         for passage in passages:
             topics = _topics(passage.text)
             options = classify_options(passage.text)
             if not topics and not options:
                 continue
+            # Relevance to the task is graded before any statement is made. Irrelevant passages
+            # never become findings or coverage.
+            grade = judge_relevance(request.task, passage.text)
+            if grade is Relevance.IRRELEVANT:
+                irrelevant += 1
+                continue
+            if grade is Relevance.DIRECT:
+                direct_seen = True
             source = passage.source
             # Identical passages from the same record count once. The key is the record, not the
             # bare source_id, so a second record cannot inherit another record's verdict.
@@ -205,9 +216,18 @@ class ShopifySpecialist:
             seen.add(key)
             citation = Citation.from_passage(passage)
             statements: list[tuple[str, str | OptionClass]] = [
-                (f"Source addresses {topic}; see the cited passage.", topic) for topic in topics
+                (
+                    f"Source addresses {topic} ({grade.value} evidence for the task); "
+                    "see the cited passage.",
+                    topic,
+                )
+                for topic in topics
             ] + [
-                (f"Source describes {OPTION_LABELS[option]}; see the cited passage.", option)
+                (
+                    f"Source describes {OPTION_LABELS[option]} ({grade.value} evidence for the "
+                    "task); see the cited passage.",
+                    option,
+                )
                 for option in sorted(options, key=str)
             ]
             for statement, _key in statements:
@@ -215,7 +235,11 @@ class ShopifySpecialist:
                     # Coverage is still tracked after the cap, so truncation does not make a class
                     # look missing. The truncation itself is reported as an unknown.
                     truncated = True
-                    if isinstance(_key, OptionClass) and is_fresh(passage, now, self._max_age):
+                    if (
+                        isinstance(_key, OptionClass)
+                        and grade is Relevance.DIRECT
+                        and is_fresh(passage, now, self._max_age)
+                    ):
                         coverage.add(_key)
                     continue
                 claim = Claim(statement, (citation,))
@@ -234,7 +258,7 @@ class ShopifySpecialist:
                         f"{source.source_id}: plan or version applicability is not established "
                         "by the evidence"
                     )
-                if isinstance(_key, OptionClass) and not stale:
+                if isinstance(_key, OptionClass) and not stale and grade is Relevance.DIRECT:
                     coverage.add(_key)
                 findings.append(
                     {
@@ -249,6 +273,14 @@ class ShopifySpecialist:
                         ],
                     }
                 )
+        if irrelevant:
+            unknowns.append(
+                f"{irrelevant} passage(s) were judged irrelevant to the task and excluded"
+            )
+        if findings and not direct_seen:
+            unknowns.append(
+                "no direct evidence for the task: findings rest on partial evidence only"
+            )
         if truncated:
             unknowns.append(
                 f"findings were capped at {MAX_FINDINGS}; some passages were not listed"
