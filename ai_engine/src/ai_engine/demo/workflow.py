@@ -180,6 +180,8 @@ def _record_selection(
         raise SelectionError("an operator label is required when decisions are recorded")
     return build_operator_selection(
         operator_label=operator_label,
+        actor_id=operator_label,
+        decided_at=DEMO_TIMESTAMP,
         analysis=analysis,
         confirm=confirm,
         reject=reject,
@@ -208,7 +210,8 @@ def run_investigation(
 ) -> DemonstrationReport:
     assigned, id_records = assign_mock_ids(analysis.requirements)
     if selection is not None:
-        verify_selection(selection, analysis)
+        # Only the checked instance is used after verification; the caller's object is not (F1).
+        selection = verify_selection(selection, analysis)
     confirmed = set(selection.confirmed_keys()) if selection is not None else set()
     candidates = [r for r in assigned if r.proposal_key in confirmed]
     unresolved: list[UnresolvedItem] = []
@@ -253,6 +256,9 @@ def run_investigation(
             registry=registry,
             clock=lambda: DEMO_TIMESTAMP,
         )
+        if selection is not None:
+            # Re-check after the agent ran: the decision must still match the analysis (AI-5.1 F2).
+            selection = verify_selection(selection, analysis)
         routing = build_routing_record(
             run_id=None,
             requirement_ids=list(task.requirement_ids),
@@ -272,7 +278,7 @@ def run_investigation(
     return DemonstrationReport(
         demo_id=DEMO_ID,
         fixture_id=fixture_id,
-        status=_status(task, execution, unresolved),
+        status=_status(task, execution, output, unresolved),
         selection_basis=SELECTION_BASIS,
         operator_selection=selection,
         boundary=boundary,
@@ -292,11 +298,15 @@ def run_investigation(
 def _status(
     task: SpecialistTask | None,
     execution: AgentExecutionResult | None,
+    output: SpecialistInvestigationResult | None,
     unresolved: list[UnresolvedItem],
 ) -> DemoStatus:
     if task is None or execution is None:
         return "not_executed"
     if execution.status is not AgentExecutionStatus.SUCCEEDED:
+        return "specialist_not_completed"
+    # An envelope may be successful while the specialist found no evidence source (F5).
+    if output is not None and output.status is SpecialistOutputStatus.EVIDENCE_UNAVAILABLE:
         return "specialist_not_completed"
     return "completed_with_unresolved_items" if unresolved else "completed"
 
@@ -475,6 +485,14 @@ def _unresolved(
             )
         )
     for statement in analysis.statements:
+        if statement.kind is StatementKind.UNCLASSIFIED:
+            items.append(
+                UnresolvedItem(
+                    kind=UnresolvedKind.UNCLASSIFIED_SOURCE_TEXT,
+                    reference=_analysis_ref(statement.proposal_key),
+                    text="Source sentence was not classified and needs human review.",
+                )
+            )
         if statement.kind is StatementKind.UNTRUSTED_INSTRUCTION:
             items.append(
                 UnresolvedItem(

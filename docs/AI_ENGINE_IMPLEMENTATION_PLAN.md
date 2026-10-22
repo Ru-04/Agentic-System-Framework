@@ -362,3 +362,25 @@ confirmation, and the stance-tag test became a conflict-group test. Each is docu
 
 Ready for AI-5 review as an isolated prototype. Not ready for Foundation integration until the approvals
 listed in `docs/AI_ENGINE_ISSUE_RESOLUTION.md` section 7 are given. AI-5 has not been started.
+
+## 12. AI-5: independent review (review only)
+
+The independent review of commit `c159fac` is in `docs/AI_ENGINE_INDEPENDENT_REVIEW.md`. It covers the
+compatibility matrix, the governance decision register, verification of each AI-4.1 resolution,
+security and isolation findings, the prioritised backlog, Foundation integration entry criteria, and
+the LLM and RAG readiness assessment.
+
+Verdict: continued isolated development is CONDITIONALLY READY after the P0 backlog. Foundation
+integration is NOT READY. Production deployment, including any LLM or RAG use, is NOT READY.
+
+No fixes were implemented. Nothing was committed, pushed or merged.
+
+## 13. AI-5.1: security remediation and contract preparation (uncommitted)
+
+The P0 defects from the AI-5 audit are fixed, and the independent re-review findings F1 to F10 are
+addressed or recorded as residual. Full details, contract changes, the seven-specialist alignment
+proposals, shared dependencies, work packages, and the Foundation interface proposal are in
+`docs/AI_ENGINE_AI51_REMEDIATION.md`.
+
+Verification: 375 tests pass; ruff and strict mypy are clean. Nothing was committed, pushed or merged.
+The authoritative v2.0 scope document was not found in the repository.

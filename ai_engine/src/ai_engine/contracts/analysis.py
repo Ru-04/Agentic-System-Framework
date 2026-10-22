@@ -35,6 +35,8 @@ class StatementKind(StrEnum):
     CONSTRAINT = "constraint"
     AMBIGUITY = "ambiguity"
     UNTRUSTED_INSTRUCTION = "untrusted_instruction"
+    # Added in AI-5.1: sentences the rules did not classify are recorded, never silently dropped.
+    UNCLASSIFIED = "unclassified"
 
 
 class ProposedStatement(ContractModel):

@@ -57,11 +57,20 @@ def validate_specialist_result(
 
     for claim in result.claims:
         for subject in claim.subject_refs:
-            if (
-                subject.subject_type.value == "requirement"
-                and subject.subject_id not in task_requirements
-            ):
-                errors.append(f"claim subject {subject.subject_id} is outside the task")
+            # Subjects must be task requirements or solutions proposed in this result (F4).
+            if subject.subject_type.value == "requirement":
+                if subject.subject_id not in task_requirements:
+                    errors.append(f"claim subject {subject.subject_id} is outside the task")
+            elif subject.subject_type.value == "candidate_solution":
+                proposed = {s.proposal_key for s in result.candidate_solutions}
+                if subject.subject_id not in proposed:
+                    errors.append(
+                        f"claim subject {subject.subject_id} is not a solution in this result"
+                    )
+            else:
+                errors.append(
+                    f"claim subject type {subject.subject_type.value} is not permitted in AI output"
+                )
         if claim.platform_context is not None and (
             claim.platform_context.platform_id != task.platform_context.platform_id
         ):

@@ -44,7 +44,8 @@ def test_overlong_goal_sentence_is_reported_not_crashing() -> None:
         make_project(), [make_segment(text="Our goal is " + "to win " * 200 + ".")]
     )
     assert result.status is AnalysisStatus.PARTIAL
-    assert result.statements == []
+    # AI-5.1 F7: the over-length sentence is reported AND recorded, never dropped.
+    assert [s.kind for s in result.statements] == [StatementKind.UNCLASSIFIED]
     assert "too long" in result.validation_errors[0]
 
 

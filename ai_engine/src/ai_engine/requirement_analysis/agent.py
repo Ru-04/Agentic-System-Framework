@@ -142,9 +142,20 @@ def split_sentences(segment: SourceSegment) -> list[_Sentence]:
     sentences: list[_Sentence] = []
     for match in _SENTENCE_RE.finditer(segment.text):
         text = match.group().strip()
-        if len(text) >= 8 and any(char.isalpha() for char in text):
+        # Keep every non-empty fragment: short or letterless text is recorded, never filtered (F6).
+        if text:
             sentences.append(_Sentence(segment=segment, text=text))
     return sentences
+
+
+def _unclassified_statement(sentence: _Sentence, keys: _KeySequence) -> ProposedStatement:
+    """A recorded, unclassified sentence. The full text lives in the referenced source segment."""
+    return ProposedStatement(
+        proposal_key=keys.next("STMT"),
+        kind=StatementKind.UNCLASSIFIED,
+        statement="Source sentence not classified; the full text is in the referenced segment.",
+        source_refs=[_reference(sentence)],
+    )
 
 
 def _reference(
@@ -232,6 +243,7 @@ class RequirementAnalysisAgent:
                         errors.append(
                             f"a sentence in {segment.segment_id} is too long and was not analysed"
                         )
+                        statements.append(_unclassified_statement(sentence, keys))
                         continue
                     candidates.append(self._classify(sentence, keys.next("CAND")))
                 elif _GOAL_RE.search(text) or _CONSTRAINT_RE.search(text):
@@ -239,6 +251,7 @@ class RequirementAnalysisAgent:
                         errors.append(
                             f"a sentence in {segment.segment_id} is too long and was not recorded"
                         )
+                        statements.append(_unclassified_statement(sentence, keys))
                         continue
                     kind = StatementKind.GOAL if _GOAL_RE.search(text) else StatementKind.CONSTRAINT
                     statements.append(
@@ -249,6 +262,9 @@ class RequirementAnalysisAgent:
                             source_refs=[_reference(sentence)],
                         )
                     )
+                else:
+                    # Nothing matched. Record the sentence so no client content is silently dropped.
+                    statements.append(_unclassified_statement(sentence, keys))
 
         assumptions: list[AssumptionProposal] = []
         conflicts: list[ConflictProposal] = []

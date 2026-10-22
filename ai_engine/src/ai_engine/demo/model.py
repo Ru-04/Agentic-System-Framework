@@ -57,6 +57,7 @@ class UnresolvedKind(StrEnum):
     SCOPE_GAP = "scope_gap"
     ANALYSIS_GAP = "analysis_gap"
     FLAGGED_SOURCE_TEXT = "flagged_source_text"
+    UNCLASSIFIED_SOURCE_TEXT = "unclassified_source_text"
 
 
 class BoundaryRecord(ContractModel):

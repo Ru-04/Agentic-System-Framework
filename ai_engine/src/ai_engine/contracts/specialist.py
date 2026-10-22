@@ -20,8 +20,10 @@ from ai_engine.contracts.common import (
     EvidenceId,
     EvidenceStatus,
     FeasibilityStatus,
+    Materiality,
     ProjectId,
     ProposalKey,
+    QuestionStatus,
     RequirementId,
     RoutingOutcome,
     ServicePatternId,
@@ -197,6 +199,29 @@ class SpecialistInvestigationResult(ContractModel):
     catalog_version: VersionStr
     review_state: str = AI_REVIEW_STATE
 
+    def _check_ai_output_rules(self) -> None:
+        """AI output may not assert approved or authoritative state (AI-5.1 C-1, C-2, C-3).
+
+        Evidence verification, materiality and question waivers or answers belong to authorised
+        humans or verification actors, not to the model.
+        """
+        verified = {EvidenceStatus.VERIFIED, EvidenceStatus.PARTIALLY_VERIFIED}
+        if any(c.evidence_status in verified for c in self.claims):
+            raise ValueError("AI output cannot assert verified or partially verified claim status")
+        if any(c.materiality is not Materiality.UNASSESSED for c in self.claims):
+            raise ValueError("AI output cannot set claim materiality; that is a reviewer decision")
+        if any(s.evidence_status in verified for s in self.candidate_solutions):
+            raise ValueError("AI output cannot assert verified candidate solution status")
+        if any(e.evidence_status in verified for e in self.evidence):
+            raise ValueError("AI output cannot carry verified evidence records")
+        if any(r.evidence_status in verified for r in self.risks):
+            raise ValueError("AI output cannot assert verified risk status")
+        for question in self.clarification_questions:
+            if question.question_id is not None:
+                raise ValueError("AI output cannot carry Foundation question identifiers")
+            if question.status is not QuestionStatus.OPEN:
+                raise ValueError("AI output questions must be open; answers and waivers are human")
+
     def _check_assumptions_and_conflicts(self) -> None:
         """Explicit cross-references: conflicts bind claims, claims bind conflicts, all in scope."""
         assumption_keys = [a.proposal_key for a in self.assumptions]
@@ -233,6 +258,7 @@ class SpecialistInvestigationResult(ContractModel):
         if self.review_state != AI_REVIEW_STATE:
             raise ValueError("specialist outputs are always pending human review")
         self._check_assumptions_and_conflicts()
+        self._check_ai_output_rules()
         if any(c.claim_id is not None for c in self.claims) or any(
             s.solution_id is not None for s in self.candidate_solutions
         ):

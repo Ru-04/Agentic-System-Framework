@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ from ai_engine.selection.operator import (
 )
 
 PROJECT_ID = "PRJ-SYN-0001"
+NOW_T = datetime(2026, 10, 20, 12, tzinfo=UTC)
 
 
 @pytest.fixture(scope="module")
@@ -41,6 +43,8 @@ def decide(
     analysis: Any, confirm: list[str] | None = None, reject: list[str] | None = None
 ) -> OperatorSelection:
     return build_operator_selection(
+        actor_id="actor-1",
+        decided_at=NOW_T,
         operator_label="test-operator",
         analysis=analysis,
         confirm=confirm or [],
@@ -54,7 +58,7 @@ def decide(
 
 def test_nothing_is_selected_without_an_explicit_decision(analysis) -> None:  # type: ignore[no-untyped-def]
     selection = decide(analysis)
-    assert selection.decisions == []
+    assert selection.decisions == ()
     assert selection.confirmed_keys() == []
 
 
@@ -90,6 +94,8 @@ def test_same_proposal_cannot_be_confirmed_and_rejected(analysis) -> None:  # ty
 def test_decisions_require_an_operator_label(analysis) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(SelectionError, match="operator label"):
         build_operator_selection(
+            actor_id="actor-1",
+            decided_at=NOW_T,
             operator_label="   ",
             analysis=analysis,
             confirm=["CAND-005"],
@@ -100,6 +106,8 @@ def test_decisions_require_an_operator_label(analysis) -> None:  # type: ignore[
 def test_selection_cannot_declare_a_different_authority() -> None:
     with pytest.raises(ValidationError):
         OperatorSelection(
+            actor_id="actor-1",
+            decided_at=NOW_T,
             operator_label="op",
             project_id=PROJECT_ID,
             analysis_fingerprint="a" * 64,
@@ -111,6 +119,8 @@ def test_selection_rejects_duplicate_decisions_at_contract_level(analysis) -> No
     selection = decide(analysis, confirm=["CAND-005"])
     with pytest.raises(ValidationError):
         OperatorSelection(
+            actor_id="actor-1",
+            decided_at=NOW_T,
             operator_label="op",
             project_id=PROJECT_ID,
             analysis_fingerprint=selection.analysis_fingerprint,

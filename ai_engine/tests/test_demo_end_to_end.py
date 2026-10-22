@@ -379,7 +379,8 @@ def test_unresolved_conflict_blocks_the_requirement_status(demo) -> None:  # typ
 
 def test_missing_evidence_is_a_reported_gap_not_silence() -> None:
     report = run_demo(collections=[], confirm=CONFIRM, operator_label=OPERATOR)
-    assert report.status == "completed_with_unresolved_items"
+    # AI-5.1 F5: no evidence source is never reported as a completed investigation.
+    assert report.status == "specialist_not_completed"
     assert (
         report.execution is not None and report.execution.status is AgentExecutionStatus.SUCCEEDED
     )
@@ -435,7 +436,8 @@ def test_demonstration_is_deterministic() -> None:
 def test_tracked_gaps_record_amendments_and_open_items(demo) -> None:  # type: ignore[no-untyped-def]
     statuses = {g.gap_id: g.status for g in demo.tracked_gaps}
     assert statuses["A-1"] == statuses["A-2"] == statuses["A-3"] == "addressed_pending_amendment"
-    assert statuses["S6"] == "closed" and statuses["D-OP"] == "closed"
+    assert statuses["S6"] == "closed"
+    assert statuses["D-OP"] == "open"
     for open_id in ("S3", "S4", "S5", "A-4", "C-05", "D-12", "D-PERS", "EK-1"):
         assert statuses[open_id] == "open"
 

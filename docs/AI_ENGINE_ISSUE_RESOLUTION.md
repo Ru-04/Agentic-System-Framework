@@ -9,7 +9,7 @@
 ## 1. Status definitions
 
 - **Resolved:** the issue is fixed in code, covered by tests, and needs no further approval to stay closed. Some resolved items still carry a *remaining approval* note.
-- **Blocked:** the issue depends on a conflict inside the approved specifications. It is recorded as a specification amendment required before integration.
+- **Blocked:** the issue depends on a conflict inside the specifications. The specifications are drafts (labelled NOT implementation-approved), so the conflict is a specification defect to be resolved by WDS. It is recorded as a specification amendment required before integration.
 - **Deferred:** the issue is real but belongs to production functionality, a governance decision or Foundation integration. It is intentionally not implemented in this prototype.
 
 ## 2. Compatibility safeguards applied (step 3)
@@ -122,7 +122,7 @@ Changed on purpose (behaviour change, not a regression):
 
 **Resolved:** AI-1-R1, R2, R3 (AI-local), R4, R5a, R9 (prototype), R11a (pending amendment), R12; AI-2-G1, G2, G3, G4, G5, G6; S1, S2 (pending amendment), S6; AI-4.1-2, binding, multi, and the AI-4 omission and rejection handling; FC-1 (pending amendment), FC-2 (pending amendment), FC-4, FC-5.
 
-**Blocked by an approved-specification conflict:** AI-1-R5b and FC-3, the blocked versus needs-clarification distinction (amendment A-4). Implemented per GOVERNANCE 6; the spec contradiction must be ruled on before integration.
+**Blocked by an approved-specification conflict:** AI-1-R5b and FC-3, the blocked versus needs-clarification distinction (amendment A-4). Implemented as a prototype draft choice per GOVERNANCE 6, which requires the contradiction to be logged and resolved before implementation. The specifications are not approved, so this is not approved behaviour. Superseded wording: see AI-5.1 in docs/AI_ENGINE_AI51_REMEDIATION.md.
 
 **Deferred with justification:**
 - AI-1-R6, R7, R8, R10a, R10b, R11b, R11c: production schema alignment, Foundation-owned fields, undecided criticality predicates, unregistered routing metadata, and a governance decision on specialist-recommendation origins.

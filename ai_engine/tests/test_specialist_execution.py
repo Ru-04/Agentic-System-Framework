@@ -124,7 +124,7 @@ def test_verified_claim_on_mock_evidence_fails_validation() -> None:
     result = execute("verified_claim")
     assert result.status is AgentExecutionStatus.FAILED_VALIDATION
     assert result.output is None
-    assert any("is not verified" in error for error in result.validation_errors)
+    assert any("verified" in error for error in result.validation_errors)
 
 
 def test_requirement_outside_task_fails_validation() -> None:

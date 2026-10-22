@@ -101,7 +101,8 @@ TRACKED_GAPS: tuple[TrackedGap, ...] = (
     ),
     TrackedGap(
         gap_id="G9",
-        title="Proposed ID prefixes (SPT, EXEC, CAND, QPROP, APROP, SASM, STMT, CONF, RSKP) open",
+        title="Proposed ID prefixes (SPT, EXEC, CAND, CLM, SOLP, QPROP, APROP, SASM, STMT, CONF,"
+        " RSKP) open",
         status="open",
         source="AI-1 plan 4",
     ),
@@ -125,8 +126,8 @@ TRACKED_GAPS: tuple[TrackedGap, ...] = (
     ),
     TrackedGap(
         gap_id="D-OP",
-        title="Operator confirmation is explicit and recorded; still needs WDS policy approval",
-        status="closed",
+        title="Operator confirmation is attributed; WDS policy approval still required",
+        status="open",
         source="AI-4 selection; AI-4.1 item 2",
     ),
     TrackedGap(
