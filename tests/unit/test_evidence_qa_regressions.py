@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST
 from webdesk.evidence.http_vendor import fetch_vendor_document
 from webdesk.evidence.retrieval import InMemoryRetriever, RetrievalError, RetrievalQuery
@@ -57,7 +58,7 @@ def _source(**overrides: Any) -> SourceRecord:
         "version": "fixture",
     }
     payload.update(overrides)
-    return SourceRecord(**payload)
+    return fixture_source(**payload)
 
 
 def _request(task: str = "storefront api headless", workspace: str = "ws-a") -> dict[str, Any]:

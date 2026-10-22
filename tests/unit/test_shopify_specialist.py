@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.retrieval import InMemoryRetriever, RetrievalError, RetrievalQuery
 from webdesk.evidence.sources import SourceKind, SourceRecord
 from webdesk.specialists.catalog import SpecialistId
@@ -37,7 +38,7 @@ def _source(source_id: str = "fx-1", **overrides: Any) -> SourceRecord:
         "version": "fixture",
     }
     payload.update(overrides)
-    return SourceRecord(**payload)
+    return fixture_source(**payload)
 
 
 def _request(**overrides: Any) -> dict[str, Any]:

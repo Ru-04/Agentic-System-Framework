@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST, VendorAllowlist
 from webdesk.evidence.citations import (
     Citation,
@@ -50,7 +51,7 @@ def _source(**overrides: Any) -> SourceRecord:
         "version": "2026-10",
     }
     payload.update(overrides)
-    return SourceRecord(**payload)
+    return fixture_source(**payload)
 
 
 def _query(text: str = "storefront api token", workspace: str = "ws-a") -> RetrievalQuery:
@@ -62,13 +63,31 @@ def _query(text: str = "storefront api token", workspace: str = "ws-a") -> Retri
 
 @pytest.mark.parametrize("field", ["source_id", "workspace_id", "origin", "title"])
 def test_blank_provenance_fields_are_refused(field: str) -> None:
+    payload = {
+        "source_id": "s",
+        "kind": SourceKind.INTERNAL_RAG,
+        "workspace_id": "ws-a",
+        "origin": "internal:rag/doc-1",
+        "title": "t",
+        "text": "x",
+        "retrieved_at": NOW,
+    }
+    payload[field] = "   "
     with pytest.raises(ValueError):
-        _source(**{field: "   "})
+        SourceRecord(**payload)
 
 
 def test_naive_timestamp_is_refused() -> None:
     with pytest.raises(ValueError):
-        _source(retrieved_at=datetime(2026, 10, 22, 12, 0))
+        SourceRecord(
+            source_id="s",
+            kind=SourceKind.INTERNAL_RAG,
+            workspace_id="ws-a",
+            origin="internal:rag/doc-1",
+            title="t",
+            text="x",
+            retrieved_at=datetime(2026, 10, 22, 12, 0),
+        )
 
 
 def test_content_hash_is_stable_and_changes_with_text() -> None:
