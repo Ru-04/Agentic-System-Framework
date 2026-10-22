@@ -83,6 +83,10 @@ def _topics(text: str) -> tuple[str, ...]:
     )
 
 
+def is_fresh(passage: Passage, now: datetime, max_age: timedelta) -> bool:
+    return assess_freshness(passage.source, now, max_age) is Freshness.FRESH
+
+
 def _mentions_plan_or_version(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in PLAN_OR_VERSION_TERMS)
@@ -134,7 +138,12 @@ class ShopifySpecialist:
                     request,
                     status="failed",
                     findings=[],
-                    unknowns=["evidence retrieval failed; nothing was assessed"],
+                    unknowns=[
+                        "evidence retrieval failed; nothing was assessed",
+                        PLAN_CLARIFICATION,
+                        FEASIBILITY_UNKNOWN,
+                        LIMITS,
+                    ],
                 ),
                 frozenset(),
             )
@@ -180,12 +189,20 @@ class ShopifySpecialist:
         now = self._clock()
         findings: list[dict[str, Any]] = []
         coverage: set[OptionClass] = set()
+        seen: set[tuple[str, str, str, str]] = set()
+        truncated = False
         for passage in passages:
             topics = _topics(passage.text)
             options = classify_options(passage.text)
             if not topics and not options:
                 continue
             source = passage.source
+            # Identical passages from the same record count once. The key is the record, not the
+            # bare source_id, so a second record cannot inherit another record's verdict.
+            key = (source.workspace_id, source.source_id, source.content_sha256, passage.text)
+            if key in seen:
+                continue
+            seen.add(key)
             citation = Citation.from_passage(passage)
             statements: list[tuple[str, str | OptionClass]] = [
                 (f"Source addresses {topic}; see the cited passage.", topic) for topic in topics
@@ -195,7 +212,12 @@ class ShopifySpecialist:
             ]
             for statement, _key in statements:
                 if len(findings) >= MAX_FINDINGS:
-                    return findings, coverage
+                    # Coverage is still tracked after the cap, so truncation does not make a class
+                    # look missing. The truncation itself is reported as an unknown.
+                    truncated = True
+                    if isinstance(_key, OptionClass) and is_fresh(passage, now, self._max_age):
+                        coverage.add(_key)
+                    continue
                 claim = Claim(statement, (citation,))
                 if check_claim(claim, sources, request.workspace_id) is not None:
                     unknowns.append(f"citation in {source.source_id} did not verify")
@@ -227,6 +249,10 @@ class ShopifySpecialist:
                         ],
                     }
                 )
+        if truncated:
+            unknowns.append(
+                f"findings were capped at {MAX_FINDINGS}; some passages were not listed"
+            )
         return findings, coverage
 
     def _output(

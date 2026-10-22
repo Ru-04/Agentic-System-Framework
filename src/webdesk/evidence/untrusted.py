@@ -78,12 +78,15 @@ def split_by_trust(
 ) -> tuple[tuple[Passage, ...], tuple[Passage, ...]]:
     usable: list[Passage] = []
     quarantined: list[Passage] = []
-    flagged_sources: dict[str, bool] = {}
+    # Keyed by record identity (workspace, id, content hash), so one record's verdict never
+    # decides for a different record that happens to share its source_id.
+    flagged_sources: dict[tuple[str, str, str], bool] = {}
     for passage in passages:
         source = passage.source
-        if source.source_id not in flagged_sources:
-            flagged_sources[source.source_id] = _source_is_flagged(source)
-        if flagged_sources[source.source_id] or flag_instruction_like(passage.text):
+        record_key = (source.workspace_id, source.source_id, source.content_sha256)
+        if record_key not in flagged_sources:
+            flagged_sources[record_key] = _source_is_flagged(source)
+        if flagged_sources[record_key] or flag_instruction_like(passage.text):
             quarantined.append(passage)
         else:
             usable.append(passage)

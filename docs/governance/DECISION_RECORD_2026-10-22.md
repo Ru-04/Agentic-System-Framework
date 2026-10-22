@@ -55,7 +55,7 @@ Recorded from the decision-maker's written answers. These are decisions made by 
 | 1 | Shopify vendor allowlist | Lead architect to suggest one | Working allowlist set to `shopify.dev` and `help.shopify.com`, exact hosts, HTTPS, default port. Recorded as a working selection. Not a formal approval of official-domain status under D08 until the decision-maker confirms it. |
 | 2 | Where origin is enforced for evidence sources (QA2-07) | Suggest, then get approval before implementing | Proposal written: `docs/governance/PROPOSALS_PENDING_APPROVAL_QA2.md`. No code change until approved. |
 | 3 | Proxy policy for vendor fetches (QA2-13) | Suggest, then get approval before implementing | Same proposal file. No code change until approved. |
-| 4 | Live retrieval window and real Shopify acceptance | Approved (live retrieval window) | One bounded live fetch of an allowlisted Shopify page was made on 22 Oct 2026. Metadata only is recorded in `docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`. Acceptance is NOT granted by this approval. |
+| 4 | Live retrieval window and real Shopify acceptance | Approved as written: "live retrieval window". The approval text does not state a number of fetches. | On 22 Oct 2026: one fetch (`docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`), then 16 allowlisted fetches for the Sprint 2 run (`docs/evaluation/SHOPIFY_REAL_INVESTIGATION_2026-10-22.md`). **Scope to be confirmed by the decision-maker.** Acceptance is NOT granted by this approval. |
 | 5 | Shopify real cases | Find them from WDS case studies and portfolio | Four sanitized briefs in `docs/evaluation/SHOPIFY_CASE_BRIEFS_SANITIZED.md`. Client-approval for use of the scenarios is not yet recorded. |
 | 6 | Human QA signatory for Sprint 2 | "AS" | Designated signatory: **AS**. No sign-off has been recorded or simulated. The signature and approval reference are to be supplied by AS. |
 
@@ -65,3 +65,7 @@ Recorded from the decision-maker's written answers. These are decisions made by 
 - The specification reconciliation package is approved for committing and maintaining in the repository for formal review. This is **not** final approval of any proposed specification.
 - Authority: the decision-maker's written authorization of 22 October 2026 under the non-production development authorization (`docs/governance/SPECIALIST_IMPLEMENTATION_AUTHORIZATION_AMENDMENT_2026-10-22.md`).
 - Approver identity, role and signature: **not provided in the record**. Left blank, not inferred.
+
+## 7. Scope note on live retrieval (22 October 2026)
+
+The approval of item 4 is recorded as "live retrieval window", with no fetch count. The record in section 5 above originally described one fetch. That description was incomplete: a further 16 allowlisted fetches were made for the Sprint 2 run. The decision-maker must confirm that this scope is within the approval. Until confirmed, the 16-fetch run is not counted as an approved retrieval.

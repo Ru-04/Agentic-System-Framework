@@ -156,15 +156,46 @@ Sprint 2 acceptance is still **NOT ACCEPTED**. The real Shopify investigation st
 ### Real run results (from `docs/evaluation/SHOPIFY_REAL_INVESTIGATION_2026-10-22.md`)
 
 - Corpus: 16 of 16 pages retrieved live. Help-centre pages were not reachable (HTTP 403).
-- Requirements with at least one cited finding: **7 of 17**.
-- Requirements with no cited finding: **10 of 17**. These are gaps. The approved corpus does not cover them: Canadian address and province rules, customer account creation after purchase, guest renewal, campaign tracking, partner stores, staff roles, search and autocomplete, pickup blackout dates, dashboards, and workflow automation.
+- Requirements with at least one cited finding: **6 of 17** (after the QA3 fixes; the earlier run showed 7).
+- Requirements with no cited finding: **11 of 17**. These are gaps. The approved corpus does not cover them: Canadian address and province rules, customer account creation after purchase, guest renewal, campaign tracking, partner stores, staff roles, search and autocomplete, pickup blackout dates, dashboards, and workflow automation.
 - Every output is `incomplete`. None reports `completed`.
 - Spot-checks showed that some matches are relevant (for example, local pickup through Shopify Functions) and others are tangential. The record makes no relevance claim beyond the matched-term rule.
 
 ### Acceptance status
 
 **Still NOT ACCEPTED.** The run is an executed record, not acceptance evidence. Acceptance needs:
-1. Independent QA of the new code and the run record. An independent QA agent has been run on commit `45df73c`; its result is recorded in section 11 when received.
+1. Independent QA of the new code and the run record. QA3 (commit `45df73c`) found 12 items. Section 11 records each one and its disposition.
 2. Additional approved official sources for the ten uncovered requirements, or a decision that those requirements are out of scope for the Shopify acceptance.
 3. An approved evaluation method for relevance. The current keyword rule is not a relevance judgement.
 4. Human QA sign-off by the designated signatory **AS**. Not given. No sign-off is recorded in this repository.
+
+## 11. Independent QA3 disposition (commit `45df73c`)
+
+The QA3 agent was independent of the implementation. Its suite result was 349 passing, lint clean and mypy clean. Its findings were fixed in the code, and regression tests were added in `tests/unit/test_s2_qa3_regressions.py`.
+
+| ID | Severity | Disposition |
+|---|---|---|
+| QA3-01 | High (scope) | **Open, for the decision-maker.** The 16-fetch run is not clearly inside the approval of item 4, which has no fetch count. The decision record now says so (section 7). Not counted as approved until confirmed. |
+| QA3-02 | Medium | **Fixed.** "Shopify Admin API" no longer matches the native indicator. The bare "shopify admin" phrase was removed. Test added. |
+| QA3-03 | Medium | **Fixed.** Quarantine is keyed by record identity (workspace, id, content hash), not by source_id alone. Test added. |
+| QA3-04 | Medium | **Fixed.** Coverage is still tracked after the cap, and truncation is reported as an unknown. Test added. |
+| QA3-05 | Low | **Fixed.** The failed path carries the clarification and feasibility lines. Test added. |
+| QA3-06 | Low | **Fixed.** Identical passages from one record count once. Test added. |
+| QA3-07 | Low | **Fixed in wording.** The allowlist docstring now states that the host list is a working selection pending D08 confirmation. |
+| QA3-08 | Low | **Fixed.** The proxy comment describes the actual mechanism. |
+| QA3-09 | High (sanitization) | **Fixed.** The public-page slug and client-identifying context were removed from the brief document. The mapping is held by the decision-maker. A grep confirms no client names in the evaluation and evidence documents. |
+| QA3-10 | Low | **Fixed.** An internal origin needs an identifier after the scheme. Test added. |
+| QA3-11 | Low | **Fixed.** The run record uses exact requirement text, parsed from the brief document. |
+| QA3-12 | Low | **Fixed.** Regression tests added for truncation coverage, the failed path, cross-workspace option passages, and quarantine identity. |
+
+### Result after the fixes
+
+- Unit tests: **358 passed**. Ruff and strict mypy are clean.
+- Run record regenerated with exact requirement text: 6 of 17 requirements have cited findings and 11 do not.
+
+### Still open
+
+1. Scope of the live retrieval approval (QA3-01). Decision-maker to confirm or narrow it.
+2. AS's independent QA sign-off. Not given. No sign-off is recorded in this repository.
+3. Relevance: the matched-term rule is not a relevance judgement, and the QA agent could not check page content, which is not in the repository.
+4. Coverage for 11 requirements needs additional approved official sources, or a decision that those requirements are out of scope.
