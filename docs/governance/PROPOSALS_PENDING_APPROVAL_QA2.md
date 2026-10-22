@@ -33,3 +33,9 @@
 - [ ] P1 option: ______ (A recommended)
 - [ ] P2 option: ______ (A recommended)
 - Approver: ______________________  Date: ____________
+
+## Approval record (22 October 2026)
+
+- P1 — approved as recommended (option A). Implemented: `SourceRecord` rejects a `VENDOR_DOC` origin that is not an allowlisted https URL, and an `INTERNAL_RAG` origin without the `internal:` scheme. Test fixtures are built only through `tests/support/evidence_fixtures.py`.
+- P2 — approved as recommended (option A). Implemented: `build_vendor_opener()` passes an empty `ProxyHandler`, so no proxy handler is installed and environment proxies are ignored for vendor fetches.
+- Approval given by the decision-maker in chat on 22 October 2026 ("yes i approve"). This is recorded as given. The approver's full name, role and signature were not provided.

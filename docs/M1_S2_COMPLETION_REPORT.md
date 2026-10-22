@@ -130,3 +130,10 @@ Findings from the live step:
 - `help.shopify.com` returned HTTP 403 to a plain client. No bypass was attempted.
 
 Sprint 2 acceptance is still **NOT ACCEPTED**. The real Shopify investigation still needs the approved evaluation runs on the briefs, the open proposals P1 and P2, and the QA signature.
+
+### Update: P1 and P2 implemented (22 October 2026)
+
+- QA2-07 (P1, approved): origin enforced in `SourceRecord`. Vendor records need an allowlisted https origin. Internal records need `internal:`. Fixtures go through `tests/support/evidence_fixtures.py` only.
+- QA2-13 (P2, approved): vendor fetches install no proxy handler, so environment proxies are ignored.
+- Unit tests: 336 passed. Ruff, format and strict mypy are clean.
+- Sprint 2 acceptance is still NOT ACCEPTED. The real investigation runs on the four briefs are still outstanding, and so is the QA signature.

@@ -12,6 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST
+
+VENDOR_ALLOWLIST = PROPOSED_SHOPIFY_ALLOWLIST
+INTERNAL_ORIGIN_PREFIX = "internal:"
+
 
 class SourceKind(StrEnum):
     INTERNAL_RAG = "internal_rag"
@@ -41,6 +46,13 @@ class SourceRecord:
                 raise ValueError(f"{name} must not be blank")
         if self.retrieved_at.tzinfo is None:
             raise ValueError("retrieved_at must be timezone-aware")
+        # Approved-source rule (proposal P1, approved 22 October 2026): the origin itself decides
+        # whether a record may be treated as approved evidence, whatever retriever built it.
+        if self.kind is SourceKind.VENDOR_DOC:
+            if not VENDOR_ALLOWLIST.permits(self.origin):
+                raise ValueError("vendor origin is not on the approved vendor allowlist")
+        elif not self.origin.startswith(INTERNAL_ORIGIN_PREFIX):
+            raise ValueError("internal origin must use the internal: scheme")
 
     @property
     def content_sha256(self) -> str:

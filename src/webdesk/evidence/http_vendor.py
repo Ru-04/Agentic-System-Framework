@@ -43,9 +43,14 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def build_vendor_opener() -> urllib.request.OpenerDirector:
+    # Proposal P2 (approved 22 October 2026): an empty ProxyHandler stops urllib from reading
+    # HTTP_PROXY / HTTPS_PROXY, so the allowlist is the only route control for vendor fetches.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler)
+
+
 def _default_opener(url: str, timeout: float) -> IO[bytes]:
-    opener = urllib.request.build_opener(_NoRedirectHandler)
-    return cast(IO[bytes], opener.open(url, timeout=timeout))
+    return cast(IO[bytes], build_vendor_opener().open(url, timeout=timeout))
 
 
 class _TextExtractor(HTMLParser):
