@@ -62,7 +62,7 @@ def test_original_wording_is_an_exact_substring_of_its_segment(adapter, run) -> 
 
 def test_every_output_passes_cross_record_checks(adapter, run) -> None:  # type: ignore[no-untyped-def]
     index = build_segment_index(adapter.list_source_segments(PROJECT_ID, DataClass.INTERNAL))
-    assert check_analysis(run, index) == []  # type: ignore[arg-type]
+    assert check_analysis(run, index) == []
 
 
 def test_atomic_extraction_yields_six_client_requirements(run) -> None:  # type: ignore[no-untyped-def]

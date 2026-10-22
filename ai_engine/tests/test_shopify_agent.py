@@ -24,7 +24,7 @@ from ai_engine.contracts.common import (
     RoutingOutcome,
 )
 from ai_engine.contracts.evidence import EvidenceKind, PlatformContext
-from ai_engine.contracts.execution import AgentExecutionStatus
+from ai_engine.contracts.execution import AgentExecutionResult, AgentExecutionStatus
 from ai_engine.contracts.requirement import AtomicRequirement
 from ai_engine.contracts.specialist import (
     ApproachType,
@@ -113,10 +113,10 @@ class Scenario:
             clock=lambda: NOW,
         )
         assert execution.status is AgentExecutionStatus.SUCCEEDED, execution.validation_errors
-        assert execution.output is not None
+        assert isinstance(execution.output, SpecialistInvestigationResult)
         return execution.output
 
-    def execute(self):  # type: ignore[no-untyped-def]
+    def execute(self) -> AgentExecutionResult:
         return run_specialist(
             execution_id="EXEC-SHP-0002",
             agent=ShopifySpecialist(),
@@ -398,5 +398,5 @@ def test_fixture_requirement_runs_end_to_end_through_the_specialist() -> None:
         clock=lambda: NOW,
     )
     assert execution.status is AgentExecutionStatus.SUCCEEDED
-    assert execution.output is not None
+    assert isinstance(execution.output, SpecialistInvestigationResult)
     assert any(c.evidence_status is EvidenceStatus.CONFLICTING for c in execution.output.claims)

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 from conftest import FIXTURE_PATH
@@ -17,25 +19,30 @@ from support import (
 
 from ai_engine.adapters.foundation import MockFoundationAdapter
 from ai_engine.contracts.common import DataClass, EvidenceStatus, RoutingOutcome
-from ai_engine.contracts.execution import AgentExecutionStatus
+from ai_engine.contracts.execution import AgentExecutionResult, AgentExecutionStatus
 from ai_engine.contracts.integrity import build_segment_index
-from ai_engine.contracts.specialist import SpecialistOutputStatus
+from ai_engine.contracts.specialist import SpecialistInvestigationResult, SpecialistOutputStatus
 from ai_engine.specialists.base import SpecialistContext
 from ai_engine.specialists.execution import run_specialist
 from ai_engine.specialists.task_builder import requirement_snapshot_hash
 
 
-def clock_factory():  # type: ignore[no-untyped-def]
+def clock_factory() -> Callable[[], datetime]:
     ticks = {"n": 0}
 
-    def clock():  # type: ignore[no-untyped-def]
+    def clock() -> datetime:
         ticks["n"] += 1
         return NOW + timedelta(seconds=ticks["n"])
 
     return clock
 
 
-def execute(mode: str = "completed", bundle=None, task=None, context=None):  # type: ignore[no-untyped-def]
+def execute(
+    mode: str = "completed",
+    bundle: Any = None,
+    task: Any = None,
+    context: Any = None,
+) -> AgentExecutionResult:
     bundle = bundle or build_bundle()
     task = task or make_task(bundle)
     return run_specialist(
@@ -49,6 +56,11 @@ def execute(mode: str = "completed", bundle=None, task=None, context=None):  # t
 
 
 # --- Successful execution and traceability ----------------------------------------------------
+
+
+def specialist_output(execution: AgentExecutionResult) -> SpecialistInvestigationResult:
+    assert isinstance(execution.output, SpecialistInvestigationResult)
+    return execution.output
 
 
 def test_completed_run_succeeds_with_output() -> None:
@@ -72,29 +84,34 @@ def test_output_cites_only_task_requirement_ids() -> None:
     bundle = build_bundle()
     result = execute(bundle=bundle)
     assert result.output is not None
-    assert set(result.output.requirement_ids) == set(bundle.by_id)
+    assert set(specialist_output(result).requirement_ids) == set(bundle.by_id)
 
 
 def test_claims_and_solutions_remain_unverified() -> None:
     result = execute()
     assert result.output is not None
-    assert all(c.evidence_status is EvidenceStatus.UNVERIFIED for c in result.output.claims)
     assert all(
-        s.evidence_status is EvidenceStatus.UNVERIFIED for s in result.output.candidate_solutions
+        c.evidence_status is EvidenceStatus.UNVERIFIED for c in specialist_output(result).claims
+    )
+    assert all(
+        s.evidence_status is EvidenceStatus.UNVERIFIED
+        for s in specialist_output(result).candidate_solutions
     )
 
 
 def test_cited_evidence_is_synthetic_and_traceable_to_the_lookup() -> None:
     result = execute()
     assert result.output is not None
-    assert [e.evidence_id for e in result.output.evidence] == ["EVD-SYN-0001"]
-    assert all(e.evidence_kind.value == "synthetic_mock" for e in result.output.evidence)
+    assert [e.evidence_id for e in specialist_output(result).evidence] == ["EVD-SYN-0001"]
+    assert all(
+        e.evidence_kind.value == "synthetic_mock" for e in specialist_output(result).evidence
+    )
 
 
 def test_evidence_outside_allowlist_or_project_is_never_cited() -> None:
     result = execute()
     assert result.output is not None
-    cited = {e.evidence_id for e in result.output.evidence}
+    cited = {e.evidence_id for e in specialist_output(result).evidence}
     assert "EVD-SYN-0002" not in cited  # other collection, not on the allowlist
     assert "EVD-SYN-0003" not in cited  # belongs to another project
 
@@ -105,7 +122,7 @@ def test_empty_allowlist_yields_no_evidence_but_still_completes() -> None:
     result = execute(bundle=bundle, task=task)
     assert result.status is AgentExecutionStatus.SUCCEEDED
     assert result.output is not None
-    assert result.output.evidence == []
+    assert specialist_output(result).evidence == []
 
 
 def test_collection_not_in_task_allowlist_is_not_served() -> None:
@@ -113,7 +130,7 @@ def test_collection_not_in_task_allowlist_is_not_served() -> None:
     task = make_task(bundle, allowed_evidence_collections=[OTHER_COLLECTION])
     result = execute(bundle=bundle, task=task)
     assert result.output is not None
-    assert [e.evidence_id for e in result.output.evidence] == ["EVD-SYN-0002"]
+    assert [e.evidence_id for e in specialist_output(result).evidence] == ["EVD-SYN-0002"]
     assert EVIDENCE_COLLECTION != OTHER_COLLECTION
 
 
@@ -254,15 +271,15 @@ def test_end_to_end_chain_preserves_traceability() -> None:
     result = execute(bundle=bundle, task=task)
     assert result.status is AgentExecutionStatus.SUCCEEDED
     assert result.output is not None
-    assert result.output.status is SpecialistOutputStatus.COMPLETED
-    assert result.output.task_id == task.task_id
-    assert result.output.project_id == bundle.project.project_id
+    assert specialist_output(result).status is SpecialistOutputStatus.COMPLETED
+    assert specialist_output(result).task_id == task.task_id
+    assert specialist_output(result).project_id == bundle.project.project_id
 
     # Every cited requirement traces back to a segment that the fixture provides.
     adapter = MockFoundationAdapter.from_file(FIXTURE_PATH)
     segments = adapter.list_source_segments(bundle.project.project_id, DataClass.INTERNAL)
     index = build_segment_index(segments)
-    for requirement_id in result.output.requirement_ids:
+    for requirement_id in specialist_output(result).requirement_ids:
         requirement = bundle.by_id[requirement_id]
         assert requirement.requirement_id == requirement_id
         assert requirement.source_refs
@@ -280,7 +297,7 @@ def test_specialist_cannot_change_the_requirement_records() -> None:
 def test_specialist_result_is_pending_human_review() -> None:
     result = execute()
     assert result.output is not None
-    assert result.output.review_state == "proposed_pending_human_review"
+    assert specialist_output(result).review_state == "proposed_pending_human_review"
 
 
 @pytest.mark.parametrize(

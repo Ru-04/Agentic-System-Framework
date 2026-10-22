@@ -291,7 +291,7 @@ def test_stale_selection_is_refused_when_the_analysis_changes(demo) -> None:  # 
             analysis=changed,
             registry=AgentRegistry.from_yaml(SPEC_REGISTRY_PATH),
             catalog_version=load_catalog_version(),
-            agent=RaisingAgent(UnsupportedRequestError("unused")),  # type: ignore[arg-type]
+            agent=RaisingAgent(UnsupportedRequestError("unused")),
             evidence_records=synthetic_shopify_evidence(project.project_id),
             allowed_collections=[SHOPIFY_EVIDENCE_COLLECTION],
             boundary=demo.boundary,
@@ -309,7 +309,7 @@ def test_archived_project_is_not_investigated(demo) -> None:  # type: ignore[no-
         analysis=demo.analysis,
         registry=AgentRegistry.from_yaml(SPEC_REGISTRY_PATH),
         catalog_version=load_catalog_version(),
-        agent=RaisingAgent(UnsupportedRequestError("unused")),  # type: ignore[arg-type]
+        agent=RaisingAgent(UnsupportedRequestError("unused")),
         evidence_records=synthetic_shopify_evidence(archived.project_id),
         allowed_collections=[SHOPIFY_EVIDENCE_COLLECTION],
         boundary=demo.boundary,
@@ -414,7 +414,7 @@ def test_missing_evidence_is_a_reported_gap_not_silence() -> None:
 def test_specialist_failure_is_reported_and_no_requirement_is_dropped(
     error: Exception, status: AgentExecutionStatus, kind: UnresolvedKind, trace_state: str
 ) -> None:
-    report = run_demo(agent=RaisingAgent(error), confirm=CONFIRM, operator_label=OPERATOR)  # type: ignore[arg-type]
+    report = run_demo(agent=RaisingAgent(error), confirm=CONFIRM, operator_label=OPERATOR)
     assert report.status == "specialist_not_completed"
     assert report.execution is not None and report.execution.status is status
     assert report.execution.output is None

@@ -124,7 +124,7 @@ def test_selection_rejects_duplicate_decisions_at_contract_level(analysis) -> No
             operator_label="op",
             project_id=PROJECT_ID,
             analysis_fingerprint=selection.analysis_fingerprint,
-            decisions=[*selection.decisions, *selection.decisions],
+            decisions=(*selection.decisions, *selection.decisions),
         )
 
 

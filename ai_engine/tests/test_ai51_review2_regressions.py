@@ -6,8 +6,9 @@ zero-width attribution note) and asserts the corrected outcome.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from conftest import FIXTURE_PATH
@@ -256,7 +257,9 @@ def test_collection_allowlist_is_read_once_so_a_foreign_collection_cannot_be_sea
 
     def probe(agent_task: Any, agent_context: SpecialistContext) -> Any:
         records = agent_context.evidence.search(
-            project_id=agent_task.project_id, allowed_collections=_TwoFacedCollections(), query=""
+            project_id=agent_task.project_id,
+            allowed_collections=cast(Sequence[str], _TwoFacedCollections()),
+            query="",
         )
         seen["ids"] = {record.evidence_id for record in records}
         return result_for(agent_task)
