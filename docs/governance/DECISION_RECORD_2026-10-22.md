@@ -58,3 +58,10 @@ Recorded from the decision-maker's written answers. These are decisions made by 
 | 4 | Live retrieval window and real Shopify acceptance | Approved (live retrieval window) | One bounded live fetch of an allowlisted Shopify page was made on 22 Oct 2026. Metadata only is recorded in `docs/evidence/SHOPIFY_LIVE_RETRIEVAL_2026-10-22.md`. Acceptance is NOT granted by this approval. |
 | 5 | Shopify real cases | Find them from WDS case studies and portfolio | Four sanitized briefs in `docs/evaluation/SHOPIFY_CASE_BRIEFS_SANITIZED.md`. Client-approval for use of the scenarios is not yet recorded. |
 | 6 | Human QA signatory for Sprint 2 | "AS" | Designated signatory: **AS**. No sign-off has been recorded or simulated. The signature and approval reference are to be supplied by AS. |
+
+## 6. Approval of P1, P2 and the specification package (22 October 2026)
+
+- P1 (source origin enforcement) and P2 (vendor proxy policy) are formally approved by the decision-maker, with their implementation, regression tests and commit `2b0cef2`.
+- The specification reconciliation package is approved for committing and maintaining in the repository for formal review. This is **not** final approval of any proposed specification.
+- Authority: the decision-maker's written authorization of 22 October 2026 under the non-production development authorization (`docs/governance/SPECIALIST_IMPLEMENTATION_AUTHORIZATION_AMENDMENT_2026-10-22.md`).
+- Approver identity, role and signature: **not provided in the record**. Left blank, not inferred.
