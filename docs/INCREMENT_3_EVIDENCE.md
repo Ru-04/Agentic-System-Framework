@@ -526,3 +526,57 @@ Remaining for R4 (stage 2 and 3):
   and other-operation proofs refused, expired and revoked sessions refused, epoch change invalidates authority,
   replay and concurrent reuse refused, two-approver impersonation refused, authorized flows succeed), and the
   authority process itself.
+
+
+## R4 stage 3 status (commits 17d6649, 9c4e9da, b0d5df8)
+
+**Verdict: NOT READY for independent Phase 1 review.** The items below are verified; the blockers that follow are not.
+
+### Verified in this stage
+
+- Migrations 0024 (proofs bound to epoch and contact revision, operation list, Administrator gate, refusals audited as
+  NULL returns), 0025 (role, membership, grant and archive writes moved to proof-consuming guards), 0026 (contact
+  request, approval, change, cancellation and withdrawal moved to guards with row locks and state re-checks; the
+  application role loses INSERT and UPDATE on the contact tables, keeping UPDATE on `outbox_notices` for the worker).
+  Each applied to a fresh hardening database and round-tripped (downgrade to the prior revision and back).
+- Services that take a proof, not an actor ID: user disable, role assign and revoke, project create, membership add and
+  revoke, access and restricted grants, archive, classification reassessment, and the contact paths above.
+- EVAL-F11j (`tests/hardening/test_eval_f11j.py`, restricted login `webdesk_app_login`, authority as a separate process):
+  17 of 17 passed. Cases: forged session row refused (42501); forged credential change refused; Administrator ID without a
+  proof refused (`proof_missing`); random proof ID refused; non-administrator cannot obtain a disable proof; proof for another
+  resource refused (`proof_resource_mismatch`); proof for another operation refused (`proof_operation_mismatch`);
+  Administrator impersonation (the proof's actor, not the caller's, is audited); replay refused (`proof_spent`);
+  concurrent use of one proof succeeds at most once; revoked session invalidates its proofs (`proof_session_not_live`);
+  expired proof refused (`proof_expired`, after a 31-second wait); self-approval refused (`self_approval`, 403); a
+  non-administrator cannot obtain an approval proof; direct approval and withdrawal writes refused; direct membership and
+  grant writes refused; a legitimate disable succeeds and is audited.
+- Full regression on fresh databases before the EVAL-F11j module was added: 422 passed, 0 failed, 0 xfailed. The
+  hardening suite with the module: 50 passed. Ruff and strict mypy: clean on `src`, `tests` and `migrations`.
+- N26 is an ordinary passing test: the database refuses the forged row and the authority refuses the forged token.
+
+### Known blockers and residual risks (must be resolved or accepted by WDS before READY)
+
+1. **Rollback restores a proof.** Consumption and the protected write share one transaction. A rolled-back transaction
+   makes the proof unspent again until it expires (30 seconds). Not closed. Options for WDS: a committed consumption
+   ledger written through the authority, or accept the window with a stated rationale.
+2. **Delivery worker writes.** The application role keeps UPDATE on `outbox_notices` (lease, sent, dead-letter). This is
+   not an authorization decision, but it is a write path under the application role. Needs a guard function or an
+   accepted residual.
+3. **Ceremony and sweep privileges.** Installation, recovery and the expiry sweep run under `webdesk_ceremony`, which still
+   inserts role assignments and updates approvals. Governed by ceremony tokens, not actor IDs. Needs WDS sign-off that this
+   is the narrowly scoped exception required by the R4 contract.
+4. **Epoch and contact-revision invalidation** is covered in the integration suite (session epoch change, contact change)
+   but not as an EVAL-F11j case against the restricted login. A dedicated restricted-login case is still needed.
+5. **Privilege audit (M5 item 7) and fresh-database full verification of the final commit** are not yet recorded in this
+   document. The privilege inventory above is the basis; a formal audit of function ownership and EXECUTE grants is pending.
+6. **Independent review** has not occurred.
+
+### AI access proposal
+
+`docs/AI_ACCESS_CONTRACT_PROPOSAL_v0.1.md` is a proposal only. It lists five decisions (D-AI-1 to D-AI-5) that WDS must make.
+No AI access is implemented, and Phase 2 work has not started.
+
+### Operational note
+
+Docker Desktop stopped during this stage. It was restarted, and the Postgres container was brought up again. The
+intermittent socket aborts seen on the Windows host were environmental and did not reproduce after the restart.
