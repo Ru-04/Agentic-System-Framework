@@ -153,3 +153,57 @@ disappeared on a clean run.
   migrated to `0032_app_direct_write_revocation`.
 - **Verdict: NOT READY.** Blocker 1 is closed for writes. Blockers 2 to 4 and the decisions in section 6 remain, and
   independent review has not occurred.
+
+## 11. Final handoff for independent review (2026-10-23; WDS decisions 1-8)
+
+Section 7 is superseded by this section for status. The register entry is `docs/GOVERNANCE_DECISION_REGISTER.md`, P-INC3-PHASE1-CLOSE-09.
+The evidence is `docs/INCREMENT_3_EVIDENCE.md`, "Phase 1 final closure". The privilege audit is `docs/PRIVILEGE_AUDIT_2026-10-23.txt`.
+The production boundary is `docs/PRODUCTION_BOUNDARY.md`.
+
+### Status of the section 7 items
+
+| Item | Status |
+| --- | --- |
+| 1. Actor on intake and run paths; direct writes | Closed. Writes: proof-gated wrappers (0030), worker identity (0031), direct writes removed (0032), SQL matrix (0035). Reads: source-read grants (0037). |
+| 2. Production authority | Not a review blocker. Blocked for deployment (decision 7). See `docs/PRODUCTION_BOUNDARY.md`. |
+| 3. Outbox delivery under the application role | Closed (0033, decision 5). |
+| 4. Ceremony column UPDATE on users and other tables | Closed (0034, 0038, decision 6). Tested for legitimate flows and for escalation attempts. |
+| 5. Rollback semantics | Decided: exactly-once committed (decision 1). Implemented and tested (rb_04, rb_06). |
+| 6. Reset-initiation policy | Decided and implemented: owner-initiated; Administrator notice only (decision 2, 0036). |
+
+### Final verification (fresh databases)
+
+- Full suite: 597 passed, 0 failed, 0 skipped.
+- Restricted-login hardening: 197 passed. EVAL-F11j: 37 passed. Reset policy: 21 passed. Source-read: 46 passed.
+  Worker and ceremony privileges: 66 passed. Replay, rollback, concurrency and SQL authorization: 39 passed.
+- Ruff clean; strict mypy clean.
+- Alembic: 0029 to head and back, on a fresh database; each of 0030 to 0038 round-trips. Full downgrade to base is not possible on
+  this shared cluster (migration 0001, pre-existing).
+
+### What the reviewer should examine first
+
+1. The SQL permission matrix: `operation_authorization_rules` (0035) and `fn_validate_operation_proof`; `fn_can_read_source_version` (0037).
+2. The read path: `fn_issue_read_grant`, `fn_read_source_storage_key`, `intake/read_access.py`, and the column grants on `source_versions`
+   and `source_segments` (0037). Confirm no login role can read storage keys or segment text.
+3. The ceremony role's grants against installation, recovery and sweep (`tests/hardening/test_privilege_audit.py`, `test_ceremony_and_public_execute.py`).
+4. The bypass table in the evidence document. Each item was confirmed before its fix.
+5. The residual risks below.
+
+### Residual risks and assumptions
+
+1. The authority is a development process. Its HTTP transport is loopback with a shared bearer secret; it is not authenticated or encrypted.
+   Production requires the items in `docs/PRODUCTION_BOUNDARY.md`.
+2. Per-resource business rules for proof operations remain in Python behind the database role and membership barrier: archive state,
+   revision checks, classification floor, and the Administrator content-grant rule.
+3. Ceremony operator and verifier identifiers are declared and recorded, not authenticated.
+4. A grant is reused for at most 60 seconds, by design. A stolen session token plus a live grant reads the named version in that window.
+5. The login rate limiter is per client address and stored in the test database; repeated runs can exhaust it. The suites reuse sessions.
+6. Full downgrade to base is not supported on a shared cluster (migration 0001 drops roles other databases hold).
+7. Real reset and activation delivery are disabled. No approved transport is configured.
+8. Independent review has not occurred. This section is the handoff for it, not an approval.
+
+### Verdict
+
+**READY FOR INDEPENDENT PHASE 1 REVIEW.** The engineering scope of decisions 1 to 8 is implemented and verified in non-production
+environments, and the section 7 items are closed, decided or documented as above. This does not declare Phase 1 approved. Production
+deployment remains blocked by decision 7, and the residual risks above are the reviewer's to weigh.

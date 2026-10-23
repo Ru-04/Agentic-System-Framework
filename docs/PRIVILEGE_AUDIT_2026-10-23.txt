@@ -1,0 +1,168 @@
+== memberships (role -> member)
+  webdesk_app -> webdesk_app_login
+  webdesk_app -> webdesk_integration_owner
+  webdesk_authority -> webdesk_authority_login
+  webdesk_authority -> webdesk_integration_owner
+  webdesk_authority -> webdesk_integration_owner
+  webdesk_authority_login -> webdesk_integration_owner
+  webdesk_ceremony -> webdesk_integration_owner
+  webdesk_ceremony -> webdesk_test_owner
+  webdesk_guard_owner -> webdesk_integration_owner
+  webdesk_guard_owner -> webdesk_integration_owner
+  webdesk_intake_worker_login -> webdesk_integration_owner
+  webdesk_outbox -> webdesk_integration_owner
+  webdesk_outbox -> webdesk_integration_owner
+  webdesk_worker -> webdesk_intake_worker_login
+  webdesk_worker -> webdesk_integration_owner
+  webdesk_worker -> webdesk_integration_owner
+== login attributes of Webdesk roles
+  ('webdesk_app', False, False, False, False, False)
+  ('webdesk_app_login', True, False, False, False, False)
+  ('webdesk_authority', False, False, False, False, False)
+  ('webdesk_authority_login', True, False, False, False, False)
+  ('webdesk_ceremony', False, False, False, False, False)
+  ('webdesk_guard_owner', False, False, False, False, False)
+  ('webdesk_intake_worker_login', True, False, False, False, False)
+  ('webdesk_integration_owner', True, False, True, True, False)
+  ('webdesk_outbox', False, False, False, False, False)
+  ('webdesk_owner', True, True, True, True, True)
+  ('webdesk_test_owner', True, False, False, False, False)
+  ('webdesk_worker', False, False, False, False, False)
+== table privileges (table-level, public schema)
+  webdesk_app account_activation_tokens SELECT
+  webdesk_app audit_events INSERT,SELECT
+  webdesk_app audit_tombstones INSERT,SELECT
+  webdesk_app contact_reservations SELECT
+  webdesk_app dependency_edges SELECT
+  webdesk_app idempotency_keys INSERT,SELECT
+  webdesk_app outbox_notices SELECT
+  webdesk_app project_access_grants SELECT
+  webdesk_app project_memberships SELECT
+  webdesk_app projects SELECT
+  webdesk_app rate_limit_events INSERT,SELECT
+  webdesk_app restricted_content_grants SELECT
+  webdesk_app role_assignments SELECT
+  webdesk_app run_input_snapshots SELECT
+  webdesk_app setup_trust_ceremonies SELECT
+  webdesk_app sources SELECT
+  webdesk_app user_contact_approvals SELECT
+  webdesk_app user_withdrawals SELECT
+  webdesk_app users SELECT
+  webdesk_app workflow_checkpoints SELECT
+  webdesk_app workflow_jobs SELECT
+  webdesk_app workflow_runs SELECT
+  webdesk_authority account_activation_tokens SELECT
+  webdesk_authority audit_events INSERT
+  webdesk_authority credentials INSERT,SELECT,UPDATE
+  webdesk_authority operation_proofs INSERT,SELECT
+  webdesk_authority rate_limit_events INSERT,SELECT
+  webdesk_authority role_assignments SELECT
+  webdesk_authority sessions INSERT,SELECT,UPDATE
+  webdesk_authority user_contact_approvals SELECT
+  webdesk_authority users SELECT
+  webdesk_ceremony audit_events INSERT
+  webdesk_ceremony contact_reservations SELECT
+  webdesk_ceremony role_assignments SELECT
+  webdesk_ceremony setup_trust_ceremonies SELECT
+  webdesk_ceremony user_contact_approvals SELECT
+  webdesk_ceremony users SELECT
+  webdesk_guard_owner account_activation_tokens INSERT,SELECT,UPDATE
+  webdesk_guard_owner audit_events INSERT
+  webdesk_guard_owner contact_reservations INSERT,SELECT
+  webdesk_guard_owner dependency_edges INSERT,SELECT,UPDATE
+  webdesk_guard_owner operation_authorization_rules SELECT
+  webdesk_guard_owner operation_proofs SELECT
+  webdesk_guard_owner outbox_notices INSERT,SELECT,UPDATE
+  webdesk_guard_owner project_access_grants INSERT,SELECT
+  webdesk_guard_owner project_memberships INSERT,SELECT
+  webdesk_guard_owner projects INSERT,SELECT
+  webdesk_guard_owner restricted_content_grants INSERT,SELECT
+  webdesk_guard_owner role_assignments INSERT,SELECT
+  webdesk_guard_owner run_input_snapshots INSERT,SELECT,UPDATE
+  webdesk_guard_owner sessions SELECT
+  webdesk_guard_owner source_read_grants INSERT,SELECT
+  webdesk_guard_owner source_segments INSERT,SELECT,UPDATE
+  webdesk_guard_owner source_versions INSERT,SELECT,UPDATE
+  webdesk_guard_owner sources INSERT,SELECT,UPDATE
+  webdesk_guard_owner user_contact_approvals INSERT,SELECT,UPDATE
+  webdesk_guard_owner user_withdrawals INSERT,SELECT
+  webdesk_guard_owner users INSERT,SELECT,UPDATE
+  webdesk_guard_owner workflow_checkpoints INSERT,SELECT,UPDATE
+  webdesk_guard_owner workflow_jobs INSERT,SELECT,UPDATE
+  webdesk_guard_owner workflow_runs INSERT,SELECT,UPDATE
+  webdesk_worker run_input_snapshots SELECT
+  webdesk_worker source_versions SELECT
+  webdesk_worker workflow_runs SELECT
+== column-level privileges that are not table-level (UPDATE/INSERT)
+  webdesk_app audit_events INSERT ( actor_id_or_service,actor_type,configuration_versions,correlation_id,error_class,event_id,event_type,occurred_at,outcome,project_id,record_refs,redacted_details )
+  webdesk_app audit_tombstones INSERT ( audit_event_id,authorized_by,data_class,deleted_at,deletion_method,deletion_reason,entity_id,entity_type,project_id,requested_by,retention_policy_version,tombst )
+  webdesk_app idempotency_keys INSERT ( actor_id,created_at,endpoint,expires_at,idempotency_key,key_id,request_hash,response )
+  webdesk_app projects UPDATE ( revision,updated_at )
+  webdesk_app rate_limit_events INSERT ( created_at,event_id,scope,subject_hash )
+  webdesk_authority audit_events INSERT ( actor_id_or_service,actor_type,configuration_versions,correlation_id,error_class,event_id,event_type,occurred_at,outcome,project_id,record_refs,redacted_details )
+  webdesk_authority credentials INSERT ( password_hash,updated_at,user_id )
+  webdesk_authority credentials UPDATE ( password_hash,updated_at,user_id )
+  webdesk_authority operation_proofs INSERT ( actor_user_id,consumed_at,contact_revision_at_issue,expires_at,issued_at,operation,proof_id,resource_id,session_epoch_at_issue,session_id )
+  webdesk_authority rate_limit_events INSERT ( created_at,event_id,scope,subject_hash )
+  webdesk_authority sessions INSERT ( expires_at,issued_at,last_seen_at,revoked_at,session_epoch_at_issue,session_id,session_token_hash,user_id )
+  webdesk_authority sessions UPDATE ( expires_at,issued_at,last_seen_at,revoked_at,session_epoch_at_issue,session_id,session_token_hash,user_id )
+  webdesk_authority users UPDATE ( revision,session_epoch,status )
+  webdesk_ceremony audit_events INSERT ( actor_id_or_service,actor_type,configuration_versions,correlation_id,error_class,event_id,event_type,occurred_at,outcome,project_id,record_refs,redacted_details )
+  webdesk_ceremony contact_reservations INSERT ( normalized_email,user_id )
+  webdesk_ceremony role_assignments INSERT ( appointment_approval_id,assigned_by_system,assigned_by_user_id,role,user_id )
+  webdesk_ceremony setup_trust_ceremonies INSERT ( activation_deadline,authorized_user_ids,deployment_operator_id,effective_admin_count_at_start,independent_verifier_id,kind,owner_approval_ref,owner_identity_ref )
+  webdesk_ceremony setup_trust_ceremonies UPDATE ( authorized_user_ids,closed_at,completed_at,effective_admin_count_at_start,status )
+  webdesk_ceremony user_contact_approvals INSERT ( administrator_appointment,approved_at,ceremony_id,created_at,expires_at,request_type,requested_email_normalized,status,user_id )
+  webdesk_ceremony user_contact_approvals UPDATE ( revision,status )
+  webdesk_ceremony users INSERT ( display_name,email,normalized_email,status )
+  webdesk_ceremony users UPDATE ( status )
+  webdesk_guard_owner account_activation_tokens INSERT ( consumed_at,contact_destination_ref,contact_revision,delivery_status,expires_at,issued_at,issued_by_actor_id,purpose,revocation_reason,revoked_at,token_hash,tok )
+  webdesk_guard_owner account_activation_tokens UPDATE ( consumed_at,contact_destination_ref,contact_revision,delivery_status,expires_at,issued_at,issued_by_actor_id,purpose,revocation_reason,revoked_at,token_hash,tok )
+  webdesk_guard_owner audit_events INSERT ( actor_id_or_service,actor_type,configuration_versions,correlation_id,error_class,event_id,event_type,occurred_at,outcome,project_id,record_refs,redacted_details )
+  webdesk_guard_owner contact_reservations INSERT ( approval_id,created_at,normalized_email,released_at,reservation_id,user_id )
+  webdesk_guard_owner contact_reservations UPDATE ( released_at )
+  webdesk_guard_owner dependency_edges INSERT ( created_at,downstream_id,downstream_revision,downstream_type,edge_id,project_id,upstream_id,upstream_revision,upstream_type )
+  webdesk_guard_owner dependency_edges UPDATE ( created_at,downstream_id,downstream_revision,downstream_type,edge_id,project_id,upstream_id,upstream_revision,upstream_type )
+  webdesk_guard_owner operation_proofs UPDATE ( consumed_at )
+  webdesk_guard_owner outbox_notices INSERT ( attempt_count,available_at,created_at,delivered_at,last_error_class,lease_expires_at,lease_owner,notice_id,old_contact_ciphertext,old_contact_ref,payload_redact )
+  webdesk_guard_owner outbox_notices UPDATE ( attempt_count,available_at,created_at,delivered_at,last_error_class,lease_expires_at,lease_owner,notice_id,old_contact_ciphertext,old_contact_ref,payload_redact )
+  webdesk_guard_owner project_access_grants INSERT ( created_at,grant_id,granted_by,permitted_actions,project_id,revoked_at,user_id )
+  webdesk_guard_owner project_memberships INSERT ( assigned_by_system,assigned_by_user_id,created_at,membership_id,project_id,revoked_at,user_id )
+  webdesk_guard_owner project_memberships UPDATE ( revoked_at )
+  webdesk_guard_owner projects INSERT ( access_boundary_id,client_reference,created_at,created_by_user_id,data_classification,name,project_id,revision,status,updated_at )
+  webdesk_guard_owner projects UPDATE ( revision,status,updated_at )
+  webdesk_guard_owner restricted_content_grants INSERT ( created_at,expires_at,grant_id,granted_by,reason,resource_id,resource_type,revoked_at,user_id )
+  webdesk_guard_owner role_assignments INSERT ( appointment_approval_id,assigned_by_system,assigned_by_user_id,assignment_id,created_at,revoked_at,role,user_id )
+  webdesk_guard_owner role_assignments UPDATE ( revoked_at )
+  webdesk_guard_owner run_input_snapshots INSERT ( created_at,included_reason,input_revision_hash,project_id,run_id,snapshot_id,source_id,source_version_id )
+  webdesk_guard_owner run_input_snapshots UPDATE ( created_at,included_reason,input_revision_hash,project_id,run_id,snapshot_id,source_id,source_version_id )
+  webdesk_guard_owner sessions UPDATE ( revoked_at )
+  webdesk_guard_owner source_read_grants INSERT ( expires_at,grant_id,issued_at,project_id,revocation_reason,revoked_at,session_id,source_version_id,user_id )
+  webdesk_guard_owner source_read_grants UPDATE ( revocation_reason,revoked_at )
+  webdesk_guard_owner source_segments INSERT ( created_at,derived_run_id,extraction_version,locator,locator_key,locator_type,project_id,segment_id,source_version_id,text_content,text_content_hash )
+  webdesk_guard_owner source_segments UPDATE ( created_at,derived_run_id,extraction_version,locator,locator_key,locator_type,project_id,segment_id,source_version_id,text_content,text_content_hash )
+  webdesk_guard_owner source_versions INSERT ( access_classification,content_hash,extraction_version,file_size_bytes,ingested_at,ingested_by_user_id,mime_type,parse_error,parse_status,project_id,revision,sca )
+  webdesk_guard_owner source_versions UPDATE ( access_classification,content_hash,extraction_version,file_size_bytes,ingested_at,ingested_by_user_id,mime_type,parse_error,parse_status,project_id,revision,sca )
+  webdesk_guard_owner sources INSERT ( access_classification,created_at,project_id,revision,source_id,source_trust,source_type,title,uploaded_by_user_id )
+  webdesk_guard_owner sources UPDATE ( access_classification,created_at,project_id,revision,source_id,source_trust,source_type,title,uploaded_by_user_id )
+  webdesk_guard_owner user_contact_approvals INSERT ( administrator_appointment,appointment_consumed_at,appointment_role_assignment_id,approval_id,approved_at,approved_by_user_id,ceremony_id,created_at,expires_at,p )
+  webdesk_guard_owner user_contact_approvals UPDATE ( administrator_appointment,appointment_consumed_at,appointment_role_assignment_id,approval_id,approved_at,approved_by_user_id,ceremony_id,created_at,expires_at,p )
+  webdesk_guard_owner user_withdrawals INSERT ( actor_user_id,audit_event_id,created_at,expected_user_revision,reason,tx_id,user_id,withdrawal_id )
+  webdesk_guard_owner users INSERT ( activated_at,contact_approved_by_user_id,contact_revision,created_at,created_by_user_id,display_name,email,identity_subject,normalized_email,revision,session_ep )
+  webdesk_guard_owner users UPDATE ( activated_at,contact_approved_by_user_id,contact_revision,created_at,created_by_user_id,display_name,email,identity_subject,normalized_email,revision,session_ep )
+  webdesk_guard_owner workflow_checkpoints INSERT ( checkpoint_id,created_at,flags,node,project_id,refs,run_id )
+  webdesk_guard_owner workflow_checkpoints UPDATE ( checkpoint_id,created_at,flags,node,project_id,refs,run_id )
+  webdesk_guard_owner workflow_jobs INSERT ( attempts,available_at,created_at,input_revision_hash,job_id,job_status,last_error_class,lease_expires_at,lease_owner,max_attempts,project_id,revision,run_id,upd )
+  webdesk_guard_owner workflow_jobs UPDATE ( attempts,available_at,created_at,input_revision_hash,job_id,job_status,last_error_class,lease_expires_at,lease_owner,max_attempts,project_id,revision,run_id,upd )
+  webdesk_guard_owner workflow_runs INSERT ( created_at,failure_class,input_revision_hash,is_stale,parked_at,project_id,revision,run_id,stale_at,stale_reason,started_by_user_id,state,status,updated_at )
+  webdesk_guard_owner workflow_runs UPDATE ( created_at,failure_class,input_revision_hash,is_stale,parked_at,project_id,revision,run_id,stale_at,stale_reason,started_by_user_id,state,status,updated_at )
+== functions executable by PUBLIC (acl '=X' or null acl)
+== webdesk_guard function owners and login-role EXECUTE
+  webdesk_guard_owner functions: 68 app-executable: app
+== webdesk_guard functions per execute-granted Webdesk role
+  webdesk_app 34
+  webdesk_ceremony 3
+  webdesk_worker 14
+  webdesk_outbox 7
+  webdesk_authority 6
+  webdesk_guard_owner 68

@@ -716,3 +716,93 @@ Verdict for Phase 1: **NOT READY FOR INDEPENDENT PHASE 1 REVIEW.** The other ite
 (item 3), the ceremony column privileges on `users` (item 4), the rollback decision (item 5, recorded), and the
 reset-initiation policy (section 6). Independent review has not occurred. Residual 1 above (reads) should be decided by
 WDS before review.
+
+## Phase 1 final closure: WDS decisions 1-8 (2026-10-23)
+
+Register entry: `docs/GOVERNANCE_DECISION_REGISTER.md`, P-INC3-PHASE1-CLOSE-09. Privilege audit: `docs/PRIVILEGE_AUDIT_2026-10-23.txt`.
+Production boundary: `docs/PRODUCTION_BOUNDARY.md`. Baseline for this round: 9bb7835, 516 passing tests.
+
+### Commits in this round
+
+| Commit | Content |
+| --- | --- |
+| b98a934 | Decision 5: outbox worker identity and transitions (0033) |
+| 8a2c273 | Decision 1: concurrent committed use refused (rb_06) |
+| 6502518 | Decisions 4 and 6: PUBLIC EXECUTE removed from the disable function; ceremony narrowed (0034) |
+| 9306a06 | Decision 8: restricted intake-worker login test |
+| 5d79269 | Decision 4: SQL permission matrix in the proof validator (0035) |
+| 0070ee3 | Decision 2: owner-initiated reset; Administrator notice only (0036) |
+| 2a37ef1 | Decision 3: source-read grants, read interface source-read/v1 (0037) |
+| 469f10f | Decisions 4 and 6: privilege audit closure and regression test (0038) |
+| (this commit) | Decision 7 production boundary; register, evidence and handoff updates |
+
+### Verification on freshly rebuilt databases (webdesk_integration and webdesk_hardening, owner-created, migrated to 0038)
+
+| Group | Result |
+| --- | --- |
+| Full regression suite | 597 passed, 0 failed, 0 skipped |
+| Restricted-login hardening folder (`tests/hardening`) | 197 passed |
+| EVAL-F11j (`test_eval_f11j.py`, `test_eval_f11j_extended.py`) | 37 passed |
+| Reset policy (`test_reset_policy`, `test_owner_reset`, `test_tokens`) | 21 passed |
+| Source-read security (`test_source_read_authorization`, intake, phase E, HTTP intake) | 46 passed |
+| Worker and ceremony privileges (privilege audit, ceremony, outbox identity, worker login, install, appointment) | 66 passed |
+| Proof replay, rollback, concurrency and SQL authorization | 39 passed |
+| Ruff (src, tests, migrations) | clean |
+| Mypy --strict src/webdesk | clean (56 source files) |
+| Alembic head to 0029 and back to head (fresh database) | passes |
+| Each of 0030 to 0038: upgrade, downgrade, upgrade | passes |
+| Alembic full downgrade to base | not possible on this cluster: migration 0001 drops roles that other databases hold (pre-existing) |
+
+### Database privilege audit (catalog, final state)
+
+The full output is in `docs/PRIVILEGE_AUDIT_2026-10-23.txt`. Summary, pinned by `tests/hardening/test_privilege_audit.py`:
+
+- Application role writes: audit events, audit tombstones, idempotency keys and rate-limit events (INSERT); project revision and
+  updated-at (UPDATE). No DELETE. It cannot read storage keys, content hashes, segment text or read grants.
+- Ceremony role writes: the flow columns only (ceremonies, users, contact reservations, approvals, role assignments, audit). Reads only the
+  tables its flows read. Executes three guard functions.
+- Worker and outbox identities: no table write. Worker executes 14 guard functions; outbox executes 7.
+- Authority: writes sessions, credentials, operation proofs, rate-limit events and audit events, and updates credentials, sessions and users.
+  Executes six authority functions.
+- No PUBLIC EXECUTE on any guard, authority or public-schema function.
+- Every guard function is owned by the guard owner, which is not a login role.
+- Login roles hold exactly one Webdesk membership each (app, authority, intake worker).
+
+### Actor-identity and direct-access bypass review
+
+Each finding below was confirmed before its fix: by a failing test, or by a direct catalog or call probe (the disable-function and PUBLIC-execute findings were probes). Each proving test now passes. The table records what was found and what closes it.
+
+| Found | Effect | Closed by | Proving test |
+| --- | --- | --- | --- |
+| `fn_disable_user` executable by PUBLIC | Any login could call it. Its body refused random actors only; a real Administrator's ID was not secret. | 0034 | `test_a_login_role_cannot_disable_an_account_by_naming_a_real_administrator` |
+| Membership, grant, project-create and source-admission wrappers accepted proofs issued to non-members | A login could call the wrapper directly and act without the role | 0035 | `test_sql_authorization.py` (4 refusals, 1 positive control) |
+| Administrator could mint a reset for another account | Credential takeover path | 0036 | `test_reset_policy.py` (reset_not_self, direct and via service) |
+| Application role read storage keys and segment text | Stored content readable without the read service | 0037 | `test_direct_database_reads_of_stored_content_are_refused` |
+| Column-level REVOKE did not remove a table-level SELECT | Looked closed, was not | 0037 (table revoked, columns granted back) | the same test |
+| PUBLIC EXECUTE on six trigger functions; ceremony INSERT on `user_withdrawals` | Unnecessary grants | 0038 | `test_no_guard_or_authority_function_is_executable_by_public` and the audit |
+| Refusal audit named the actor "anonymous" | Denials could not be traced to an account | Refusal DETAIL names the account (0035, 0037) | `test_a_refused_operation_keeps_its_denial_audit` |
+| EVAL-F11j case f11j_18 passed for the body's reason, not the privilege's | False assurance | New case with a real Administrator ID (`test_ceremony_and_public_execute.py`) | as above |
+
+Actor identity: every mutation and read takes its actor from a verified source. Proof operations take the actor from the proof. Reads take
+it from the session, checked against the sessions table. The ceremony CLI's operator and verifier identifiers are declared and recorded; they
+are not authenticated here (see residual 3). The remaining `actor` parameters in the source are private helpers that receive an actor
+already derived from a proof, or audit-only labels.
+
+### Infrastructure note
+
+During verification the PostgreSQL container for the test databases (port 5433) was not running, because Docker Desktop was stopped. Docker
+Desktop was started and `docker compose up -d postgres` restarted the existing container. Its data persisted; both base databases were at
+0036 and were then migrated to 0038. No data was lost or reset.
+
+### Residual risks (for the independent reviewer)
+
+1. The authority transport is loopback HTTP with a shared bearer secret. It is not authenticated or encrypted (decision 7).
+2. Per-resource business rules for proof operations (archive state, revision checks, classification floor, the Administrator content-grant rule)
+   are checked in Python behind the database role and membership barrier.
+3. Ceremony operator and verifier identifiers are declared, not authenticated.
+4. The login-rate limiter is per client address and stored in the test database. Repeated runs can exhaust it. The suites reuse sessions to
+   limit logins.
+5. A full downgrade to base is not supported on a shared cluster (migration 0001).
+6. Source-read grants are reused within their 60-second window by design. A stolen session token together with a live grant reads the one
+   version the grant names, for the rest of that window.
+7. The reset notice and the reset delivery depend on an approved transport that is not configured. No real delivery is enabled.

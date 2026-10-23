@@ -182,3 +182,123 @@ webdesk_guard.fn_revoke_user_sessions|webdesk_guard_owner|webdesk_app
 webdesk_guard.fn_withdraw_with_proof|webdesk_guard_owner|webdesk_app
 
 ```
+
+## P-INC3-PHASE1-CLOSE-09 — WDS final decisions 1-8 (approved 2026-10-23): implementation status
+
+This entry records the eight WDS decisions as implemented after the baseline (commit 9bb7835, 516 passing tests). It does not modify any
+earlier approval. Each decision names the commits, migrations and tests that implement it. Where the implementation departs from the
+decision's wording, the departure is stated.
+
+### Decision 1 — Rollback and single-use proofs (exactly-once committed operation)
+
+- Implemented. A proof is consumed in the same transaction as the mutation it authorizes. A rollback restores the proof to unspent while
+  it is unexpired. A committed use spends it for every later attempt (`proof_spent`).
+- Concurrency: a second concurrent use waits on the proof row. If the first commits, the second is refused; if the first rolls back, the
+  second may use the proof (`tests/hardening/test_proof_rollback.py`, rb_04 and rb_06).
+- Denial audit: a refusal is written by the authority or the guard, and the transaction runner commits it.
+- Commits: 8a2c273 (rb_06). Earlier semantics: migrations 0024 to 0030.
+
+### Decision 2 — Password reset
+
+- Implemented (migration 0036). An account owner's reset proof is issued to that account. `fn_issue_reset_token_with_proof` refuses any
+  other actor (`reset_not_self`). An Administrator's reset for another account is refused by the database, including on a direct call.
+- Administrator-triggered reset is notification-only: `account.reset.notify` (Administrator) returns the approved contact address of an
+  active account and creates no token. `tokens.notify_reset` sends a notice that carries no secret.
+- Real delivery stays disabled by default (`WEBDESK_RESET_DELIVERY=disabled`). The SMTP adapter requires every gate, including
+  `WEBDESK_SMTP_VERIFIED=true`. No real delivery is enabled in this repository.
+- Tests: `tests/hardening/test_reset_policy.py` (6 cases), `tests/hardening/test_eval_f11j_extended.py` (f11j_21, f11j_22),
+  `tests/integration/test_owner_reset.py`, `tests/integration/test_tokens.py`.
+- Commit: 0070ee3.
+
+### Decision 3 — Source-content read security
+
+- Implemented (migration 0037, `src/webdesk/intake/read_access.py`, interface `source-read/v1`). A read needs a session token and a grant
+  that the authority issued for one source version. Identity comes from the session, verified in the database. No caller-supplied actor
+  is accepted.
+- A grant lasts 60 seconds (at most five minutes) and is bound to one session, one account and one source version. Expiry, revocation,
+  logout and membership removal all end its use. Permission and quarantine are checked again at every read.
+- The SOURCE_READ matrix is enforced in SQL (`fn_can_read_source_version`). Quarantined content is never granted or read.
+- Direct database reads of `storage_key`, `content_hash`, `text_content` and `text_content_hash` are refused. The application role keeps
+  SELECT on the other columns.
+- Denial audit: `source.content.denied` with the account named, and `source.read.grant.denied` on the authority path.
+- Tests: `tests/hardening/test_source_read_authorization.py` (13 cases), `tests/support/reads.py`.
+- Commit: 2a37ef1.
+
+### Decision 4 — SQL authorization
+
+- Implemented in two parts. Migration 0035 adds `operation_authorization_rules`, derived from the permission matrix, and enforces it in
+  `fn_validate_operation_proof`, which every proof consumption passes through. Migration 0037 enforces SOURCE_READ in SQL.
+- PostgreSQL enforces: the actor is an active account; it holds an active role that the operation's rule names; for assigned operations,
+  an active membership on the resource project; for reads, membership, the source.read grant, restricted grants and quarantine.
+  Approval separation (`self_approval`) and the workflow-state checks of each wrapper are also in SQL (migrations 0026 and 0030).
+- Remains in Python, by design: archive state, revision checks, the classification floor, and the content rule for Administrator source
+  access (the database enforces the role there; the content grant is checked in the service). The authority decides whether a session is
+  valid before it issues a proof.
+- Bypass found and fixed: `fn_disable_user` was executable by PUBLIC (migration 0034). It is now owner-only.
+- Tests: `tests/hardening/test_sql_authorization.py` (5), `tests/hardening/test_ceremony_and_public_execute.py`,
+  `tests/hardening/test_privilege_audit.py`.
+- Commits: 6502518, 5d79269, 469f10f.
+
+### Decision 5 — Outbox worker
+
+- Implemented (migration 0033). The `webdesk_outbox` identity holds no table write. Its transitions are guard functions: claim, renew,
+  open the sealed prior address for the leased notice only, sent, dead-letter and retry. Each fences on the lease owner and status.
+- The application role lost UPDATE on the outbox delivery-state columns and keeps SELECT.
+- `OutboxWorker.deliver` renews the lease first, so a reclaimed worker reports `lease_lost` and writes nothing.
+- Tests: `tests/hardening/test_outbox_identity.py` (11 cases); the existing outbox suites pass unchanged.
+- Commit: b98a934.
+
+### Decision 6 — Ceremony least privilege
+
+- Implemented (migrations 0029, 0034 and 0038). The ceremony role has the three guard functions its flows call (appointment consumption
+  for installation and recovery, and the reservation release and token revocation of the expiry sweep).
+- Writes are limited to the flow columns: ceremonies (insert and the close columns), users (insert four columns; status), contact
+  reservations, approvals (insert nine columns; status and revision), and role assignments (the bootstrap and appointment columns). Reads
+  are limited to the tables those flows read. `user_withdrawals` INSERT was removed (0038).
+- The approved zero-Administrator recovery and the no-self-approval rules are unchanged. The ceremony role cannot be assumed by a login
+  role (tested).
+- Tests: `tests/hardening/test_ceremony_and_public_execute.py` (24), `tests/hardening/test_privilege_audit.py`, and the existing
+  installation, recovery and appointment tests.
+- Commits: 6502518, 469f10f.
+- Residual: the ceremony CLI declares an operator and a verifier identifier that are recorded in the audit. They are not authenticated
+  here; the production authority and operator custody (decision 7) must authenticate them.
+
+### Decision 7 — Production authority
+
+- Documented, and production deployment is blocked. `docs/PRODUCTION_BOUNDARY.md` lists each dependency and blocker: trusted authority
+  deployment, signing-key custody, authenticated transport, separate database identities, worker deployment and isolation, the approved
+  email transport, and operational monitoring and recovery.
+- No production service was deployed. No readiness claim is made.
+
+### Decision 8 — Intake worker identity
+
+- Implemented and tested. A dedicated LOGIN role, a member of `webdesk_worker` and of nothing else, runs the intake worker. The test
+  provisions the login with a password, verifies its memberships and attributes, runs the intake worker through it, and refuses direct
+  writes, human wrappers and role changes.
+- The worker login is not created by a migration, because migrations hold no secrets. Deployment must provision it (see
+  `docs/PRODUCTION_BOUNDARY.md`).
+- Tests: `tests/committed/test_worker_login.py` (4 cases).
+- Commit: 9306a06.
+
+### Final verification (2026-10-23, fresh databases)
+
+- Full regression suite: 597 passed, 0 failed, 0 skipped.
+- Restricted-login hardening folder: 197 passed. EVAL-F11j (both files): 37 passed.
+- Reset policy (`test_reset_policy`, owner reset, tokens): 21 passed.
+- Source-read security (authorization, intake, phase E, HTTP intake): 46 passed.
+- Worker and ceremony privileges (audit, ceremony, outbox identity, worker login, installation and appointment): 66 passed.
+- Proof replay, rollback and concurrency (proof rollback, SQL authorization, release boundary): 39 passed.
+- Ruff: clean (src, tests, migrations). Strict mypy: clean (56 source files).
+- Alembic: head to 0029 and back to head on a fresh database, and each of 0030 to 0038 round-trips on its own. A full downgrade to
+  base is not possible on this shared cluster: migration 0001 drops roles that other databases hold (pre-existing, not changed).
+- Privilege audit (catalog, final state): `docs/PRIVILEGE_AUDIT_2026-10-23.txt`. No PUBLIC EXECUTE on any guard, authority or public function.
+
+### Residual risks recorded for the reviewer
+
+1. The authority's HTTP transport is loopback and shares a bearer secret; it is not authenticated beyond that (decision 7).
+2. Authorization for proof operations is enforced in SQL for role and membership, and for reads in full. The per-resource business rules remain
+   in Python (above).
+3. The ceremony operator and verifier identifiers are declared, not authenticated.
+4. The login-rate limiter is per client address and stored in the database. Repeated runs against one database can exhaust it; the test
+   suites reuse sessions to avoid this.
+5. Full downgrade to base is not supported on a shared cluster (migration 0001).
