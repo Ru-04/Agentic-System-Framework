@@ -67,3 +67,25 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 - **Effect on AS records:** the AS approval statements in `AS_APPROVALS_RECORD_2026-10-23.md` and the sign-off records are preserved unchanged. Where they say AS authored or reviewed the work, that statement is now in conflict with this account. The conflict is recorded here, not corrected in those records.
 - **Status:** reported, **not verified** from the repository. Git history cannot confirm the account. WDS has not provided it as a signed or dated document.
 - **Reviewer:** PG is the only candidate reviewer on record. PG's independence is **not established** until WDS confirms PG's role and that PG did not produce or edit the work.
+
+## WDS management statement on authorship and reviewer nomination (23 October 2026)
+
+- **Statement (WDS management, as given in chat):** BD produced the Sprint 1–3 implementation work. The commits were recorded under the Git identity `toarushiS`, used for repository attribution.
+- **Reference:** local commit `ae289aa` (authorship record). Historical commits are not rewritten and their authorship is not altered.
+- **Verification status (separate from the statement):** **not verified.** The repository does not establish who produced the work. Do not infer implementation responsibility from the Git author field.
+- **Nominated independent QA reviewer:** PG, for Sprint 1, Sprint 2 and Sprint 3.
+- **AS role:** Technical Lead and Project Manager. Not independent of the work. Existing management approval records are preserved.
+
+### PG independence and qualification checklist (all NOT VERIFIED)
+
+| Check | Status |
+|---|---|
+| PG's actual role and qualifications verified | NOT VERIFIED |
+| PG did not implement or author the reviewed work (Sprint 1–3) | NOT VERIFIED |
+| PG has required access to the QA evidence | NOT VERIFIED |
+| Independence determination recorded | NOT RECORDED |
+| PG's review findings obtained | NOT OBTAINED |
+| PG's sign-off obtained | NOT OBTAINED. No approval or signature has been entered for PG |
+
+### Push status
+- Local commit `ae289aa` is not on the remote. Push is refused with HTTP 403 for the Git identity `toarushiS` on `Ru-04/Agentic-System-Framework`. The remote branch is at `abf13a9`.
