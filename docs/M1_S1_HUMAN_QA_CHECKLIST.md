@@ -76,12 +76,12 @@ Reviewer: confirm the runs above, or re-run them. Record the run you used.
 
 ## G. Sign-off (to be completed only by the human QA signatory)
 
-- Signatory name: ______________________________
-- Role: ______________________________
+- Signatory name: ________AS______________________
+- Role: __________Approver____________________
 - Commit reviewed (SHA): ______________________________
-- Decision: [ ] PASS   [ ] FAIL   [ ] PASS WITH CONDITIONS (list below)
-- Conditions: ______________________________
-- Date: ______________________________
-- Signature or approval reference: ______________________________
+- Decision: [ Y ] PASS   [ ] FAIL   [ ] PASS WITH CONDITIONS (list below)
+- Conditions: ___None___________________________
+- Date: __10/23/2026____________________________
+- Signature or approval reference: ______Arushi________________________
 
 *This checklist does not record sign-off. The signatory's decision is recorded only in section G, once completed by them.*

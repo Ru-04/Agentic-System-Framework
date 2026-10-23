@@ -46,5 +46,5 @@ The repository records AS as the author of every commit in Sprint 1 and Sprint 2
 
 - Approver full name: Arushi Sharma
 - Role: Technical Lead and Project Manager
-- Date: ______________________
+- Date: ____10/23/2026__________________
 - Signature: **to be completed by AS personally. Not entered by the system.**

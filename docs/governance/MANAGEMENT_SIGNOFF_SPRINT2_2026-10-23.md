@@ -62,7 +62,7 @@ The approval therefore does not yet attach to a specification revision, and no s
 
 ## 7. Signature fields (for the approver only)
 
-- Approver full name: ______________________ *(not entered by the system)*
+- Approver full name: ______AS________________ *(not entered by the system)*
 - Approver role: WDS Authorized Approver
 - Date: 23 October 2026
-- Signature or approval reference: ______________________ *(to be completed by the approver only)*
+- Signature or approval reference: ______Arushi ________________ *(to be completed by the approver only)*
