@@ -6,7 +6,8 @@ the shared harness. It does not change them.
 
 Rules the base enforces for every platform:
 - No approved evidence source configured means no retrieval is attempted, and the output says so.
-- Workspace scope and quarantine are applied inside the retriever, before ranking and the limit.
+- Only vendor passages whose origin the profile's approved source permits can be cited.
+- Workspace scope, quarantine and instruction screening are applied before ranking and the limit.
 - Relevance is graded (DIRECT, PARTIAL, IRRELEVANT). Only DIRECT evidence counts as coverage.
 - Every finding cites a verified passage. Keyword matches are not reported as capability.
 - Feasibility is always reported as not determined. Output is always "incomplete" or "failed".
@@ -15,6 +16,7 @@ Rules the base enforces for every platform:
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -33,21 +35,30 @@ from webdesk.evidence.retrieval import (
     search_with_retry,
 )
 from webdesk.evidence.sources import Freshness, SourceKind, assess_freshness
-from webdesk.evidence.untrusted import make_admission
+from webdesk.evidence.untrusted import flag_instruction_like, make_admission, split_by_trust
 from webdesk.specialists.authority import Action
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, SpecialistInput
 from webdesk.specialists.platforms.shopify_options import (
     FEASIBILITY_UNKNOWN,
-    OPTION_LABELS,
-    PLAN_CLARIFICATION,
     OptionClass,
-    classify_options,
 )
 
 MIN_TERM_HITS: Final[int] = 2
 CANDIDATE_LIMIT: Final[int] = 20
 MAX_FINDINGS: Final[int] = 20
+
+# Platform-neutral. The Shopify clarification names Shopify and must not reach other platforms.
+PLAN_CLARIFICATION: Final[str] = (
+    "CLARIFY: confirm the platform plan or edition and the store setup this requirement assumes"
+)
+
+# Neutral labels. The Shopify labels describe Shopify and must not be used for other platforms.
+OPTION_LABELS: Final[dict[OptionClass, str]] = {
+    OptionClass.NATIVE: "native platform configuration",
+    OptionClass.APP_OR_EXTENSION: "third-party app or extension",
+    OptionClass.CUSTOM_API: "custom code against a documented API",
+}
 
 LIMITS: Final[str] = (
     "findings are limited to the retrieved approved evidence; client-specific comparison and "
@@ -67,17 +78,31 @@ class PlatformProfile:
     # Keyword sets that describe what is looked for. They are not claims about the platform.
     capability_topics: Mapping[str, tuple[str, ...]]
     plan_or_version_terms: tuple[str, ...] = ()
+    # Option-class indicators for this platform. Empty until reviewed evidence supports them.
+    option_indicators: Mapping[OptionClass, tuple[str, ...]] = field(default_factory=dict)
     # Approved evidence source for this platform. None means no source is approved yet.
     approved_source: VendorAllowlist | None = None
     notes: tuple[str, ...] = field(default=())
 
 
+def _mentions(phrase: str, text: str) -> bool:
+    # Whole-word match with an optional plural suffix, so "app" does not match "apply".
+    return re.search(rf"\b{re.escape(phrase)}(?:s|es)?\b", text, re.IGNORECASE) is not None
+
+
 def _topics(profile: PlatformProfile, text: str) -> tuple[str, ...]:
-    lowered = text.lower()
     return tuple(
         label
         for label, phrases in profile.capability_topics.items()
-        if any(phrase in lowered for phrase in phrases)
+        if any(_mentions(phrase, text) for phrase in phrases)
+    )
+
+
+def _options(profile: PlatformProfile, text: str) -> frozenset[OptionClass]:
+    return frozenset(
+        option
+        for option, phrases in profile.option_indicators.items()
+        if any(_mentions(phrase, text) for phrase in phrases)
     )
 
 
@@ -86,7 +111,7 @@ def _rank_key(
 ) -> tuple[int, int, int, str, int]:
     grade = judge_relevance(task, passage.text)
     grade_order = 0 if grade is Relevance.DIRECT else 1 if grade is Relevance.PARTIAL else 2
-    has_signal = bool(_topics(profile, passage.text) or classify_options(passage.text))
+    has_signal = bool(_topics(profile, passage.text) or _options(profile, passage.text))
     overlap = len(content_terms(task) & content_terms(passage.text))
     return (grade_order, 0 if has_signal else 1, -overlap, passage.source.source_id, passage.start)
 
@@ -191,27 +216,34 @@ class PlatformSpecialist:
             )
 
         unknowns: list[str] = []
-        if rejected[0]:
-            unknowns.append(
-                f"{rejected[0]} candidate passage(s) contained instruction-like text "
-                "and were excluded"
-            )
         if result.status is RetrievalStatus.NO_EVIDENCE:
             unknowns.insert(0, "no approved evidence was found for the task")
             findings: list[dict[str, Any]] = []
             coverage: set[OptionClass] = set()
         else:
-            candidates = tuple(
-                sorted(
-                    (p for p in result.passages if p.source.workspace_id == request.workspace_id),
-                    key=lambda p: _rank_key(request.task, profile, p),
-                )
+            # Fail closed: a passage is citable only if its workspace matches, its origin is
+            # permitted by this platform's approved source, its source id is clean, and it is
+            # not instruction-like. The retriever is not trusted to have applied these.
+            in_scope = tuple(
+                p
+                for p in result.passages
+                if p.source.workspace_id == request.workspace_id
+                and profile.approved_source.permits(p.source.origin)
+                and not flag_instruction_like(p.source.source_id)
             )
+            usable, quarantined = split_by_trust(in_scope)
+            rejected[0] += len(quarantined)
+            candidates = tuple(sorted(usable, key=lambda p: _rank_key(request.task, profile, p)))
             findings, coverage = self._findings(request, candidates, unknowns)
             if len(result.passages) >= CANDIDATE_LIMIT:
                 unknowns.append(
                     f"the candidate set reached its limit of {CANDIDATE_LIMIT} passages"
                 )
+        if rejected[0]:
+            unknowns.append(
+                f"{rejected[0]} candidate passage(s) were excluded by scope, origin or "
+                "instruction screening"
+            )
         for option in OptionClass:
             if option not in coverage:
                 unknowns.append(_gap(option))
@@ -235,7 +267,7 @@ class PlatformSpecialist:
         seen: set[tuple[str, str, str]] = set()
         for passage in passages:
             topics = _topics(profile, passage.text)
-            options = classify_options(passage.text)
+            options = _options(profile, passage.text)
             if not topics and not options:
                 continue
             grade = judge_relevance(request.task, passage.text)
@@ -281,7 +313,7 @@ class PlatformSpecialist:
                         f"{source.source_id} was retrieved {source.retrieved_at:%Y-%m-%d}; "
                         "it is outside the freshness window or dated in the future"
                     )
-                if any(term in passage.text.lower() for term in profile.plan_or_version_terms):
+                if any(_mentions(term, passage.text) for term in profile.plan_or_version_terms):
                     unknowns.append(
                         f"{source.source_id}: plan or version applicability is not established "
                         "by the evidence"
