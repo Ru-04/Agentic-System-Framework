@@ -59,3 +59,11 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 - **Status of (a):** reported, **not verified.** The repository does not show BD as author of any commit. All commits are authored by `toarushiS <arushi@webdeskinc.com>`. The written factual account of authorship has not been provided to the repository, and the git author identity is not explained by it. Independence is **not established** until WDS records the account in writing.
 - **Status of (b):** PG reported as the alternative reviewer. PG's role, authority and authorship history are **not recorded**. Independence is **not established**. PG has not been contacted and has not reviewed anything.
 - **Not recorded:** any QA result, sign-off or independence determination under BD's or PG's name.
+
+## WDS factual account of authorship (23 October 2026, as reported in chat)
+
+- **Reported by WDS:** option 1. The Git author name on every Sprint 1–3 commit is `toarushiS <arushi@webdeskinc.com>`. BD produced the work. The commits were recorded under that identity only.
+- **Effect on independence:** BD is the producer of the reviewed work and is **not independent** of it. The Git author name does not identify the producer. It must not be used to infer who produced the work.
+- **Effect on AS records:** the AS approval statements in `AS_APPROVALS_RECORD_2026-10-23.md` and the sign-off records are preserved unchanged. Where they say AS authored or reviewed the work, that statement is now in conflict with this account. The conflict is recorded here, not corrected in those records.
+- **Status:** reported, **not verified** from the repository. Git history cannot confirm the account. WDS has not provided it as a signed or dated document.
+- **Reviewer:** PG is the only candidate reviewer on record. PG's independence is **not established** until WDS confirms PG's role and that PG did not produce or edit the work.
