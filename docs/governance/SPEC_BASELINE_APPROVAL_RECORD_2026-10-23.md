@@ -65,7 +65,7 @@ The approval refers to a "reconciled seven-document package". Three candidates e
 
 ## 7. Signature fields (human only)
 
-- Approver name: ______________________
+- Approver name: ________AS______________
 - Approver role: WDS Authorized Approver
-- Version binding confirmed as option (a), (b) or (c): ______
+- Version binding confirmed as option (a), (b) or (c): ___a___
 - Signature or approval reference: **to be completed by the approver only**

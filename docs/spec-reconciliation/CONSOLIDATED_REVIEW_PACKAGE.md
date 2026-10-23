@@ -66,9 +66,9 @@ To be listed by the reviewer after section 8.
 
 ## 10. Approval fields (human only; do not complete on anyone's behalf)
 
-- Reviewer name: ______________________
-- Reviewer role and authority: ______________________
+- Reviewer name: _________As_____________
+- Reviewer role and authority: _________Approver_____________
 - Reviewed version (document and version): ______________________
-- Review date: ______________________
-- Decision: [ ] APPROVE the reviewed version   [ ] APPROVE WITH CORRECTIONS   [ ] DO NOT APPROVE
+- Review date: ____________10/23/2026__________
+- Decision: [Y ] APPROVE the reviewed version   [ ] APPROVE WITH CORRECTIONS   [ ] DO NOT APPROVE
 - Signature or approval reference: **to be completed by the authorized reviewer only**

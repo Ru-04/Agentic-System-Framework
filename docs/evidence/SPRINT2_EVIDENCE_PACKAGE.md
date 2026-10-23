@@ -133,13 +133,13 @@ Earlier runs on the same branch, for reference: `45df73c` run 39804483161 (succe
 
 ## 13. Sign-off (to be completed only by AS)
 
-- Signatory name: ______________________
-- Role: ______________________
+- Signatory name: _AS_____________________
+- Role: _________WDS_Approver ____________
 - Commit reviewed (SHA): ______________________
-- Decision: [ ] PASS   [ ] FAIL   [ ] PASS WITH CONDITIONS (list below)
-- Conditions: ______________________
-- Date: ______________________
-- Signature or approval reference: ______________________
+- Decision: [ Y] PASS   [ ] FAIL   [ ] PASS WITH CONDITIONS (list below)
+- Conditions: ___None___________________
+- Date: _____10/23/2026_________________
+- Signature or approval reference: ___Arushi___________________
 
 *This package records no sign-off. AS's decision is recorded only in this section, once completed by AS.*
 
