@@ -22,3 +22,35 @@ This handoff lists only the actions that require you personally. Nothing has bee
 
 - Do not change any threshold or rule; they are frozen (S2-D15).
 - Do not treat your review as Milestone 1 acceptance; that needs separate independent milestone testing.
+
+## Secure transfer — exact steps (23 October 2026)
+
+**Status:** the transfer has **not** been made. This environment cannot reach the WDS-approved file-sharing system, so the files below are staged locally for the decision-maker to upload.
+
+**Files to transfer (and only these three):**
+
+- `C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/review_package/reviewer_reading_file.md` — the 55 pairs with requirement, source and passage text. Restricted.
+- `C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/review_package/reviewer_labels_TO_FILL.csv` — the blank label template with the exact importer header.
+- `C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/review_package/README.txt` — instructions for AS.
+- `C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/review_package/MANIFEST.sha256` — SHA-256 of the three files above, so AS can confirm the copy is intact.
+
+**Do not transfer:** `C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/private_do_not_transfer/pairs_for_cli_PRIVATE.json`. It contains the system's grades and must not reach the reviewer before the independent classification (S2-D21).
+
+**Manual actions required (decision-maker or an authorized WDS file administrator):**
+
+1. Upload the three files to the approved WDS file-sharing system. Restrict access to AS only.
+2. Confirm that AS can open and download the files. Confirm the checksums match `MANIFEST.sha256`.
+3. Record the upload in this handoff (system name, link or item ID, date, uploader). Do not record a link to passage text in the repository.
+
+**Return path:** AS completes `reviewer_labels_TO_FILL.csv` and returns it through the same approved system. The decision-maker then runs, on the private pair file:
+
+`python -m webdesk.evidence.evaluation_cli --pairs C:/Users/baps/AppData/Local/Temp/claude/D--WDS-Agentic-System-FrameWork--claude-worktrees-webdesk-specialist-baseline-v1-3b21b1/ba29eeca-4c47-42ca-a887-facf1ad7e2ae/scratchpad/private_do_not_transfer/pairs_for_cli_PRIVATE.json --labels <returned-file>`
+
+## Where each sign-off is recorded (human only)
+
+- **Sprint 2 QA sign-off (AS):** `docs/evidence/SPRINT2_EVIDENCE_PACKAGE.md`, section 13, "Sign-off (to be completed only by AS)".
+- **Sprint 2 independent human relevance review (AS):** the returned label file, with reviewer name, confidence and uncertainty per pair.
+- **Sprint 1 formal human QA sign-off:** `docs/M1_S1_HUMAN_QA_CHECKLIST.md`, section G, "Sign-off (to be completed only by the human QA signatory)". Not signed.
+- **Specification approval (authorized reviewer):** `docs/spec-reconciliation/CONSOLIDATED_REVIEW_PACKAGE.md`, section 10, and `docs/governance/SPEC_BASELINE_APPROVAL_RECORD_2026-10-23.md`, section 7 (version binding is still open).
+
+No sign-off in any of these locations has been completed by this system.
