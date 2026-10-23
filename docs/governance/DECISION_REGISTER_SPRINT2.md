@@ -48,3 +48,22 @@
 - Reviewer package prepared; access to passage text to be arranged by the decision-maker. Nothing labelled. AS is the proposed reviewer; no sign-off recorded.
 - Label importer and metrics implemented and tested on synthetic files only. No threshold has been tuned against human labels, and none is held out yet.
 - Semantic validator remains disabled (D09). Short-requirement clarification and `www.shopify.com` scope preserved and covered by regression tests.
+
+## Decisions S2-D13 to S2-D17 (authorization date 23 October 2026)
+
+Authorization date: 23 October 2026. These are new decisions. They do not backdate or reinterpret any earlier record. Approver identity and signature were **not provided in this record** and are left blank.
+
+| ID | Decision | Exact scope | Restrictions | Status |
+|---|---|---|---|---|
+| **S2-D13** | Secure reviewer access: use an existing WDS-approved, access-controlled internal file-sharing method for the 55-pair reading file. | Access for the designated reviewer to the review material only. | Passage text stays outside GitHub. No unnecessary client or confidential information. Access controls and provenance preserved. If no approved method is available, the exact human action is reported. | **Pending human action.** This system has no access to WDS's internal file-sharing method, so the package has not been shared. The decision-maker must upload it through the approved method. |
+| **S2-D14** | Independent human review: AS is the designated independent reviewer for all 55 pairs, subject to availability and independence. | 55 pairs listed in `HUMAN_REVIEW_SHEET_SPRINT2.md`. | AS classifies each pair independently. No prefilled labels, no fabricated results, no signing for AS. If AS cannot review, documented authorization is needed before any other reviewer is assigned. | **Pending.** No label has been assigned or recorded. |
+| **S2-D15** | Frozen relevance thresholds for this evaluation. | DIRECT: at least 3 specific terms and at least 50% of the requirement's specific terms. PARTIAL: at least 3 specific terms. Platform-generic terms excluded. Retrieval: at least 2 shared terms, candidate limit 20. Clarification floor: 3 specific terms. | Only independently verified defects may be corrected. No threshold may be changed to raise DIRECT coverage. No tuning against the final evaluation data. Future tuning needs separate development labels and an untouched held-out set. Pinned by `tests/unit/test_frozen_thresholds.py`. | **In force.** |
+| **S2-D16** | Semantic validator: defer live integration until D09 is separately completed. | D09 needs an approved provider, exact model ID, credentials and budget. | Semantic validator stays disabled. Sprint 2 completes on deterministic relevance only if it is independently validated against the acceptance criteria. | **In force.** Validator disabled (`DisabledSemanticValidator` raises). |
+| **S2-D17** | Accelerated Sprint 2 completion: complete all independently executable engineering, testing, documentation and QA preparation now. | Formal closure requires: (1) completed independent human relevance review; (2) satisfactory evidence-validation results; (3) AS's actual signed QA acceptance; (4) successful GitHub CI against the final commit; (5) satisfaction of applicable specification and security acceptance requirements. | No requirement may be marked passed without evidence. No identity details or signatures are manufactured. | **In force.** Formal closure is **not** met (items 1, 2, 3 and 5 are open). |
+
+### Preserved decisions (not changed by S2-D13 to S2-D17)
+
+- Short requirements with fewer than three specific terms require clarification (regression-tested).
+- `www.shopify.com` is within the restricted S2-D08 scope (regression-tested).
+- No unauthorized external browsing. No live semantic-model call before full D09 approval.
+- No production activation. No change to the frozen 4-milestone, 9-sprint plan.
