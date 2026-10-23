@@ -1,0 +1,160 @@
+{
+  "fixture_id": "RAG-SYN-001",
+  "synthetic": true,
+  "description": "Synthetic RAG corpus for AI-S03 tests. No real client, vendor or Foundation data.",
+  "collections": [
+    {
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "scope": "synthetic_test",
+      "approval_reference": "AI-S03 synthetic fixture approval (WDS decision, 2026-10)"
+    },
+    {
+      "collection_id": "col-syn-b",
+      "project_id": "PRJ-SYN-0002",
+      "scope": "synthetic_test",
+      "approval_reference": "AI-S03 synthetic fixture approval (WDS decision, 2026-10)"
+    },
+    {
+      "collection_id": "col-syn-c",
+      "project_id": "PRJ-SYN-0001",
+      "scope": "synthetic_test",
+      "approval_reference": "AI-S03 synthetic fixture approval (WDS decision, 2026-10)"
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "DOC-SYN-INV-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-INV-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic inventory rule",
+      "version": "1",
+      "effective_date": "2026-01-10T00:00:00+00:00",
+      "conflict_group": "cg-inventory",
+      "status": "available",
+      "text": "Synthetic inventory rule: the storefront must update stock levels immediately when the warehouse system changes stock. Counts are refreshed from the warehouse once per hour.",
+      "content_hash": "bf218af88d15b96b7721969a1c39019fef039d0fe833b2d167222bed8e7489cd"
+    },
+    {
+      "document_id": "DOC-SYN-INV-02",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-INV-02",
+      "kind": "synthetic_test",
+      "title": "Synthetic inventory contradiction",
+      "version": "1",
+      "effective_date": "2026-02-01T00:00:00+00:00",
+      "conflict_group": "cg-inventory",
+      "status": "available",
+      "text": "Synthetic inventory contradiction: the storefront must not update stock levels from the warehouse system. Counts refresh nightly.",
+      "content_hash": "2f8e0f33eacb087593c5c8eb18377940e1d2fa6c6bf59d207b9f30c3db128c80"
+    },
+    {
+      "document_id": "DOC-SYN-CHK-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-CHK-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic checkout note",
+      "version": "1",
+      "effective_date": "2025-03-01T00:00:00+00:00",
+      "superseded_by_version": "2",
+      "status": "available",
+      "text": "Synthetic checkout note: the legacy checkout uses a single page for payment.",
+      "content_hash": "4287aab47b0879db47a945d9dbb0c14b4caf90d2c89ced43360dc99d77240a8c"
+    },
+    {
+      "document_id": "DOC-SYN-CHK-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-CHK-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic checkout note",
+      "version": "2",
+      "effective_date": "2026-06-01T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic checkout note: the checkout uses three steps and must feel faster than the legacy page.",
+      "content_hash": "47aca5a802246055457517799021f95396bfb3a13df501796ea06a81645105de"
+    },
+    {
+      "document_id": "DOC-SYN-WSH-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-WSH-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic wishlist note",
+      "version": "1",
+      "effective_date": "2026-03-01T00:00:00+00:00",
+      "status": "unavailable",
+      "text": "Synthetic wishlist note: the storefront supports a wishlist for registered customers.",
+      "content_hash": "b7854c84fbfa46ad516985baa20a23ae7e6a456fbba47bcf0cd6fd9345e0fea1"
+    },
+    {
+      "document_id": "DOC-SYN-GFT-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-GFT-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic gift card note",
+      "version": "1",
+      "effective_date": "2025-01-05T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic gift card note: gift cards can be sold online through the storefront.",
+      "content_hash": "45b6078c5988d3fcb47f033b967d27466f99d67a695ad0f9ead71f05988be5f0"
+    },
+    {
+      "document_id": "DOC-SYN-PRI-01",
+      "collection_id": "col-syn-c",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-PRI-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic pricing note",
+      "version": "1",
+      "effective_date": "2026-04-01T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic pricing note: discount codes apply to the basket total.",
+      "content_hash": "9f5c3cec75e09a6c3171492f6970fff002e0ae2cc0db6a0fa313e1b3144c2880"
+    },
+    {
+      "document_id": "DOC-SYN-INV-B1",
+      "collection_id": "col-syn-b",
+      "project_id": "PRJ-SYN-0002",
+      "source_id": "SRC-SYN-INV-B1",
+      "kind": "synthetic_test",
+      "title": "Synthetic inventory note, second project",
+      "version": "1",
+      "effective_date": "2026-01-20T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic inventory note for the second project: stock levels update daily from the warehouse.",
+      "content_hash": "fe4bef4299d7795347d017685d85f9b7c94b9ed53a6e9c4456366100c86dce34"
+    },
+    {
+      "document_id": "DOC-SYN-BAD-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0001",
+      "source_id": "SRC-SYN-BAD-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic document with a wrong hash",
+      "version": "1",
+      "effective_date": "2026-05-01T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic bad-hash note: this document claims a hash it does not have.",
+      "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "document_id": "DOC-SYN-XPR-01",
+      "collection_id": "col-syn-a",
+      "project_id": "PRJ-SYN-0002",
+      "source_id": "SRC-SYN-XPR-01",
+      "kind": "synthetic_test",
+      "title": "Synthetic cross-project mismatch",
+      "version": "1",
+      "effective_date": "2026-05-02T00:00:00+00:00",
+      "status": "available",
+      "text": "Synthetic cross-project note: this document belongs to the second project.",
+      "content_hash": "4f73bea3bcfbd34e0306252286516c79567b253511807945e46b8c840a21f05b"
+    }
+  ]
+}

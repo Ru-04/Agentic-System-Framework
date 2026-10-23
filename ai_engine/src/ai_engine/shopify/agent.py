@@ -192,7 +192,9 @@ class _Builder:
         """Evidence IDs from the first contradiction group that has two or more served records."""
         groups: dict[str, list[str]] = {}
         for item in found:
-            group = self.context.evidence.conflict_group_of(item.evidence_id)
+            group = self.context.evidence.conflict_group_of(
+                item.evidence_id, project_id=self.task.project_id
+            )
             if group is not None:
                 groups.setdefault(group, []).append(item.evidence_id)
         for ids in groups.values():

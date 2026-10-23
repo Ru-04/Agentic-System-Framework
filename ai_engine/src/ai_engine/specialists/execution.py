@@ -63,7 +63,8 @@ class _AgentEvidenceView:
             project_id=project_id, allowed_collections=allowed_collections, query=query
         )
 
-    def conflict_group_of(self, evidence_id: str) -> str | None:
+    def conflict_group_of(self, evidence_id: str, *, project_id: str | None = None) -> str | None:
+        # The run's project is authoritative: the group is always read for the task's project.
         return self._group_of(evidence_id)
 
 
@@ -187,7 +188,7 @@ def run_specialist(
         # including another project's record, gets the same answer as an unknown one (AI-5.1 F3).
         if evidence_id not in served:
             return None
-        return context.evidence.conflict_group_of(evidence_id)
+        return context.evidence.conflict_group_of(evidence_id, project_id=task.project_id)
 
     # The agent works on private copies, so it cannot change the task, the requirements or the
     # project that the post-run checks rely on (AI-5.1 review F1, F2).

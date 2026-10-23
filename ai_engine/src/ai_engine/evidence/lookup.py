@@ -27,7 +27,9 @@ class EvidenceLookup(Protocol):
         self, *, project_id: str, allowed_collections: Sequence[str], query: str
     ) -> list[EvidenceReference]: ...
 
-    def conflict_group_of(self, evidence_id: str) -> str | None: ...
+    def conflict_group_of(
+        self, evidence_id: str, *, project_id: str | None = None
+    ) -> str | None: ...
 
 
 @dataclass(frozen=True)
@@ -49,14 +51,15 @@ class MockEvidenceLookup:
 
     def __init__(self, items: Iterable[CollectedEvidence]) -> None:
         self._items = tuple(items)
-        self._groups: dict[str, str | None] = {}
+        # Keyed by (project, evidence identity): the same identifier in two projects is two records.
+        self._groups: dict[tuple[str, str], str | None] = {}
         for item in self._items:
             if item.record.evidence_kind is not EvidenceKind.SYNTHETIC_MOCK:
                 raise EvidenceAccessError(
                     f"mock lookup accepts synthetic evidence only; {item.record.evidence_id} is "
                     f"{item.record.evidence_kind}"
                 )
-            self._groups[item.record.evidence_id] = item.conflict_group
+            self._groups[(item.record.project_id, item.record.evidence_id)] = item.conflict_group
 
     def search(
         self, *, project_id: str, allowed_collections: Sequence[str], query: str
@@ -73,5 +76,10 @@ class MockEvidenceLookup:
             and (not terms or any(term in item.record.relevance_summary.lower() for term in terms))
         ]
 
-    def conflict_group_of(self, evidence_id: str) -> str | None:
-        return self._groups.get(evidence_id)
+    def conflict_group_of(self, evidence_id: str, *, project_id: str | None = None) -> str | None:
+        if project_id is not None:
+            return self._groups.get((project_id, evidence_id))
+        # Without a project, answer only when the identifier names one record. Two projects with the
+        # same identifier must not be guessed between, so an ambiguous identifier gets no group.
+        matches = [group for (_, eid), group in self._groups.items() if eid == evidence_id]
+        return matches[0] if len(matches) == 1 else None
