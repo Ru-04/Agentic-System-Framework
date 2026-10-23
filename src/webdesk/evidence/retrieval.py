@@ -37,6 +37,9 @@ class RetrievalQuery:
     limit: int = 5
     # A passage must share at least this many distinct meaningful terms with the query.
     min_term_hits: int = 1
+    # Eligibility predicate (S2-D18, S2-D20). Applied inside the retriever, before ranking and
+    # before the candidate limit, so an ineligible passage never consumes a candidate slot.
+    admit: Callable[[Passage], bool] | None = None
 
     def __post_init__(self) -> None:
         if not self.workspace_id.strip():
@@ -140,12 +143,26 @@ def content_terms(text: str) -> set[str]:
     return _terms(text)
 
 
+# Sibilant plurals that take "-es" ("processes", "addresses", "matches", "boxes"). Words of four
+# letters or fewer are never folded, so "axes" is left alone (QA4-08).
+_ES_ENDINGS: Final[tuple[str, ...]] = ("sses", "shes", "ches", "xes")
+
+
 def _singular(word: str) -> str:
     # Simple plural folding: "filters" -> "filter". Words ending in "ss", "us", "is" or "ps" are
-    # kept, so "https" does not fold to "http" (QA4-09). "-es" plurals are not folded (known limit).
+    # kept, so "https" does not fold to "http" (QA4-09).
     if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is", "ps")):
         return word[:-1]
     return word
+
+
+def _canonical(word: str) -> str:
+    """One matching form per word. Each word still counts once toward the term floor, so a single
+    query word can never satisfy a two-term floor by producing two forms (QA4-08 defect, found by a
+    regression test). "caches" therefore does not match "cache": a recorded limit."""
+    if len(word) >= 5 and word.endswith(_ES_ENDINGS):
+        return word[:-2]
+    return _singular(word)
 
 
 def _terms(text: str) -> set[str]:
@@ -155,11 +172,8 @@ def _terms(text: str) -> set[str]:
     joined = re.sub(r"(?<=[a-z0-9])-(?=[a-z0-9])", "", lowered)
     words = {match.group(0) for match in _TERM.finditer(lowered)}
     words |= {match.group(0) for match in _TERM.finditer(joined)}
-    return {
-        _singular(word)
-        for word in words
-        if word not in _STOPWORDS and _singular(word) not in _STOPWORDS
-    }
+    canonical = {_canonical(word) for word in words}
+    return {form for form in canonical if form not in _STOPWORDS}
 
 
 class InMemoryRetriever:
@@ -172,14 +186,20 @@ class InMemoryRetriever:
         query_terms = _terms(query.text)
         scored: list[tuple[int, Passage]] = []
         for source in self._sources:
+            # Workspace scope is enforced before any scoring or ranking (S2-D20).
             if source.workspace_id != query.workspace_id or source.kind not in query.kinds:
                 continue
             for match in _LINE.finditer(source.text):
                 if not match.group(0).strip():
                     continue
                 hits = len(query_terms & _terms(match.group(0)))
-                if hits >= query.min_term_hits:
-                    scored.append((hits, Passage(source, match.start(), match.end())))
+                if hits < query.min_term_hits:
+                    continue
+                passage = Passage(source, match.start(), match.end())
+                # Eligibility is checked before the candidate limit (S2-D18).
+                if query.admit is not None and not query.admit(passage):
+                    continue
+                scored.append((hits, passage))
         if not scored:
             return RetrievalResult(RetrievalStatus.NO_EVIDENCE)
         scored.sort(key=lambda item: (-item[0], item[1].source.source_id, item[1].start))
