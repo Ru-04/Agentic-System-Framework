@@ -82,3 +82,9 @@ Authorization date: 23 October 2026. These are new decisions, not retroactive ap
 | **S2-D23** | Accelerated execution: routine Sprint 2 remediation, regression testing, feature-branch commits, GitHub CI and report preparation. | Within the approved Sprint 2 scope only. | No automatic merge. No protected-branch change. No production deployment or activation. No unauthorized model calls. No bypass of human QA or specification gates. | **In force.** |
 
 S2-D15 (frozen thresholds), S2-D16 (semantic validator disabled), S2-D13 and S2-D14 remain in force. Thresholds are unchanged by S2-D18 to S2-D20.
+
+## Specification baseline approval (recorded 23 October 2026, as reported)
+
+- A WDS Authorized Approver's approval on 23 October 2026 of the "reconciled seven-document specification package" and of Sprint 2 engineering progress is recorded as reported. Approver name and signature are not in this environment and are not recorded.
+- **Version binding is open.** No revised seven-document set exists in the repository. The seven documents are the unchanged 0.3.10 drafts, whose headers say NOT implementation-approved. The approval is therefore not bound to any specification revision. See `docs/governance/SPEC_BASELINE_APPROVAL_RECORD_2026-10-23.md`, section 4, for the three options the approver must choose between.
+- Gate 1 authorization and the 22 October amendment are preserved unchanged.
