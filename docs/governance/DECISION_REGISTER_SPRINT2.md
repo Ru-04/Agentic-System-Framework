@@ -42,3 +42,9 @@
 | **S2-R2** | Handle requirements with too few specific terms on my own. | Implemented: a requirement with fewer than three specific terms gets a clarification request ("restate the requirement with the platform features it involves") rather than a relevance grade. No requirement among the 17 falls below the threshold, so no current result changes. |
 | **S2-R3** | `www.shopify.com` is within S2-D08. | Confirmed. The scope on `www.shopify.com` is the same as on `shopify.com`. |
 | **S2-R4** | "AS approves." | Reported by the decision-maker. **This is not AS's signed sign-off.** AS's own signed record, stating AS's name, role, date and the commit reviewed, is still required in `docs/evidence/SPRINT2_EVIDENCE_PACKAGE.md`, section 13. No sign-off has been recorded on AS's behalf. |
+
+## Human review and evaluation tooling (23 October 2026)
+
+- Reviewer package prepared; access to passage text to be arranged by the decision-maker. Nothing labelled. AS is the proposed reviewer; no sign-off recorded.
+- Label importer and metrics implemented and tested on synthetic files only. No threshold has been tuned against human labels, and none is held out yet.
+- Semantic validator remains disabled (D09). Short-requirement clarification and `www.shopify.com` scope preserved and covered by regression tests.
