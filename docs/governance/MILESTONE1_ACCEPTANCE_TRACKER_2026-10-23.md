@@ -45,3 +45,10 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 3. Choose the reviewed commit and the specification version; produce and hash the reconciled specification set if option (b) is chosen.
 4. Signed Sprint 1 and Sprint 2 QA by a qualified independent reviewer.
 5. Assign and run independent Milestone 1 testing; run final CI on the accepted commit.
+
+## Sprint 3 independent reviewer — named by WDS, independence NOT established (23 October 2026)
+
+- **Named by WDS in chat:** Arushi Sharma (AS), as independent Sprint 3 QA reviewer.
+- **Independence check:** AS is recorded as author of every Sprint 1, Sprint 2 and Sprint 3 commit, including `c54a868` and `e3ba3b7` (`toarushiS <arushi@webdeskinc.com>`). Under Q2 she cannot be treated as independent of this work unless WDS documents that the authorship does not reflect her personal contribution.
+- **Status:** assignment recorded; **not accepted as independent QA.** No Sprint 3 QA result is recorded under her name. The assistant's automated review is not independent QA.
+- **Decision needed (WDS, in chat):** either (a) a written factual account of who produced the Sprint 1–3 work, so independence can be assessed, or (b) an alternative reviewer with no authorship of this work.
