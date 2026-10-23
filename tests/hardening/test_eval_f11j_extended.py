@@ -111,36 +111,54 @@ def test_f11j_20_reset_token_issuance_without_a_proof_is_refused_and_audited(
     assert audited >= 1
 
 
-def test_f11j_21_a_reset_token_cannot_be_issued_for_a_non_administrator_proof(
+def test_f11j_21_a_reset_token_cannot_be_issued_for_another_account_by_a_staff_proof(
     app_engine: Engine, world: dict[str, uuid.UUID]
 ) -> None:
-    """Only an Administrator can obtain a reset-issue proof, so no reset token can be issued by a
-    staff member."""
+    """WDS decision 2: a reset proof is owner-initiated.
+
+    A staff member's proof is refused for another account,
+    and a reset token is never minted for it."""
     target = make_active_user(app_engine, world)
     staff = make_active_user(app_engine, world)
+    transport = CaptureTransport()
     with app_engine.begin() as conn:
-        with pytest.raises(AuthError):
-            remote_prove(conn, staff, "account.reset.issue", target)
+        proof = remote_prove(conn, staff, "account.reset.issue", target)
+        with pytest.raises(ProofRefused) as refused:
+            tokens.issue(
+                conn,
+                user_id=target,
+                purpose="reset",
+                transport=transport,
+                limits=TOKEN_LIMITS,
+                client_ip="203.0.113.51",
+                actor=None,
+                proof=proof,
+            )
+    assert refused.value.reason == "reset_not_self"
+    assert transport.messages == []
 
 
-def test_f11j_22_a_legitimate_administrator_reset_issuance_succeeds(
+def test_f11j_22_an_administrator_cannot_issue_a_reset_for_another_account(
     app_engine: Engine, world: dict[str, uuid.UUID]
 ) -> None:
+    """WDS decision 2: an Administrator's reset is a notification only (see test_owner_reset)."""
     target = make_active_user(app_engine, world)
+    transport = CaptureTransport()
     with app_engine.begin() as conn:
         proof = remote_prove(conn, world["admin"], "account.reset.issue", target)
-        transport = CaptureTransport()
-        tokens.issue(
-            conn,
-            user_id=target,
-            purpose="reset",
-            transport=transport,
-            limits=TOKEN_LIMITS,
-            client_ip="203.0.113.51",
-            actor=None,
-            proof=proof,
-        )
-    assert transport.messages, "the reset token was delivered"
+        with pytest.raises(ProofRefused) as refused:
+            tokens.issue(
+                conn,
+                user_id=target,
+                purpose="reset",
+                transport=transport,
+                limits=TOKEN_LIMITS,
+                client_ip="203.0.113.52",
+                actor=None,
+                proof=proof,
+            )
+    assert refused.value.reason == "reset_not_self"
+    assert transport.messages == []
 
 
 # --- Session epoch and contact revision invalidation ----------------------------------------------

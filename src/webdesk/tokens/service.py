@@ -234,3 +234,44 @@ def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
         record_refs=[str(row[0]), str(user_id)],
     )
     return user_id
+
+
+def notify_reset(
+    conn: Connection,
+    *,
+    proof: uuid.UUID,
+    user_id: uuid.UUID,
+    transport: EmailTransport,
+) -> None:
+    """Administrator-triggered reset notification (WDS decision 2).
+
+    The notice goes to the account's approved contact. It carries no token and no link that sets a
+    password, and it tells the owner to start a reset from the trusted authority. The Administrator
+    receives nothing. The database refuses the proof unless the actor is an active Administrator and
+    the target account is active.
+    """
+    address = str(
+        consume_with(
+            conn,
+            "account.reset.notify",
+            "SELECT webdesk_guard.fn_record_reset_notification_with_proof(:p, :u)",
+            {"p": proof, "u": user_id},
+        )
+    )
+    transport.send(
+        to=address,
+        subject="WDS password reset",
+        body=(
+            "An Administrator asked us to remind you that you can reset your own WDS password. "
+            "Start the reset yourself. No Administrator can see or set your password."
+        ),
+        idempotency_key=str(uuid.uuid4()),
+    )
+    record_event(
+        conn,
+        actor_type="system",
+        actor_id="reset-notice",
+        event_type="reset.notification.sent",
+        outcome="success",
+        record_refs=[str(user_id)],
+    )

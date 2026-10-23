@@ -144,22 +144,29 @@ def test_a_second_owner_reset_supersedes_the_first_token(
 def test_administrator_triggered_notification_delivers_without_returning_the_secret(
     committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
+    """WDS decision 2: an Administrator's notice carries no token and returns nothing."""
     admin, second = committed_admins
     user = committed_active_user(committed_engine, admin, second, "admin notify")
     transport = CaptureTransport()
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        result = tokens.issue(
+        result = tokens.notify_reset(
             conn,
+            proof=prove(conn, admin, "account.reset.notify", user),
             user_id=user,
-            purpose="reset",
             transport=transport,
-            limits=LIMITS,
-            client_ip="203.0.113.90",
-            actor=None,
-            proof=prove(conn, admin, "account.reset.issue", user),
         )
+        reset_tokens = conn.execute(
+            text(
+                "SELECT count(*) FROM account_activation_tokens"
+                " WHERE user_id = :u AND purpose = 'reset'"
+            ),
+            {"u": user},
+        ).scalar_one()
     # The Administrator's call returns nothing: no secret, no URL, and no choice of password.
     assert result is None
+    assert reset_tokens == 0, "a notification must not create a reset token"
     assert len(transport.messages) == 1
     assert transport.messages[0][0] == _email_of(committed_engine, user)
+    body = transport.messages[0][2]
+    assert "single-use code" not in body

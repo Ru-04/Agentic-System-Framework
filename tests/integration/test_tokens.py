@@ -18,7 +18,7 @@ from sqlalchemy.engine import Connection
 
 from tests.support.people import POLICY, administrators_for, user_in_state
 from tests.support.privileged import guard_insert
-from tests.support.proofs import prove, reset_proof
+from tests.support.proofs import ProofNotIssued, prove, reset_proof
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import CaptureTransport, TransportUnavailable
 from webdesk.identity import contacts
@@ -335,11 +335,13 @@ def test_active_user_can_request_a_reset_and_pending_user_cannot(conn: Connectio
     )
     token = _token_from(transport)
     assert tokens.consume(conn, token=token, purpose="reset") == active
+    with pytest.raises(ProofNotIssued):
+        reset_proof(conn, pending)  # the authority never issues a reset proof to a pending account
     with pytest.raises(TokenError):
         tokens.issue(
             conn,
             user_id=pending,
-            proof=reset_proof(conn, pending),
+            proof=None,
             purpose="reset",
             transport=transport,
             limits=LIMITS,
