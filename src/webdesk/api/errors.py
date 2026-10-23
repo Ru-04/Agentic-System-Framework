@@ -15,6 +15,7 @@ from webdesk.ceremony.recovery import RecoveryError
 from webdesk.idempotency.service import IdempotencyError
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.intake.ingest import IngestError
+from webdesk.intake.read_access import ReadAccessError
 from webdesk.intake.reparse import ReparseError
 from webdesk.projects.service import ProjectServiceError
 from webdesk.rbac.assign import RoleServiceError
@@ -35,6 +36,7 @@ DOMAIN_ERRORS: tuple[type[Exception], ...] = (
     IngestError,
     RunError,
     ReparseError,
+    ReadAccessError,
 )
 
 

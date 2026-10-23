@@ -17,10 +17,12 @@ from datetime import timedelta
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from webdesk.audit.service import record_event
 from webdesk.auth import service as auth
+from webdesk.auth.service import AuthError
+from webdesk.authority.proofs import refusal_actor
 from webdesk.delivery.transport import EmailTransport
 from webdesk.identity.email import ContactEmailPolicy, EmailPolicyError
 from webdesk.ratelimit.limiter import Limit, RateLimitExceeded, check, record, subject_hash
@@ -202,3 +204,80 @@ def request_owner_reset(
         outcome="success",
         record_refs=[str(user_id), str(token_id)],
     )
+
+
+READ_REFUSALS = (
+    "session_not_live",
+    "version_not_found",
+    "quarantined",
+    "read_not_permitted",
+    "grant_not_found",
+)
+
+
+def issue_read_grant(
+    conn: Connection, *, session_token: str, source_version: uuid.UUID
+) -> uuid.UUID:
+    """Issue a short-lived read grant for one source version (WDS decision 3).
+
+    The session is the verified identity. The database checks the SOURCE_READ matrix, refuses
+    quarantined content, and writes the grant. A refusal is audited and then raised.
+    """
+    try:
+        with conn.begin_nested():
+            value = conn.execute(
+                text("SELECT webdesk_guard.fn_issue_read_grant(:h, :v)"),
+                {"h": subject_hash(session_token), "v": source_version},
+            ).scalar_one()
+    except DBAPIError as exc:
+        reason = (str(exc.orig).splitlines() or ["read_refused"])[0].strip()
+        if reason not in READ_REFUSALS:
+            raise
+        record_event(
+            conn,
+            actor_type="human" if refusal_actor(exc) else "system",
+            actor_id=refusal_actor(exc) or "anonymous",
+            event_type="source.read.grant.denied",
+            outcome="denied",
+            error_class=reason,
+            record_refs=[str(source_version)],
+        )
+        raise ReadGrantRefused(reason) from exc
+    grant = uuid.UUID(str(value))
+    user = validate_session(conn, session_token)
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(user),
+        event_type="source.read.grant.issued",
+        outcome="success",
+        record_refs=[str(grant), str(source_version)],
+    )
+    return grant
+
+
+def revoke_read_grant(conn: Connection, *, session_token: str, grant: uuid.UUID) -> bool:
+    """Revoke one read grant the session owns. Returns whether a live grant was revoked."""
+    revoked = bool(
+        conn.execute(
+            text("SELECT webdesk_guard.fn_revoke_source_read_grant(:h, :g)"),
+            {"h": subject_hash(session_token), "g": grant},
+        ).scalar_one()
+    )
+    user = validate_session(conn, session_token)
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(user),
+        event_type="source.read.grant.revoked" if revoked else "source.read.grant.revoke_refused",
+        outcome="success" if revoked else "denied",
+        record_refs=[str(grant)],
+    )
+    return revoked
+
+
+class ReadGrantRefused(AuthError):
+    """A read grant was refused.
+
+    An AuthError, so the authority commits the denial audit (see server._run).
+    """

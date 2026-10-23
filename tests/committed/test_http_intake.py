@@ -150,9 +150,14 @@ def test_an_analyst_uploads_a_source_and_reads_its_bytes_back(http: dict[str, ob
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["parse_status"] == "pending"
+    grant = client.post(
+        f"/source-versions/{body['source_version_id']}/read-grant",
+        headers=_auth(str(http["analyst_token"])),
+    )
+    assert grant.status_code == 200, grant.text
     content = client.get(
         f"/source-versions/{body['source_version_id']}/content",
-        headers=_auth(str(http["analyst_token"])),
+        headers={**_auth(str(http["analyst_token"])), "X-Read-Grant": grant.json()["grant_id"]},
     )
     assert content.status_code == 200
     assert content.content == b"http line one\n"

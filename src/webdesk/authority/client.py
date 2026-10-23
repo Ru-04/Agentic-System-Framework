@@ -66,6 +66,20 @@ class AuthorityClient:
     def logout(self, session_token: str) -> None:
         self._post("/v1/logout", {"session_token": session_token})
 
+    def issue_read_grant(self, session_token: str, source_version: uuid.UUID) -> uuid.UUID:
+        reply = self._post(
+            "/v1/read-grant",
+            {"session_token": session_token, "source_version_id": str(source_version)},
+        )
+        return uuid.UUID(str(reply["grant_id"]))
+
+    def revoke_read_grant(self, session_token: str, grant: uuid.UUID) -> bool:
+        reply = self._post(
+            "/v1/read-grant/revoke",
+            {"session_token": session_token, "grant_id": str(grant)},
+        )
+        return bool(reply["revoked"])
+
     def issue_operation_proof(
         self, session_token: str, operation: str, resource: uuid.UUID | None
     ) -> uuid.UUID:

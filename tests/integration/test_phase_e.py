@@ -14,13 +14,15 @@ from typing import Any
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
+from tests.support.reads import read_as
 from webdesk.ceremony.install import PreparedInstall, apply_install
-from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
+from webdesk.intake.ingest import ingest_source
 from webdesk.projects import service as projects
 from webdesk.projects.service import ProjectServiceError
 from webdesk.rbac.assign import assign_role
@@ -264,7 +266,7 @@ def test_a_content_read_writes_exactly_one_audit_event_without_the_content(
 ) -> None:
     ids = _setup(conn)
     version = _ingest(conn, store, ids)
-    assert read_source_content(conn, store, ids["analyst"], version.source_version_id) == NOTES
+    assert read_as(conn, store, ids["analyst"], version.source_version_id) == NOTES
     rows = conn.execute(
         text(
             """SELECT count(*), bool_and(redacted_details::text NOT LIKE '%client sentence%')
@@ -277,19 +279,16 @@ def test_a_content_read_writes_exactly_one_audit_event_without_the_content(
     assert rows[1] is True
 
 
-def test_a_denied_content_read_is_audited_and_returns_no_bytes(
+def test_a_denied_content_read_is_refused_by_the_database_and_returns_no_bytes(
     conn: Connection, store: ContentStore
 ) -> None:
+    """The database refuses a stranger's grant. The denial audit is written on the authority path.
+
+    That audit is asserted in tests/hardening/test_source_read_authorization.py.
+    """
     ids = _setup(conn)
     version = _ingest(conn, store, ids)
     stranger = _active_user(conn)
-    with pytest.raises(IngestError) as exc:
-        read_source_content(conn, store, stranger, version.source_version_id)
-    assert exc.value.status == 403
-    denied = conn.execute(
-        text(
-            """SELECT count(*) FROM audit_events WHERE event_type = 'source.content.denied'
-               AND record_refs IS NOT NULL"""
-        )
-    ).scalar_one()
-    assert denied >= 1
+    with pytest.raises(DBAPIError) as exc:
+        read_as(conn, store, stranger, version.source_version_id)
+    assert "read_not_permitted" in str(exc.value.orig)

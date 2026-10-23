@@ -16,16 +16,18 @@ from typing import Any
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import activate_user
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
+from tests.support.reads import read_as
 from webdesk.authority.proofs import ProofRefused
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.intake import parse_service
-from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
+from webdesk.intake.ingest import IngestError, ingest_source
 from webdesk.intake.parse_service import ParseRefused
 from webdesk.intake.parsers import ParseResult, SegmentDraft
 from webdesk.projects import service as projects
@@ -280,9 +282,9 @@ def test_restricted_upload_is_quarantined_and_its_bytes_cannot_be_read(
     result, _ = _ingest(conn, store, ids["analyst"], ids["project"], access="restricted")
     assert result.scan_status == "quarantined"
     assert result.parse_status == "pending"
-    with pytest.raises(IngestError) as exc:
-        read_source_content(conn, store, ids["analyst"], result.source_version_id)
-    assert (exc.value.status, exc.value.reason) == (409, "quarantined")
+    with pytest.raises(DBAPIError) as exc:
+        read_as(conn, store, ids["analyst"], result.source_version_id)
+    assert "quarantined" in str(exc.value.orig)
     with pytest.raises(ParseRefused) as refused:
         as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
     assert refused.value.reason == "quarantined"
@@ -293,7 +295,7 @@ def test_admitted_content_reads_back_and_the_read_is_audited(
 ) -> None:
     ids = _setup(conn)
     result, _ = _ingest(conn, store, ids["analyst"], ids["project"])
-    assert read_source_content(conn, store, ids["analyst"], result.source_version_id) == NOTES
+    assert read_as(conn, store, ids["analyst"], result.source_version_id) == NOTES
     reads = conn.execute(
         text("SELECT count(*) FROM audit_events WHERE event_type = 'source.content.read'")
     ).scalar_one()

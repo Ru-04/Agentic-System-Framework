@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
@@ -24,7 +24,8 @@ from webdesk.api.transactions import run_in_transaction
 from webdesk.auth.service import AuthError
 from webdesk.authority.client import AuthorityClient, AuthorityUnavailable
 from webdesk.authority.proofs import ProofRefused
-from webdesk.intake.ingest import IngestError, ingest_source, read_source_content
+from webdesk.intake.ingest import IngestError, ingest_source
+from webdesk.intake.read_access import ReadAccessError, read_source_version_v1
 from webdesk.intake.reparse import reparse_source_version
 from webdesk.runs import service as runs
 from webdesk.storage.content_store import ContentStore
@@ -178,15 +179,55 @@ async def upload_source(project_id: str, request: Request, token: Token) -> dict
     }
 
 
+@router.post("/source-versions/{version_id}/read-grant")
+async def request_read_grant(version_id: str, request: Request, token: Token) -> dict[str, str]:
+    """Ask the authority for a short-lived read grant for one source version (WDS decision 3)."""
+    version = _uuid(version_id)
+    authority: AuthorityClient | None = request.app.state.authority
+    if authority is None:
+        raise AuthError("authority_unconfigured")
+
+    def attempt() -> uuid.UUID:
+        try:
+            authority.validate_session(token)  # a dead session is 401
+        except AuthorityUnavailable as exc:
+            raise AuthError("authority_unavailable") from exc
+        try:
+            return authority.issue_read_grant(token, version)
+        except AuthorityUnavailable as exc:
+            raise AuthError("authority_unavailable") from exc
+        except AuthError as exc:
+            # The session is live, so the authority refused this read for this account.
+            raise ReadAccessError(403, "read_not_permitted") from exc
+
+    grant = await run_in_threadpool(attempt)
+    return {"grant_id": str(grant), "source_version_id": str(version)}
+
+
 @router.get("/source-versions/{version_id}/content")
-async def read_content(version_id: str, request: Request, actor: Actor) -> Response:
+async def read_content(
+    version_id: str,
+    request: Request,
+    token: Token,
+    x_read_grant: Annotated[str | None, Header(alias="X-Read-Grant")] = None,
+) -> Response:
+    """Read stored bytes through ``source-read/v1``. The session and a read grant are required."""
+    if not x_read_grant:
+        raise ReadAccessError(403, "grant_missing")
     store = _store(request)
     engine = request.app.state.engine
     version = _uuid(version_id)
+    grant = _uuid(x_read_grant)
     data = await run_in_threadpool(
         run_in_transaction,
         engine,
-        lambda conn: read_source_content(conn, store, actor, version),
+        lambda conn: read_source_version_v1(
+            conn,
+            store,
+            session_token=token,
+            grant=grant,
+            source_version=version,
+        ),
     )
     return Response(content=data, media_type="application/octet-stream")
 

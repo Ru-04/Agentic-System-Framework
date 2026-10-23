@@ -529,8 +529,11 @@ def test_a_sha256_helper_matches_the_stored_content_hash_convention(
     ids = _setup(conn)
     data = b"hash convention line\n"
     version = _ingest(conn, store, ids, data=data)
+    # content_hash is not readable by the application role (WDS decision 3). The owner reads it.
+    conn.execute(text("RESET ROLE"))
     stored = conn.execute(
         text("SELECT content_hash FROM source_versions WHERE source_version_id = :v"),
         {"v": version.source_version_id},
     ).scalar_one()
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
     assert stored == hashlib.sha256(data).hexdigest() == str(stored)

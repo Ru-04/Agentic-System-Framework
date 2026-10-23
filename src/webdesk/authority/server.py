@@ -126,6 +126,24 @@ def _proof(conn: Connection, body: dict[str, Any], _ip: str) -> dict[str, Any]:
     return {"proof_id": str(proof)}
 
 
+def _read_grant(conn: Connection, body: dict[str, Any], _ip: str) -> dict[str, Any]:
+    grant = authority.issue_read_grant(
+        conn,
+        session_token=_body_field(body, "session_token"),
+        source_version=uuid.UUID(_body_field(body, "source_version_id")),
+    )
+    return {"grant_id": str(grant)}
+
+
+def _revoke_read_grant(conn: Connection, body: dict[str, Any], _ip: str) -> dict[str, Any]:
+    revoked = authority.revoke_read_grant(
+        conn,
+        session_token=_body_field(body, "session_token"),
+        grant=uuid.UUID(_body_field(body, "grant_id")),
+    )
+    return {"revoked": revoked}
+
+
 ROUTES: dict[str, Callable[[Connection, dict[str, Any], str], dict[str, Any]]] = {
     "/v1/login": _login,
     "/v1/activate": _activate,
@@ -133,6 +151,8 @@ ROUTES: dict[str, Callable[[Connection, dict[str, Any], str], dict[str, Any]]] =
     "/v1/validate": _validate,
     "/v1/logout": _logout,
     "/v1/proof": _proof,
+    "/v1/read-grant": _read_grant,
+    "/v1/read-grant/revoke": _revoke_read_grant,
 }
 
 
