@@ -89,3 +89,10 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 
 ### Push status
 - Local commit `ae289aa` is not on the remote. Push is refused with HTTP 403 for the Git identity `toarushiS` on `Ru-04/Agentic-System-Framework`. The remote branch is at `abf13a9`.
+
+## Reviewer roles decided in chat (23 October 2026, as reported)
+
+- **Independent AI-assisted review:** a separate Claude chat, started fresh with the review brief in `docs/governance/INDEPENDENT_REVIEW_BRIEF_2026-10-23.md`. It is not this working session, and its findings are not human QA.
+- **Human QA reviewer:** PG. PG's role, qualifications, independence and sign-off are **not yet verified** (see the PG checklist above).
+- **Developer assignment:** Standalone Applications and Middleware Applications: BD (as reported). BD is an authorship-unverified contributor, so BD does not count as independent for this work.
+- **Push:** deferred by WDS. The branch stays local until access is restored.
