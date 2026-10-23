@@ -40,7 +40,7 @@ Not retrieved, and not used as evidence: the Shopify plan pages above (HTTP 403 
 
 | Brief | # | Requirement | Retrieved | DIRECT | PARTIAL | Status | Findings | Sources cited | Direct-evidence option classes | Gaps (of 3) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| SH-CASE-01 | 1 | Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses. | 3 | 0 | 0 | incomplete | 0 | — | none | 3 |
+| SH-CASE-01 | 1 | Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses. | 7 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-01 | 2 | Do not rely on IP-based province detection. Province must be captured explicitly. | 1 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-01 | 3 | Let a customer renew a rate plan from the order status page without creating an account. | 20 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-01 | 4 | Create the customer account after purchase, reusing details already entered at checkout. | 20 | 0 | 3 | incomplete | 0 | — | none | 3 |
@@ -58,7 +58,7 @@ Not retrieved, and not used as evidence: the Shopify plan pages above (HTTP 403 
 | SH-CASE-04 | 3 | Staff dashboard with daily volume, forecasting and reporting. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
 | SH-CASE-04 | 4 | Automated order preparation timelines. | 0 | 0 | 0 | incomplete | 0 | — | none | 3 |
 
-**Summary:** 17 requirements retained. With a DIRECT passage: **0**. With a cited finding: **0**. With no finding: **17**. Passage grades across the run: {'direct': 0, 'partial': 5, 'irrelevant': 107}.
+**Summary:** 17 requirements retained. With a DIRECT passage: **0**. With a cited finding: **0**. With no finding: **17**. Passage grades across the run: {'direct': 0, 'partial': 5, 'irrelevant': 111}.
 
 ## 4. Relevance diagnosis (S2-D10)
 

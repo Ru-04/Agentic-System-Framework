@@ -33,7 +33,7 @@ from webdesk.evidence.retrieval import (
     search_with_retry,
 )
 from webdesk.evidence.sources import Freshness, SourceKind, SourceRecord, assess_freshness
-from webdesk.evidence.untrusted import split_by_trust
+from webdesk.evidence.untrusted import make_admission, split_by_trust
 from webdesk.specialists.authority import Action
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, SpecialistInput
@@ -137,12 +137,16 @@ class ShopifySpecialist:
         self, request: SpecialistInput
     ) -> tuple[dict[str, Any], frozenset[OptionClass]]:
         """Return the contract output and the option classes the evidence covers."""
+        # Workspace scope and quarantine are applied inside the retriever, before ranking and the
+        # candidate limit (S2-D18, S2-D20). An excluded passage never consumes a candidate slot.
+        rejected = [0]
         query = RetrievalQuery(
             workspace_id=request.workspace_id,
             text=request.task,
             kinds=frozenset(SourceKind),
             min_term_hits=MIN_TERM_HITS,
             limit=CANDIDATE_LIMIT,
+            admit=make_admission(request.workspace_id, rejected),
         )
         try:
             result = search_with_retry(
@@ -184,6 +188,11 @@ class ShopifySpecialist:
             )
         if result.status is RetrievalStatus.NO_EVIDENCE:
             gap_unknowns = ["no approved evidence was found for the task"]
+            if rejected[0]:
+                gap_unknowns.append(
+                    f"{rejected[0]} candidate passage(s) contained instruction-like text and were "
+                    "excluded"
+                )
             gap_unknowns += [_gap(option) for option in OptionClass]
             gap_unknowns += [PLAN_CLARIFICATION, FEASIBILITY_UNKNOWN, LIMITS]
             return (
@@ -208,9 +217,10 @@ class ShopifySpecialist:
                 f"the candidate set reached its limit of {CANDIDATE_LIMIT} passages; further "
                 "passages were not assessed"
             )
-        if quarantined:
+        excluded = rejected[0] + len(quarantined)
+        if excluded:
             unknowns.append(
-                f"{len(quarantined)} passage(s) contained instruction-like text and were excluded"
+                f"{excluded} candidate passage(s) contained instruction-like text and were excluded"
             )
         sources = {passage.source.source_id: passage.source for passage in usable}
         findings, coverage = self._findings(request, usable, sources, unknowns)

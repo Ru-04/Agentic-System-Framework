@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Final
 
 from webdesk.evidence.retrieval import Passage
@@ -95,3 +95,26 @@ def split_by_trust(
 
 def _source_is_flagged(source: SourceRecord) -> bool:
     return bool(flag_instruction_like(source.text))
+
+
+def make_admission(workspace_id: str, rejected: list[int]) -> Callable[[Passage], bool]:
+    """Eligibility for retrieval: same workspace, not quarantined (record or passage).
+
+    ``rejected`` is incremented for each candidate refused as instruction-like, so the caller can
+    report how many were excluded without naming them.
+    """
+    flags: dict[tuple[str, str, str], bool] = {}
+
+    def admit(passage: Passage) -> bool:
+        source = passage.source
+        if source.workspace_id != workspace_id:
+            return False
+        key = (source.workspace_id, source.source_id, source.content_sha256)
+        if key not in flags:
+            flags[key] = _source_is_flagged(source)
+        if flags[key] or flag_instruction_like(passage.text):
+            rejected[0] += 1
+            return False
+        return True
+
+    return admit

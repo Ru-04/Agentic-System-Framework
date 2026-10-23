@@ -67,3 +67,18 @@ Authorization date: 23 October 2026. These are new decisions. They do not backda
 - `www.shopify.com` is within the restricted S2-D08 scope (regression-tested).
 - No unauthorized external browsing. No live semantic-model call before full D09 approval.
 - No production activation. No change to the frozen 4-milestone, 9-sprint plan.
+
+## Decisions S2-D18 to S2-D23 (authorization date 23 October 2026)
+
+Authorization date: 23 October 2026. These are new decisions, not retroactive approvals. Approver identity and signature were **not provided in this record** and are left blank.
+
+| ID | Decision | Exact scope | Restrictions | Status |
+|---|---|---|---|---|
+| **S2-D18** | Evidence quarantine ordering: eligibility and quarantine checks run before the retriever candidate limit. | `RetrievalQuery.admit` is applied inside the retriever, before ranking and the limit. The specialist builds it with `make_admission`. | Quarantined records must not consume candidate slots. Invalid or restricted records must not displace valid evidence. Source identities and citation references are preserved. Covered by positive, negative, boundary and regression tests. | **Implemented and tested** (`tests/unit/test_s2_remediation.py`). |
+| **S2-D19** | Targeted `-es` plural normalization for recall. | Sibilant endings only (`sses`, `shes`, `ches`, `xes`) on words of five or more letters. One canonical form per word. | Thresholds unchanged. No excessive stemming. Recorded limits: "caches" does not match "cache"; "APIs" is not folded. Coverage not increased artificially. | **Implemented and tested.** |
+| **S2-D20** | Mandatory workspace filtering before ranking and limiting. | Enforced in `InMemoryRetriever.search` before any scoring; the specialist adds no evidence outside its workspace. | Cross-workspace evidence never appears in unauthorized results and does not consume candidate slots. Any confirmed cross-workspace exposure is acceptance-blocking. | **Implemented and tested.** No exposure found in regression tests. A production retriever must meet the same contract; none exists in this repository. |
+| **S2-D21** | Independent human review: AS is the designated reviewer; secure delivery of the 55-pair reading file through an approved WDS-controlled channel. | 55 pairs. AS classifies each pair, records uncertainty and comments, returns the label file, reviews the QA evidence, and signs the QA record. | No fabricated labels, reviewer statements or signatures. | **Pending human action.** This system has no access to the WDS-approved file-sharing method, so the file has not been delivered. See `docs/evidence/SPRINT2_HANDOFF_FOR_AS.md`. |
+| **S2-D22** | Consolidated independent review of the seven reconciled specification documents. | Governance, Architecture, Service catalog, Agent registry, Requirement schema, Review policy, Evaluation plan. | Proposed specifications become authoritative only after an authorized reviewer explicitly approves the reviewed version. No automatic approval. | **Review package prepared** (`docs/spec-reconciliation/CONSOLIDATED_REVIEW_PACKAGE.md`). **Review not performed.** |
+| **S2-D23** | Accelerated execution: routine Sprint 2 remediation, regression testing, feature-branch commits, GitHub CI and report preparation. | Within the approved Sprint 2 scope only. | No automatic merge. No protected-branch change. No production deployment or activation. No unauthorized model calls. No bypass of human QA or specification gates. | **In force.** |
+
+S2-D15 (frozen thresholds), S2-D16 (semantic validator disabled), S2-D13 and S2-D14 remain in force. Thresholds are unchanged by S2-D18 to S2-D20.
