@@ -80,3 +80,11 @@
 - AI-S04 scope source (section 8).
 - Developer assignment for Standalone and Middleware (section 9).
 - Push access for `toarushiS` on `Ru-04/Agentic-System-Framework` is still refused (HTTP 403). The branch `claude/webdesk-specialist-baseline-v1-3b21b1` has local commits not on the remote.
+
+## 12. Addendum: approver named in chat (23 October 2026)
+- **Reported in chat:** "The Approver is AS" (Arushi Sharma), for the AI-S02 approval.
+- **Recorded as reported, not verified.** The repository still names the approver only as "WDS Project Owner". No dated decision record for Decision 2 exists.
+- **Authority not established:** AS's recorded role is Technical Lead and Project Manager (decision Q2). Nothing in the repository shows that AS holds WDS Project Owner authority.
+- **Independence not established:** the Git author on the AI-S02 commits is `toarushiS`. The 23 October management statement says BD produced the Sprint 1–3 work. Who produced the AI-S02 work is not recorded.
+- **Status:** the AI-S02 status records are unchanged. This addendum does not record acceptance.
+- **Still needed:** a dated approval record, from an authority the repository confirms, that states the reviewed commit, scope and date.
