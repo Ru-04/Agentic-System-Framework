@@ -25,9 +25,7 @@ added here.
 
 from __future__ import annotations
 
-import importlib.util
 from collections.abc import Sequence
-from pathlib import Path
 
 from alembic import op
 
@@ -86,16 +84,57 @@ def _sql_list(values: Sequence[str]) -> str:
     return ", ".join(f"'{v}'" for v in values)
 
 
+ISSUE_0025_TEMPLATE = """
+CREATE OR REPLACE FUNCTION webdesk_authority.fn_issue_operation_proof(
+    p_session_hash text, p_operation text, p_resource uuid)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $fn$
+DECLARE
+    s_id uuid;
+    s_user uuid;
+    s_epoch integer;
+    s_rev integer;
+    new_proof uuid;
+BEGIN
+    SELECT s.session_id, s.user_id, u.session_epoch, u.contact_revision
+      INTO s_id, s_user, s_epoch, s_rev
+    FROM sessions s JOIN users u ON u.user_id = s.user_id
+    WHERE s.session_token_hash = p_session_hash AND s.revoked_at IS NULL
+      AND s.expires_at > now() AND u.status = 'active'
+      AND s.session_epoch_at_issue = u.session_epoch;
+    IF NOT FOUND THEN
+        INSERT INTO audit_events (actor_type, actor_id_or_service, event_type, outcome, error_class,
+                                  record_refs, configuration_versions, redacted_details)
+        VALUES ('system', 'anonymous', 'authority.proof.refused', 'denied', 'session_not_live',
+                '[]'::jsonb, '{}'::jsonb, '{}'::jsonb);
+        RETURN NULL;
+    END IF;
+    IF p_operation NOT IN ('user.disable', 'role.revoke', 'role.assign', 'project.create', 'project.membership.add', 'project.membership.revoke', 'project.access.grant', 'restricted.grant', 'project.archive', 'classification.reassess', 'contact.request.create', 'contact.request.change', 'contact.approve.create', 'contact.approve.change', 'contact.withdraw') THEN
+        RAISE EXCEPTION 'operation is not authorized for proof' USING ERRCODE = 'check_violation';
+    END IF;
+    IF p_operation IN ('user.disable', 'role.revoke', 'role.assign', 'contact.approve.create', 'contact.approve.change') THEN
+        IF NOT EXISTS (SELECT 1 FROM role_assignments
+                       WHERE user_id = s_user AND role = 'Administrator' AND revoked_at IS NULL) THEN
+            INSERT INTO audit_events (actor_type, actor_id_or_service, event_type, outcome, error_class,
+                                      record_refs, configuration_versions, redacted_details)
+            VALUES ('human', s_user::text, 'authority.proof.refused', 'denied',
+                    'operation_not_permitted', '[]'::jsonb, '{}'::jsonb,
+                    jsonb_build_object('operation', p_operation));
+            RETURN NULL;
+        END IF;
+    END IF;
+    INSERT INTO operation_proofs (actor_user_id, session_id, operation, resource_id, expires_at,
+                                  contact_revision_at_issue, session_epoch_at_issue)
+    VALUES (s_user, s_id, p_operation, p_resource, now() + interval '30 seconds', s_rev, s_epoch)
+    RETURNING proof_id INTO new_proof;
+    RETURN new_proof;
+END
+$fn$;
+"""
+
+
 def _load_0026_issue_text() -> str:
-    """The 0026 issuance function text, the same template revision 0027 starts from."""
-    path = Path(__file__).with_name("0026_proof_guarded_contacts.py")
-    spec = importlib.util.spec_from_file_location("migration_0026", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load revision 0026")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    text_value: str = module.ISSUE_0025
-    return text_value
+    """The 0026 issuance function text: a frozen snapshot, so no revision imports another."""
+    return ISSUE_0025_TEMPLATE
 
 
 def _issue_text(ops_to: Sequence[str], admin_to: Sequence[str]) -> str:

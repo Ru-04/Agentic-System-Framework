@@ -125,9 +125,10 @@ def test_the_ceremony_role_cannot_read_tables_its_flows_do_not_use(
     )
 
 
-def test_the_ceremony_role_keeps_the_three_guard_functions_its_flows_call(conn: Connection) -> None:
+def test_the_ceremony_role_keeps_the_guard_functions_its_flows_call(conn: Connection) -> None:
     for signature in (
         "webdesk_guard.fn_consume_appointment(uuid,uuid)",
+        "webdesk_guard.fn_issue_ceremony_activation(uuid,text,text,integer)",
         "webdesk_guard.fn_release_reservations(uuid,text,uuid,text)",
         "webdesk_guard.fn_revoke_expired_activation_tokens()",
     ):

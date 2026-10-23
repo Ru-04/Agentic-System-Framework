@@ -29,6 +29,7 @@ REFUSAL_REASONS = (
     "proof_role_not_held",
     "proof_permission_not_held",
     "reset_not_self",
+    "self_assignment",
 )
 
 

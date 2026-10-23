@@ -82,12 +82,18 @@ def issue(
     client_ip: str,
     actor: uuid.UUID | None,
     proof: uuid.UUID | None = None,
+    ceremony: bool = False,
 ) -> None:
     """Issue a token and deliver it to the approved contact. Returns nothing (no Admin access).
 
     A reset token is issued only with an operation proof (``account.reset.issue``, an Administrator
-    operation) for the target account. An activation token needs no proof: it is a system flow that
-    the database already requires to be backed by a live approved contact approval.
+    operation) for the target account. An activation token is issued only with an operation proof
+    (``account.activation.issue``, held by an active Administrator). The database consumes the proof
+    and requires a live approved contact approval. The token is generated here and delivered only
+    to the approved contact; it is never returned to the caller (review finding F1).
+
+    ``ceremony=True`` issues the bootstrap activation of an installation Administrator. The caller
+    must hold ``webdesk_ceremony``, and the database requires a live ceremony-backed appointment.
     """
     if purpose not in PURPOSES:
         raise TokenError("invalid_request")
@@ -169,22 +175,47 @@ def issue(
                 )
             )
         )
+    elif ceremony:
+        # Only the ceremony role may call the bootstrap function; the caller's role is restored.
+        caller = conn.execute(text("SELECT current_user")).scalar_one()
+        conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+        try:
+            token_id = uuid.UUID(
+                str(
+                    conn.execute(
+                        text(
+                            "SELECT webdesk_guard.fn_issue_ceremony_activation(:u, :h, :dest, :ttl)"
+                        ),
+                        {
+                            "u": user_id,
+                            "h": token_hash(token),
+                            "dest": subject_hash(email),
+                            "ttl": ttl,
+                        },
+                    ).scalar_one()
+                )
+            )
+        finally:
+            conn.execute(text(f'SET LOCAL ROLE "{caller}"'))
     else:
+        if proof is None:
+            audit_refusal(conn, "account.activation.issue", "proof_missing")
+            raise ProofRefused("proof_missing")
         token_id = uuid.UUID(
             str(
-                conn.execute(
-                    text(
-                        "SELECT webdesk_guard.fn_issue_activation_token("
-                        ":u, :h, :dest, :ttl, :actor)"
-                    ),
+                consume_with(
+                    conn,
+                    "account.activation.issue",
+                    "SELECT webdesk_guard.fn_issue_activation_with_proof("
+                    ":p, :u, :h, :dest, :ttl)",
                     {
+                        "p": proof,
                         "u": user_id,
                         "h": token_hash(token),
                         "dest": subject_hash(email),
                         "ttl": ttl,
-                        "actor": actor,
                     },
-                ).scalar_one()
+                )
             )
         )
     subject = "WDS account activation" if purpose == "activate" else "WDS password reset"

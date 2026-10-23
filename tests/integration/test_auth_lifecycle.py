@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activation_proof
 from tests.support.authority import authority_call
 from tests.support.people import user_in_state
 from tests.support.proofs import reset_proof
@@ -75,6 +76,7 @@ def _activation_token(conn: Connection, user: uuid.UUID) -> str:
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=TOKEN_LIMITS,
         client_ip="203.0.113.7",

@@ -16,7 +16,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
-from tests.support.activation import activate_user
+from tests.support.activation import activate_user, activation_proof
 from tests.support.people import active_user, external_loss_of_access, user_in_state
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
@@ -191,6 +191,7 @@ def test_a_token_for_an_ineligible_account_is_refused_and_audited(conn: Connecti
             conn,
             user_id=active,
             purpose="activate",
+            proof=activation_proof(conn, active),
             transport=CaptureTransport(),
             limits=TOKEN_LIMITS,
             client_ip="203.0.113.1",
@@ -214,6 +215,7 @@ def test_a_weak_password_at_activation_is_refused_and_audited(conn: Connection) 
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=TOKEN_LIMITS,
         client_ip="203.0.113.2",

@@ -94,6 +94,7 @@ def test_the_sweep_revokes_tokens_of_an_install_contact_that_missed_its_deadline
             conn,
             user_id=second,
             purpose="activate",
+            ceremony=True,
             transport=CaptureTransport(),
             limits=LIMITS,
             client_ip="198.51.100.9",

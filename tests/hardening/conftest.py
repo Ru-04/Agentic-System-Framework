@@ -13,6 +13,7 @@ flow. Protected actions in the tests are then taken only through the login role.
 from __future__ import annotations
 
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -31,9 +32,9 @@ from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.delivery.transport import CaptureTransport
 from webdesk.identity import contacts
 from webdesk.identity.email import ContactEmailPolicy
-from webdesk.ratelimit.limiter import Limit
+from webdesk.ratelimit.limiter import Limit, subject_hash
 from webdesk.tokens import service as tokens
-from webdesk.tokens.service import TokenLimits
+from webdesk.tokens.service import TokenLimits, token_hash
 
 APP_URL = os.environ.get("WEBDESK_HARDENING_APP_URL")
 OWNER_URL = os.environ.get("WEBDESK_HARDENING_OWNER_URL")
@@ -182,7 +183,7 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
                 text("SELECT status FROM users WHERE user_id = :u"), {"u": user}
             ).scalar_one()
             if status == "pending_activation":
-                _activate_by_token(app_engine, user)
+                _activate_bootstrap(app_engine, user)
         already = conn.execute(
             text(
                 """SELECT 1 FROM role_assignments
@@ -208,9 +209,11 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     return {"admin": first, "second": second}
 
 
-def _activate_by_token(engine: Engine, user: uuid.UUID) -> None:
+def _activate_by_token(engine: Engine, user: uuid.UUID, approver: uuid.UUID) -> None:
+    """Activate an approved account. The token needs an Administrator's activation proof (F1)."""
     transport = CaptureTransport()
     with engine.begin() as conn:
+        proof = remote_prove(conn, approver, "account.activation.issue", user)
         tokens.issue(
             conn,
             user_id=user,
@@ -219,8 +222,36 @@ def _activate_by_token(engine: Engine, user: uuid.UUID) -> None:
             limits=TOKEN_LIMITS,
             client_ip="198.51.100.1",
             actor=None,
+            proof=proof,
         )
     token = transport.messages[-1][2].rsplit(": ", 1)[1]
+    _require_authority().activate(token, PASSWORD)
+
+
+def _activate_bootstrap(engine: Engine, user: uuid.UUID) -> None:
+    """Activate an installation Administrator (bootstrap: no approver exists yet).
+
+    Production splits this across roles, and so does the helper. The ceremony role issues the token
+    (``fn_issue_ceremony_activation``). The application role then marks it sent. The owner cannot
+    assume the application role here, so the two steps run on their own connections.
+    """
+    _app_url, owner_url = _require_urls()
+    owner = create_engine(owner_url)
+    token = secrets.token_urlsafe(32)
+    try:
+        with owner.begin() as conn:
+            email = conn.execute(
+                text("SELECT normalized_email FROM users WHERE user_id = :u"), {"u": user}
+            ).scalar_one()
+            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+            token_id = conn.execute(
+                text("SELECT webdesk_guard.fn_issue_ceremony_activation(:u, :h, :d, 1800)"),
+                {"u": user, "h": token_hash(token), "d": subject_hash(str(email))},
+            ).scalar_one()
+    finally:
+        owner.dispose()
+    with engine.begin() as conn:
+        conn.execute(text("SELECT webdesk_guard.fn_mark_token_sent(:t)"), {"t": token_id})
     _require_authority().activate(token, PASSWORD)
 
 
@@ -262,7 +293,7 @@ def make_active_user(engine: Engine, world: dict[str, uuid.UUID]) -> uuid.UUID:
             approval,
             "proof-hardening",
         )
-    _activate_by_token(engine, user)
+    _activate_by_token(engine, user, admin)
     return user
 
 

@@ -26,9 +26,7 @@ Downgrade restores the 0024 validator text and drops the rules table.
 
 from __future__ import annotations
 
-import importlib.util
 from collections.abc import Sequence
-from pathlib import Path
 
 from alembic import op
 
@@ -89,18 +87,56 @@ NEW_CHECK = """
 """
 
 
+VALIDATOR_0024_TEMPLATE = """CREATE FUNCTION webdesk_guard.fn_validate_operation_proof(
+    p_proof uuid, p_operation text, p_resource uuid, p_lock boolean)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $fn$
+DECLARE
+    pr operation_proofs%ROWTYPE;
+BEGIN
+    IF p_lock THEN
+        SELECT * INTO pr FROM operation_proofs WHERE proof_id = p_proof FOR UPDATE;
+    ELSE
+        SELECT * INTO pr FROM operation_proofs WHERE proof_id = p_proof;
+    END IF;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'proof_missing' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF pr.consumed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'proof_spent' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF pr.expires_at <= now() THEN
+        RAISE EXCEPTION 'proof_expired' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF pr.operation IS DISTINCT FROM p_operation THEN
+        RAISE EXCEPTION 'proof_operation_mismatch' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF pr.resource_id IS DISTINCT FROM p_resource THEN
+        RAISE EXCEPTION 'proof_resource_mismatch' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM sessions s JOIN users u ON u.user_id = s.user_id
+        WHERE s.session_id = pr.session_id AND s.revoked_at IS NULL AND s.expires_at > now()
+          AND u.status = 'active'
+          AND s.session_epoch_at_issue = u.session_epoch
+          AND u.session_epoch = pr.session_epoch_at_issue
+          AND u.contact_revision = pr.contact_revision_at_issue
+    ) THEN
+        RAISE EXCEPTION 'proof_session_not_live' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF pr.operation IN ('user.disable', 'role.revoke', 'role.assign', 'contact.approve.create', 'contact.approve.change') AND NOT EXISTS (
+        SELECT 1 FROM role_assignments
+        WHERE user_id = pr.actor_user_id AND role = 'Administrator' AND revoked_at IS NULL
+    ) THEN
+        RAISE EXCEPTION 'proof_role_not_held' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN pr.actor_user_id;
+END
+$fn$;"""
+
+
 def _load_0024_validator() -> str:
-    """The 0024 validator text, as created by that revision (the template this revision builds on)."""
-    path = Path(__file__).with_name("0024_proof_enforcement.py")
-    spec = importlib.util.spec_from_file_location("migration_0024", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load revision 0024")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    sql: str = module.UPGRADE_SQL
-    start = sql.index("CREATE FUNCTION webdesk_guard.fn_validate_operation_proof")
-    end = sql.index("$fn$;", start) + len("$fn$;")
-    return sql[start:end]
+    """The 0024 validator text, frozen from that revision (the template this revision builds on)."""
+    return VALIDATOR_0024_TEMPLATE
 
 
 def _validator_with_rules() -> str:

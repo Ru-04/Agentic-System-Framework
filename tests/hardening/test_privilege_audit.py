@@ -93,7 +93,7 @@ APP_EXECUTE = frozenset(
         "fn_disable_user_with_proof",
         "fn_grant_access_with_proof",
         "fn_grant_restricted_with_proof",
-        "fn_issue_activation_token",
+        "fn_issue_activation_with_proof",
         "fn_issue_reset_token_with_proof",
         "fn_mark_token_sent",
         "fn_proof_actor",
@@ -117,7 +117,12 @@ APP_EXECUTE = frozenset(
     }
 )
 CEREMONY_EXECUTE = frozenset(
-    {"fn_consume_appointment", "fn_release_reservations", "fn_revoke_expired_activation_tokens"}
+    {
+        "fn_consume_appointment",
+        "fn_issue_ceremony_activation",
+        "fn_release_reservations",
+        "fn_revoke_expired_activation_tokens",
+    }
 )
 WORKER_EXECUTE = frozenset(
     {

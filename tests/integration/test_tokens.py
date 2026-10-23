@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.activation import activation_proof
 from tests.support.people import POLICY, administrators_for, user_in_state
 from tests.support.privileged import guard_insert
 from tests.support.proofs import ProofNotIssued, prove, reset_proof
@@ -77,6 +78,7 @@ def test_activation_token_is_delivered_only_to_the_contact_and_stored_as_a_hash(
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=LIMITS,
         client_ip="203.0.113.7",
@@ -115,6 +117,7 @@ def test_issuing_again_revokes_the_previous_live_token(conn: Connection) -> None
             conn,
             user_id=user,
             purpose="activate",
+            proof=activation_proof(conn, user),
             transport=transport,
             limits=LIMITS,
             client_ip="203.0.113.7",
@@ -145,6 +148,7 @@ def test_valid_token_is_consumed_once(conn: Connection) -> None:
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=LIMITS,
         client_ip="203.0.113.7",
@@ -165,6 +169,7 @@ def test_expired_token_is_refused_with_the_same_neutral_error(conn: Connection) 
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=LIMITS,
         client_ip="203.0.113.7",
@@ -231,6 +236,7 @@ def test_token_cannot_be_used_for_the_other_purpose(conn: Connection) -> None:
         conn,
         user_id=user,
         purpose="activate",
+        proof=activation_proof(conn, user),
         transport=transport,
         limits=LIMITS,
         client_ip="203.0.113.7",
@@ -254,6 +260,7 @@ def test_failed_delivery_leaves_no_token_behind(conn: Connection) -> None:
                 conn,
                 user_id=user,
                 purpose="activate",
+                proof=activation_proof(conn, user),
                 transport=Unavailable(),
                 limits=LIMITS,
                 client_ip="203.0.113.7",
@@ -274,6 +281,7 @@ def test_contact_rate_limit_refuses_the_sixth_request_in_the_window(conn: Connec
             conn,
             user_id=user,
             purpose="activate",
+            proof=activation_proof(conn, user),
             transport=transport,
             limits=LIMITS,
             client_ip="203.0.113.7",
@@ -284,6 +292,7 @@ def test_contact_rate_limit_refuses_the_sixth_request_in_the_window(conn: Connec
             conn,
             user_id=user,
             purpose="activate",
+            proof=activation_proof(conn, user),
             transport=transport,
             limits=LIMITS,
             client_ip="203.0.113.8",
