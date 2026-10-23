@@ -15,10 +15,10 @@ PROFILE = PlatformProfile(
     specialist_id=SpecialistId.MIDDLEWARE_APPLICATIONS,
     label="Middleware Applications",
     capability_topics={
-        "orchestration and sync": ("sync", "orchestrat", "transform"),
+        "orchestration and sync": ("sync", "orchestration", "transform"),
         "webhooks and events": ("webhook", "event", "queue"),
-        "retries and idempotency": ("retry", "idempotent", "idempotency"),
-        "authentication and observability": ("oauth", "token", "log", "observab"),
+        "retries and idempotency": ("retry", "retries", "idempotent", "idempotency"),
+        "authentication and observability": ("oauth", "token", "log", "observability"),
     },
     plan_or_version_terms=(),
     approved_source=None,
