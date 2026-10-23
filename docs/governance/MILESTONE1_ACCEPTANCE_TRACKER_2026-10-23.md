@@ -52,3 +52,10 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 - **Independence check:** AS is recorded as author of every Sprint 1, Sprint 2 and Sprint 3 commit, including `c54a868` and `e3ba3b7` (`toarushiS <arushi@webdeskinc.com>`). Under Q2 she cannot be treated as independent of this work unless WDS documents that the authorship does not reflect her personal contribution.
 - **Status:** assignment recorded; **not accepted as independent QA.** No Sprint 3 QA result is recorded under her name. The assistant's automated review is not independent QA.
 - **Decision needed (WDS, in chat):** either (a) a written factual account of who produced the Sprint 1–3 work, so independence can be assessed, or (b) an alternative reviewer with no authorship of this work.
+
+## WDS response on Sprint 3 reviewer independence (23 October 2026, as reported in chat)
+
+- **Reported in chat:** "a) BD" and "b) PG". Mapped to the two options offered in chat: (a) a factual account of who produced the work; (b) an alternative reviewer.
+- **Status of (a):** reported, **not verified.** The repository does not show BD as author of any commit. All commits are authored by `toarushiS <arushi@webdeskinc.com>`. The written factual account of authorship has not been provided to the repository, and the git author identity is not explained by it. Independence is **not established** until WDS records the account in writing.
+- **Status of (b):** PG reported as the alternative reviewer. PG's role, authority and authorship history are **not recorded**. Independence is **not established**. PG has not been contacted and has not reviewed anything.
+- **Not recorded:** any QA result, sign-off or independence determination under BD's or PG's name.
