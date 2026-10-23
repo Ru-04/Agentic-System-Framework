@@ -88,3 +88,11 @@
 - **Independence not established:** the Git author on the AI-S02 commits is `toarushiS`. The 23 October management statement says BD produced the Sprint 1–3 work. Who produced the AI-S02 work is not recorded.
 - **Status:** the AI-S02 status records are unchanged. This addendum does not record acceptance.
 - **Still needed:** a dated approval record, from an authority the repository confirms, that states the reviewed commit, scope and date.
+
+## 13. Addendum: date and typed name reported (23 October 2026)
+- **Reported in chat:** date 23/10/2026; "signature - Arushi"; approver AS.
+- **Recorded as reported, not verified.** The "signature" is a typed name supplied in chat. It is not a signature made by AS in this repository, and this record does not create one.
+- **Authority still not established:** the register names "WDS Project Owner". AS's recorded role is Technical Lead and Project Manager. Nothing in the repository shows that AS holds the Project Owner role.
+- **Independence still not established:** the Git author is `toarushiS`, and the 23 October management statement says BD produced the Sprint 1–3 work. Who produced the AI-S02 work is not recorded.
+- **Scope and reviewed commit:** not stated in the chat reply. The reviewed commit is `c43cda0`, as the register states. The approval scope still needs to be written down.
+- **Status:** the AI-S02 status records are unchanged. The implementation report still says acceptance was not given, and the register still says APPROVED. They stay in conflict until WDS confirms the authority and scope in writing.
