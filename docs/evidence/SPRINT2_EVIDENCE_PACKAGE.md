@@ -156,3 +156,13 @@ Earlier runs on the same branch, for reference: `45df73c` run 39804483161 (succe
 ## Superseded by QA4 response (later on 22 October 2026)
 
 The figures in the sections above that give 15 PARTIAL, 3 requirements with findings, 13 findings, 46 of 55 agreement, and 369 or 370 tests are **superseded**. Current figures and dispositions: `docs/evidence/SPRINT2_QA4_RESPONSE.md`. Current: 389 unit tests passing; 0 DIRECT, 5 PARTIAL, 107 IRRELEVANT; 0 requirements with a cited finding.
+
+## Human review status (23 October 2026)
+
+- **Protocol:** `docs/evaluation/HUMAN_REVIEW_PROTOCOL.md` (definitions, fields, process, metrics, rules for use).
+- **Review sheet:** `docs/evaluation/HUMAN_REVIEW_SHEET_SPRINT2.md` (55 pairs, no passage text).
+- **Reviewer package:** prepared outside the repository. It holds a blank label file that uses the exact importer header, and a reading file with passage text. Access must be arranged by the decision-maker through an approved channel. Nothing is labelled.
+- **Importer and metrics:** `webdesk.evidence.evaluation` and `python -m webdesk.evidence.evaluation_cli`. They report DIRECT precision and recall (undefined when a denominator is zero), the 3 by 3 confusion matrix, false positives and negatives, disagreements, and requirement-level coverage. Tested on synthetic files only.
+- **Reviewer result:** **not yet available.** No precision, recall or coverage figure for human-labelled evidence exists. The figures in the earlier sections are system grades, not human-validated results.
+- **Sign-off:** AS's personal, signed review is still required. Nothing has been signed or implied.
+- **CI:** run `39827062274` for commit `67c9e33` succeeded (`lint-type-unit` and `postgres-tests`). The commit that follows this section is verified separately.
