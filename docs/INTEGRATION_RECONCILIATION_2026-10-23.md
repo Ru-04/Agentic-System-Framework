@@ -96,3 +96,8 @@
 - **Independence still not established:** the Git author is `toarushiS`, and the 23 October management statement says BD produced the Sprint 1–3 work. Who produced the AI-S02 work is not recorded.
 - **Scope and reviewed commit:** not stated in the chat reply. The reviewed commit is `c43cda0`, as the register states. The approval scope still needs to be written down.
 - **Status:** the AI-S02 status records are unchanged. The implementation report still says acceptance was not given, and the register still says APPROVED. They stay in conflict until WDS confirms the authority and scope in writing.
+
+## 14. WDS decisions reported in chat (23 October 2026)
+- **AI-S02 approval:** "WDS approver gives its approval for AI-S02." Recorded as reported. Reviewed commit `c43cda0`. The scope and the approval record are still to be written down by WDS. The register's role label ("WDS Project Owner") and the approver's stated role should be reconciled in that record.
+- **Standalone Applications and Middleware Applications:** developer assigned is **BD**. Recorded as reported. This adds to, and does not replace, the earlier four-developer allocation. BD's other assignments are not stated.
+- **Push:** deferred by WDS. Local commits stay local until access is restored.
