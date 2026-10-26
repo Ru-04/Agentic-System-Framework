@@ -31,3 +31,18 @@
 
 ## Frozen plan
 The 4-milestone, 9-sprint baseline is unchanged. Sprint 3 acceptance remains subject to its mandatory gates. Sprint 4 remains unstarted.
+
+## Second chat approval (26 October 2026): implementation authorization
+Source: WDS Authorized Approver, chat, 26 October 2026 ("Formal Approval and Continue Seven-Specialist Development"). Management authorization only. Not QA acceptance, not a signature, not PG review.
+
+| ID | Approved scope | Status |
+|---|---|---|
+| INT-01 | Adapter contract v0.2 implemented and tested. WebDesk authoritative for workspace, actor, execution authorization, evidence admission, audit and approval/routing. No breaking change without versioned tests. No invented confidence. | Approved for implementation and testing. Code uncommitted; tests NOT EXECUTED (see TEST-01) |
+| INT-02 | Synthetic vertical slice through the adapter, using the existing fixture. Deterministic test-only specialist. Production integration blocked (QA-07, M3 S6). | Approved. Implemented as a test-only harness |
+| DEV-01 | BD assigned to Standalone Applications and Middleware Applications lanes. BD may build, write tests, fix defects and document. BD must not give independent QA acceptance for BD work. | Approved assignment (management decision) |
+| TECH-01 | Standalone Applications technology-neutral. Concrete technology only with a verified project scenario and approved sources. | Approved (restates the 26 Oct decision) |
+| TECH-02 | Middleware Applications technology-neutral. Node.js not the only option. | Approved (restates the 26 Oct decision) |
+| SRC-01 | Verification and configuration preparation only. Default-deny. Exact allowlist prepared for a separate activation approval. No live requests for candidates. | Approved for preparation only |
+| SRC-02 | Shift4Shop source discovery only. No invented domain. No retrieval without source-specific authorization. | Approved for discovery only. Discovery candidate recorded; ownership not yet verified |
+| QA-01 | PG nominated Independent QA Reviewer and Authorized QA Acceptance Signatory. PG personally confirms independence. Assistant does not fill PG declaration, labels, findings or signature. | Approved (restates the 26 Oct decision). Independence PENDING |
+| TEST-01 | Run current-head tests through an authorized environment only. Do not bypass error 4551. Record NOT EXECUTED if unavailable. | Approved. Not achieved: no authorized environment available in this session |
