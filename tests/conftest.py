@@ -71,10 +71,11 @@ def _migrate(url: str) -> None:
 def _drop_when_detached(conn: Connection, name: str) -> None:
     """Drop a test database only when no other session is attached to it.
 
-    The check waits up to ``DETACH_WAIT_SECONDS`` for backends to exit before it reports a session. A
-    connection the test really holds stays open, so it is still reported after the wait, by user,
-    application name, backend type, start time and current query. ``DROP ... WITH (FORCE)`` is not
-    used: it masks the leak, and this role lacks the rights to terminate other roles' sessions.
+    The check waits up to ``DETACH_WAIT_SECONDS`` for backends to exit before it reports a
+    session. A connection the test really holds stays open, so it is still reported after the wait,
+    by user, application name, backend type, start time and current query.
+    ``DROP ... WITH (FORCE)`` is not used: it masks the leak, and this role lacks the rights to
+    terminate other roles' sessions.
     """
     deadline = time.monotonic() + DETACH_WAIT_SECONDS
     while True:
