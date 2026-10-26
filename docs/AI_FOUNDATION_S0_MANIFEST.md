@@ -20,7 +20,7 @@ Verification of S0 (recomputed from `git show` and `git archive` of `82585db`, n
 | Artifact | SHA-256 |
 |---|---|
 | `docs/AI_FOUNDATION_READ_CONTRACT_v1.md` (approved contract `ai-read/v1`) | `8f2617c1039bb5bdcd974bf09f54c39137b17018f663936c2f7887c08b7aac2f` |
-| `docs/RUFF_FORMAT_EXCEPTIONS.md` | `02ecd69794b08372a77e180949cd4561294573537e041deab8c2bdc6a998d5f3` |
+| `docs/RUFF_FORMAT_EXCEPTIONS.md` | `074ab590787f047e9b4cd8e301ec4060499d25db39f737c03af8efcc364e3333` |
 
 The contract hash is of the committed file. Any change to the contract changes the hash, and the contract's version is then
 reissued (section 13 of the contract).
