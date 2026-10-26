@@ -64,3 +64,16 @@ Source: WDS management approval, chat, 26 October 2026, stated by the approver a
 | QA-07 runtime authorization implemented before applicable production integration | Engineering (M3 S6) | OPEN; production blocked |
 | Milestone 1 acceptance dependencies | WDS and independent reviewers | OPEN |
 | No platform declared technically verified from synthetic tests alone | Standing rule | Enforced |
+
+## Decisions of 26 October 2026 (chat): B1-B6, C4, SEC-01
+Source: WDS Authorized Approver, chat, 26 October 2026, based on verification report and test commit a69cd50.
+- **B1 approved:** BigCommerce boundary `docs.bigcommerce.com/developer/docs/*` replaces `developer.bigcommerce.com/docs/*`; exact page `.../developer/api-reference/rest/admin/catalog/products/get-product` only. Not the `/api-reference/*` tree. Activation pending gates.
+- **B2 approved with conditions:** WooCommerce `developer.woocommerce.com/docs/*` and `/guides/*`, for controlled read-only retrieval after Sprint 4 entry and activation gates. Ownership PARTIAL (Automattic via WordPress.org listing). Not conclusively verified.
+- **B3 approved for narrowing:** exact-page allowlist to replace Adobe prefixes. Page activation pending; exact URLs need final approval. Shared Adobe Commerce and Magento Open Source content labelled; no edition feature inferred.
+- **B4 deferred:** Shift4Shop inactive until vendor REST portal and documentation host relationship is verified.
+- **B5 deferred:** Magento Open Source inactive until edition boundaries are established. C4 fetch showed the devdocs host redirects to Adobe.
+- **B6 deferred:** WordPress developer documentation inactive pending verification and approval.
+- **C4 approved:** limited fetch done (see verification results). Exact Open Source entries not yet proposed for approval.
+- **SEC-01 approved and implemented:** duplicate scoped hosts refused with explicit error; exact_paths field added (default empty, existing entries unchanged); redirect and exact-page regression tests added (tests/unit/test_allowlist_sec01.py).
+- **Active sources:** none. Inactive approved configuration: src/webdesk/evidence/approved_boundaries.py (WooCommerce, BigCommerce). Every platform profile keeps approved_source None.
+- Standing: live LLM calls disabled; production blocked by QA-07; pushes deferred; PG review pending; Sprint 3 formal acceptance pending.

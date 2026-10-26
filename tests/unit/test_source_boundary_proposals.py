@@ -34,8 +34,11 @@ CANDIDATE = VendorAllowlist(
 ADOBE_EXACT = VendorAllowlist(
     hosts=frozenset(),
     scoped=(
-        ScopedHost("developer.adobe.com", ("/commerce/php/architecture",), exact=False),
-        ScopedHost("developer.adobe.com", ("/commerce/frontend-core",), exact=True),
+        ScopedHost(
+            "developer.adobe.com",
+            ("/commerce/php/architecture",),
+            exact_paths=("/commerce/frontend-core",),
+        ),
     ),
 )
 

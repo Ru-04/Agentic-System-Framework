@@ -35,3 +35,9 @@
 - The owner of `developer.woocommerce.com`, `developer.bigcommerce.com` / `docs.bigcommerce.com`, `developer.adobe.com`, `developer.3dcart.com`, `apirest.3dcart.com`, and `developer.wordpress.org` as the registered domain holder. No WHOIS or legal page was read.
 - Redirect chains beyond the first hop observed.
 - Any page not listed above.
+
+## C4 Magento Open Source fetch (26 October 2026, limited, read-only)
+- Requested: `https://devdocs.magento.com/guides/v2.4/`. **Redirected** to `https://developer.adobe.com/commerce/docs/` (Adobe Commerce Developer Documentation). The devdocs host is therefore not an independent Open Source documentation host today.
+- `https://developer.adobe.com/open/magento` (community entry, read earlier): lists Magento Open Source on GitHub, DevDocs on GitHub, and Merchant Documentation. These are repositories, not runtime documentation pages.
+- Result: **no Open Source-only runtime page list can be proposed yet.** The devdocs redirect and the shared Adobe pages mean edition-specific pages must be identified individually and approved one by one.
+- Redirect rule applied: devdocs.magento.com to developer.adobe.com is a cross-host redirect to an unapproved host, so it is refused under the allowlist rules.
