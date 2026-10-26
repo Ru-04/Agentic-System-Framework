@@ -83,3 +83,9 @@ Recorded separately in the commit and in section 8 once checked. Do not treat an
 - Uncommitted integration changes: `UNCOMMITTED_CHANGES_STATUS_2026-10-26.md`.
 - Tests: clean-room ai_engine at `052d853` 1257 passed, ruff clean. Webdesk pytest and mypy at `564d0d1`: NOT EXECUTED, APPLICATION CONTROL ERROR 4551. No authorized alternative runner available to this session; the first route is the GitHub specialist-ci run on a pushed commit (push deferred).
 - Sprint 3 acceptance: NOT ACCEPTED. PG independence declaration: not completed by PG; PG completes it personally.
+
+## 11. Documentation reconciliation (26 October 2026)
+- Committed implementation: adapter v0.2 and slice at `3969a8f`. Platform foundations at `e3ba3b7` and later.
+- Acceptance status (separated): see `SPRINT3_CLOSURE_RECONCILIATION_2026-10-26.md`. Sprint 3 is NOT ACCEPTED.
+- Reviewer package: `PG_FINAL_REVIEW_PACKAGE_SPRINT3_2026-10-26.md`. PG completes the declaration personally.
+- Source proposals (Sprint 4 input): `SPRINT4_SOURCE_APPROVAL_PROPOSALS_2026-10-26.md`. Nothing approved.
