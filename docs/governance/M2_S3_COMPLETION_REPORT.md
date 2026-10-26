@@ -89,3 +89,8 @@ Recorded separately in the commit and in section 8 once checked. Do not treat an
 - Acceptance status (separated): see `SPRINT3_CLOSURE_RECONCILIATION_2026-10-26.md`. Sprint 3 is NOT ACCEPTED.
 - Reviewer package: `PG_FINAL_REVIEW_PACKAGE_SPRINT3_2026-10-26.md`. PG completes the declaration personally.
 - Source proposals (Sprint 4 input): `SPRINT4_SOURCE_APPROVAL_PROPOSALS_2026-10-26.md`. Nothing approved.
+
+## 12. Management approval status (26 October 2026)
+- ENGINEERING ACCEPTED WITH CONDITIONS, FORMAL SPRINT ACCEPTANCE PENDING. Bound to `3969a8f` and `5105628`. Recorded in `MANAGEMENT_DECISION_REGISTER_2026-10-26.md`.
+- PG independent QA: PENDING. PG completes the declaration personally.
+- Remaining conditions and owners: see the register entry.
