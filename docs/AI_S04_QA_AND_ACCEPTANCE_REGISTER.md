@@ -1,7 +1,6 @@
 # AI-S04 QA and Acceptance Register
 
-Status: **AI-S04 full sprint acceptance: PENDING.** Synthetic-scope engineering is complete for the five commerce
-specialist categories. Real-platform verification is not started. WDS has not accepted AI-S04.
+Status: **AI-S04 Synthetic-Scope Engineering: APPROVED** (WDS formal approval). **Full functional acceptance: PENDING** (35 of 45 reported criteria satisfied; ten real-platform criteria not waived). Real-platform verification has not started.
 
 Branch: `integration/ai-s01-s02-s03`. Development checkpoint: `ac1ef7e` (WooCommerce, BigCommerce). Nine-file commit:
 `2988913` (Shift4Shop, Magento / Adobe Commerce, BigCommerce wording fix). Low-finding corrections: uncommitted.
@@ -72,3 +71,15 @@ Synthetic-scope criteria met: 35 of 35. Real-platform criteria met: 0 of 10. Tot
 - Routing readiness gates (see `AI_S04_ROUTING_READINESS.md`).
 - WDS acceptance decision. Either full acceptance, or a clearly limited engineering-only closure if WDS separately
   authorises it.
+
+## 8. Supporting documents (preparation, not approval)
+
+- `AI_S04_REGISTRY_MIGRATION_AMENDMENT.md`: proposed registry amendment for D-01 and D-15 (not applied).
+- `AI_S04_VENDOR_SOURCE_ACCESS_MATRIX.md`: five-platform source and access approval matrix (nothing approved).
+- `AI_S04_ROUTING_READINESS.md`: runtime activation remains blocked.
+
+## 9. Remaining ten real-platform criteria (not waived)
+
+For each of Shopify, WooCommerce, BigCommerce, Shift4Shop and Magento Open Source / Adobe Commerce (evaluated separately):
+- R1: each platform-specific claim traced to a checked official source for the version in use.
+- R2: each platform's integration path exercised against an authorised test instance, with results recorded as evidence.

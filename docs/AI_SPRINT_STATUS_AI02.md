@@ -12,7 +12,7 @@ This register separates accepted engineering work from uncompleted production an
 | AI-S01 | P0 security remediation (AI-5.1), trust boundaries, evidence isolation, operator selection integrity | **Engineering APPROVED / CLOSED** (limited; isolated engineering implementation; not production authorisation or production-security certification) | `feature/ai-engine` `15d660a` (review fix `c1a0b15`) | 388 passed; ruff and strict mypy clean |
 | AI-S02 | LLM port, guarded structured calls, LLM-backed intake and semantic agents, typing remediation | **Engineering APPROVED** (engineering implementation only; not production authorisation). Real-provider evaluation **PENDING** | `feature/ai-s02` `c43cda0` | 958 passed at acceptance; ruff and strict mypy clean |
 | AI-S03 | RAG and evidence retrieval (shared infrastructure for all seven specialist categories) | **Engineering APPROVED / CLOSED** at `5dff462` (isolated engineering implementation; not production authorisation). Limitations accepted as documented: 500-candidate window; complete-snapshot empty-query lookup; Foundation integration dependencies; real collections and live sources need separate approval | `feature/ai-s03` `5dff462` | 1190 passed at acceptance on the combined tree; ruff and strict mypy clean |
-| AI-S04 | Commerce specialists: Shopify, WordPress/WooCommerce, BigCommerce, Shift4Shop, Magento / Adobe Commerce | **IN PROGRESS.** Synthetic-scope engineering complete for all five; independent synthetic-scope QA PASS. 35 of 45 reported criteria met. Real-platform criteria (10) not started. **Full sprint acceptance: PENDING** | `integration/ai-s01-s02-s03` `2988913` (nine-file commit); Low corrections uncommitted | 1256 passed on the integration tree; ruff and strict mypy clean |
+| AI-S04 | Commerce specialists: Shopify, WordPress/WooCommerce, BigCommerce, Shift4Shop, Magento / Adobe Commerce | **Synthetic-Scope Engineering APPROVED.** Full functional acceptance **PENDING** (35 of 45 reported criteria satisfied; ten real-platform criteria not waived) | Commits `2988913`, `6360590`, `052d853` on `integration/ai-s01-s02-s03` | 1257 passed; ruff check and format clean; strict mypy clean across 115 files |
 
 ## Accepted engineering work versus outstanding requirements
 
@@ -46,7 +46,7 @@ engineering acceptances on the evidence recorded in their records.
 | AI-S02 Real-provider evaluation | PENDING |
 | AI-S03 development | COMPLETE (isolated engineering implementation) |
 | AI-S03 engineering acceptance | APPROVED / CLOSED at `5dff462` (not production authorisation) |
-| AI-S04 | IN PROGRESS (synthetic scope complete; real-platform criteria and full acceptance PENDING) |
+| AI-S04 | Synthetic-Scope Engineering APPROVED; full functional acceptance PENDING (35/45) |
 
 ## Remaining blockers
 
