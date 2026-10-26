@@ -11,8 +11,8 @@ Revision 0039 closes three database findings from the release review of 640287e:
   the caller.
 - F2 (Medium): ``webdesk_guard.fn_worker_record_audit`` accepted any actor type and any actor id. The
   worker and outbox identities could therefore write ``human`` audit rows naming any account. The
-  function now accepts only ``system`` events. Worker labels are deployment-defined, so the actor
-  identifier is not checked here (residual R-F2).
+  function now accepts only ``system`` events and refuses an actor identifier that names an account.
+  Deployment-defined worker labels remain allowed (residual R-F2, WDS direction 2).
   Bootstrap activation of installation Administrators has no approver, so a separate function,
   ``fn_issue_ceremony_activation``, serves it. Only the ceremony role may execute it, and only for an
   account that holds a live ceremony-backed Administrator appointment.
@@ -243,6 +243,9 @@ DECLARE
 BEGIN
     IF p_actor_type IS DISTINCT FROM 'system' THEN
         RAISE EXCEPTION 'worker audit events are system events' USING ERRCODE = 'check_violation';
+    END IF;
+    IF EXISTS (SELECT 1 FROM users WHERE user_id::text = p_actor_id) THEN
+        RAISE EXCEPTION 'worker audit may not name an account' USING ERRCODE = 'check_violation';
     END IF;
     INSERT INTO audit_events (actor_type, actor_id_or_service, event_type, outcome, error_class,
                               record_refs, configuration_versions, redacted_details)

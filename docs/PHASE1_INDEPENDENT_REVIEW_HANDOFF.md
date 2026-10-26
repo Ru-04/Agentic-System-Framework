@@ -207,3 +207,46 @@ The production boundary is `docs/PRODUCTION_BOUNDARY.md`.
 **READY FOR INDEPENDENT PHASE 1 REVIEW.** The engineering scope of decisions 1 to 8 is implemented and verified in non-production
 environments, and the section 7 items are closed, decided or documented as above. This does not declare Phase 1 approved. Production
 deployment remains blocked by decision 7, and the residual risks above are the reviewer's to weigh.
+
+## 12. Review-fix closure for re-review (2026-10-26)
+
+Register: `docs/GOVERNANCE_DECISION_REGISTER.md`, P-INC3-PHASE1-REVIEW-FIX-10. Evidence: `docs/INCREMENT_3_EVIDENCE.md`, "Phase 1 review-fix closure (2026-10-26)".
+Fixes are in commit 4340350, and follow-up changes are in the commit recorded in the register and evidence.
+
+### Status of review findings
+
+| Finding | Status | Where to check |
+| --- | --- | --- |
+| F1 activation tokens minted by the application login | Closed (migration 0039, proof-gated; ceremony path separate) | `tests/hardening/test_review_reproduction.py` |
+| F2 worker audit could be human-attributed | Closed for human type and account identifiers; residual R-F2 | `tests/integration/test_security_closure.py` |
+| F3 self-assignment refused only in Python | Closed in SQL (migration 0039) | `test_review_reproduction.py::test_f3...` |
+| F4 revisions loaded siblings by path | Closed in code; historical edit needs your verification (below) | Equivalence section of the evidence document |
+
+### Please verify these specifically
+
+1. **Historical migration exception (WDS-approved on conditions).** Revisions 0027, 0030, 0035 and 0036 were edited in 4340350. The executed `UPGRADE_SQL` and `DOWNGRADE_SQL` are identical to `git show 4340350^:` for each revision, and the revision identifiers and dependencies are unchanged. Please reproduce the comparison yourself and record it. This exception stays open until you do.
+2. **Ceremony activation** (`fn_issue_ceremony_activation`). Check eligibility (live, approved, ceremony-backed appointment), expiry, single use with supersession, role isolation (ceremony role only), and the `token.issued` audit rows. Each has a test; please check the tests exercise the real function.
+3. **R-F2 scope.** A worker cannot write a human-type event or name an account. A worker can still write `system` events under other labels. Confirm this is acceptable under WDS direction 2.
+4. **Remote history.** The local clone's remote-tracking reference predates the commits that introduced 0027 to 0036. Confirm whether any shared environment applied those revisions. If one did, the exception does not cover it.
+
+### Verification (one ordered pass, fresh databases)
+
+- Full regression suite: 617 passed, exit 0.
+- Restricted-login hardening, including privilege audit and reproductions: 210 passed, exit 0.
+- EVAL-F11j: 37 passed, exit 0.
+- Ruff lint clean. Five files predating this work are not Ruff-formatted and were left untouched.
+- Mypy strict clean (56 source files).
+- Migration fresh head, downgrade and re-upgrade catalog-identical; one-step downgrade of 0039 restores the 0038 catalog exactly.
+
+### Unresolved
+
+- A scratch reproduction probe hung three times during this work. The cause was my own harness, not product code: overlapping probe instances and a plugin-loaded conftest. It was replaced by the committed module `tests/hardening/test_review_reproduction.py`, which passes. The hang and its diagnosis are recorded in the evidence document.
+- The application's activation path has no production caller in `src`. The activation flows are exercised by tests only.
+
+### Production-only dependencies (unchanged; see `docs/PRODUCTION_BOUNDARY.md`)
+
+Trusted authority deployment and signing-key custody; authenticated transport in place of loopback with a bearer secret; separate database identities; worker deployment and isolation with its own login; an approved email transport; operational monitoring and recovery; authenticated ceremony operator and verifier identities.
+
+### Verdict
+
+**READY FOR INDEPENDENT PHASE 1 RE-REVIEW (non-production scope).** This is not acceptance. The non-production items that must close before acceptance are: your verification of the historical migration exception (item 1), your confirmation of R-F2 scope (item 3), and the remote-history answer (item 4). Production deployment remains blocked by the production dependencies above.

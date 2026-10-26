@@ -180,21 +180,24 @@ def issue(
         caller = conn.execute(text("SELECT current_user")).scalar_one()
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         try:
-            token_id = uuid.UUID(
-                str(
-                    conn.execute(
-                        text(
-                            "SELECT webdesk_guard.fn_issue_ceremony_activation(:u, :h, :dest, :ttl)"
-                        ),
-                        {
-                            "u": user_id,
-                            "h": token_hash(token),
-                            "dest": subject_hash(email),
-                            "ttl": ttl,
-                        },
-                    ).scalar_one()
+            # The savepoint closes before the role is restored: a refusal leaves no aborted state.
+            with conn.begin_nested():
+                token_id = uuid.UUID(
+                    str(
+                        conn.execute(
+                            text(
+                                "SELECT webdesk_guard.fn_issue_ceremony_activation"
+                                "(:u, :h, :dest, :ttl)"
+                            ),
+                            {
+                                "u": user_id,
+                                "h": token_hash(token),
+                                "dest": subject_hash(email),
+                                "ttl": ttl,
+                            },
+                        ).scalar_one()
+                    )
                 )
-            )
         finally:
             conn.execute(text(f'SET LOCAL ROLE "{caller}"'))
     else:

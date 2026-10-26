@@ -806,3 +806,94 @@ Desktop was started and `docker compose up -d postgres` restarted the existing c
 6. Source-read grants are reused within their 60-second window by design. A stolen session token together with a live grant reads the one
    version the grant names, for the rest of that window.
 7. The reset notice and the reset delivery depend on an approved transport that is not configured. No real delivery is enabled.
+
+## Phase 1 review-fix closure (2026-10-26): F1-F4, equivalence and verification
+
+Register entry: `docs/GOVERNANCE_DECISION_REGISTER.md`, P-INC3-PHASE1-REVIEW-FIX-10. Fixes are in commit 4340350. Follow-up changes are
+listed in the register and are not yet committed at the time of writing.
+
+### Reproduction of the review findings (restricted login and roles)
+
+| Finding | Reproduction | Result |
+| --- | --- | --- |
+| F1 original mint: `fn_issue_activation_token(user, chosen hash, claimed Administrator)` as the application login | `tests/hardening/test_review_reproduction.py::test_f1_the_original_activation_mint_is_refused` | Refused: the function no longer exists (SQLSTATE 42883) or is not executable by the application role (42501) |
+| F1 replacement without or with a forged proof | `test_f1_the_replacement_refuses_a_missing_or_forged_proof` | Refused for a null proof and for a random proof |
+| F1 activation with the chosen secret, when no token was issued | `test_f1_an_unissued_token_cannot_activate_the_account` | Refused (`AuthError`); the application role has no credential write |
+| F1 proof for a non-Administrator | `test_f1_a_non_administrator_cannot_obtain_the_proof` | Authority refuses (`operation_not_permitted`) |
+| F3 original self-assignment by an Administrator's valid proof | `test_f3_the_original_self_assignment_is_refused_in_sql` | Refused in SQL (`self_assignment`) |
+| F2 worker writes a `human` event, or a `system` event naming an account | `tests/integration/test_security_closure.py` (worker role via `as_worker`) | Refused (`worker audit events are system events`; `worker audit may not name an account`) |
+| Ceremony: no appointment, expired appointment, superseded token, application login calling the function | integration and committed tests listed in the register | Refused, as specified |
+
+All five hardening reproductions pass in one run (3.2 seconds, restricted login `webdesk_app_login`).
+
+### Reproduction incident: hung scratch probe (documented, not hidden)
+
+A scratch probe that replayed the same F1 and F3 SQL through a pytest plugin hung three times. Each time the process waited on an
+advisory-lock wait inside `contacts.approve_create` during setup. Diagnosis: the hung processes were my own scratch runs. The first
+run was stopped by timeout, and the later ones were started while earlier instances still held the authority port. The scratch
+harness also loaded the conftest as a plugin, outside normal collection. Three steps resolved it.
+
+1. The WebDesk PostgreSQL container had stopped. It was restarted with `docker compose up -d postgres`. Its data was intact.
+2. Orphaned scratch probe processes were stopped only after they were confirmed to be this task's processes.
+3. Diagnostic stack traces were captured (`scratchpad/hang_diag.txt`, faulthandler after 40 seconds).
+
+The committed reproduction module runs the same exploits through normal collection, with the real fixtures, and passes. The
+scratch probe is not part of the evidence. Its unresolved hang is recorded as an open harness issue; it does not affect product code,
+because the same helper passes in the existing suite (`test_n2_approved_pending_activation...`, 3.5 seconds).
+
+### Historical migration equivalence (0027, 0030, 0035, 0036)
+
+Method: import each revision from the tree before 4340350 (`git archive 4340350^`) and from the current tree, then compare the
+module-level `UPGRADE_SQL` and `DOWNGRADE_SQL` strings and the `revision` and `down_revision` identifiers.
+
+| Revision | UPGRADE_SQL identical | DOWNGRADE_SQL identical | revision and down_revision identical |
+| --- | --- | --- | --- |
+| 0027_proof_gated_token_issuance | yes | yes | yes |
+| 0030_run_intake_proofs | yes | yes | yes |
+| 0035_sql_permission_matrix | yes | yes | yes |
+| 0036_reset_policy | yes | yes | yes |
+
+The only differences are new module constants that hold the frozen text (`ISSUE_0025_TEMPLATE`, `VALIDATOR_0024_TEMPLATE`,
+`ISSUE_RENDERED_0030`, `ISSUE_RENDERED_0036`, `VALIDATOR_0035_SNAPSHOT`). The executed SQL is unchanged. The catalog check agrees:
+a fresh build after the change matched the pre-change catalog for 93 guard, authority and public functions and their ACLs.
+
+Compatibility: Alembic records only the revision identifier, and that is unchanged. Each applied revision therefore runs the same SQL it
+ran before. A database that applied these revisions needs no action.
+
+### Migration verification (fresh, isolated databases)
+
+- Fresh database migrated to head (0039). Catalog recorded.
+- Downgrade to 0029 and upgrade to head: the resulting catalog equals the fresh head catalog exactly.
+- One-step downgrade of 0039: the catalog equals the 0038 baseline exactly (93 functions, with ACLs).
+
+### Verification pass (single ordered run, fresh databases, no overlapping pytest jobs)
+
+| Step | Command scope | Result |
+| --- | --- | --- |
+| Rebuild | integration and hardening bases created from nothing and migrated to head | exit 0 |
+| Full regression | `tests` | 617 passed, 0 failed, exit 0 |
+| Restricted-login hardening | `tests/hardening` (includes privilege audit and reproductions) | 210 passed, exit 0 |
+| EVAL-F11j | `test_eval_f11j.py`, `test_eval_f11j_extended.py` | 37 passed, exit 0 |
+| Ruff lint | `src tests migrations` | clean after a one-line docstring fix (re-checked, exit 0) |
+| Ruff format | `src tests migrations` | 5 pre-existing files not formatted (untouched by this work) |
+| Mypy strict | `src/webdesk` | clean, 56 source files, exit 0 |
+| Migration chain and one-step downgrade | as above | pass |
+
+The full suite ran before one docstring-only edit in `tests/integration/test_security_closure.py`. The migration chain was re-run
+afterwards, and it still matches.
+
+### Privilege audit and function EXECUTE
+
+Covered by `tests/hardening/test_privilege_audit.py` (inside the 210 hardening tests). It pins:
+
+- the application role's guard functions, now including `fn_issue_activation_with_proof` and without `fn_issue_activation_token`;
+- the ceremony role's functions, now including `fn_issue_ceremony_activation`;
+- no PUBLIC execute on guard, authority or public-schema functions.
+
+### Open security risks
+
+1. R-F2 residual: a worker can write a `system` event under any label that is not an account identifier (register, R-F2).
+2. The ceremony operator and verifier identifiers are declared, not authenticated (residual 3 in the handoff).
+3. The authority transport is loopback with a shared bearer secret (decision 7).
+4. Real activation issuance from the production application is not wired. No caller of the activation path exists in `src`, so the
+   ceremony and proof paths are exercised by tests only.

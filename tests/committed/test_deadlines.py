@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import LIMITS, activate_user
 from tests.support.people import _email, install_two_contacts_with_window
@@ -232,3 +233,26 @@ def test_replacement_recovery_creates_a_pending_activation_contact_with_an_appoi
             text("SELECT status FROM users WHERE user_id = :u"), {"u": result.user_id}
         ).scalar_one()
     assert status == "pending_activation"
+
+
+def test_a_bootstrap_token_is_refused_once_the_appointment_has_expired(
+    committed_engine: Engine,
+) -> None:
+    """WDS direction 1: the ceremony activation needs a live appointment, so it expires with it."""
+    _first, second, _appointment = _install(committed_engine, WINDOW)
+    time.sleep(WINDOW.total_seconds() + 1)
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        with pytest.raises(DBAPIError) as exc:
+            with conn.begin_nested():
+                tokens.issue(
+                    conn,
+                    user_id=second,
+                    purpose="activate",
+                    transport=CaptureTransport(),
+                    limits=LIMITS,
+                    client_ip="198.51.100.30",
+                    actor=None,
+                    ceremony=True,
+                )
+    assert "ceremony-backed appointment" in str(exc.value.orig)

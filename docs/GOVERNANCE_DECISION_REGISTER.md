@@ -302,3 +302,105 @@ decision's wording, the departure is stated.
 4. The login-rate limiter is per client address and stored in the database. Repeated runs against one database can exhaust it; the test
    suites reuse sessions to avoid this.
 5. Full downgrade to base is not supported on a shared cluster (migration 0001).
+
+## P-INC3-PHASE1-REVIEW-FIX-10 — Independent review findings F1-F4: fixes, exceptions and residuals (2026-10-26)
+
+This entry records the closure of the four findings from the independent Phase 1 acceptance review of 640287e. It does not modify
+any earlier approval. Commit 4340350 carries the fixes. The changes made after it are listed under "Follow-up changes" below and
+are not yet committed at the time of writing.
+
+### Findings and fixes
+
+| Finding | Severity | Fix | Migration | Reproduction |
+| --- | --- | --- | --- | --- |
+| F1 Application login could mint and supersede activation tokens | High | Activation issuance needs an `account.activation.issue` proof held by an active Administrator (`fn_issue_activation_with_proof`). The caller-supplied function is dropped. Bootstrap uses `fn_issue_ceremony_activation` (ceremony role only; see below). | 0039 | `tests/hardening/test_review_reproduction.py` (4 cases, restricted login) |
+| F2 Worker identities could write human-attributed audit rows | Medium | `fn_worker_record_audit` accepts `system` events only and refuses an actor identifier that names an account (R-F2 below). | 0039 | `tests/integration/test_security_closure.py` (worker role) |
+| F3 Self-assignment refused only in Python | Medium | `fn_assign_role_with_proof` refuses `actor = target` in SQL (`self_assignment`). The Python check stays as a second layer. | 0039 | `tests/hardening/test_review_reproduction.py::test_f3_the_original_self_assignment_is_refused_in_sql` |
+| F4 Revisions loaded sibling revisions by path | Medium | Frozen text in each revision (0027, 0030, 0035, 0036). See "Historical migration exception". | 0027, 0030, 0035, 0036 | Static check `tests/hardening/test_security_closure.py::test_no_migration_loads_another_revision_by_path`, plus equivalence evidence below |
+
+### Ceremony activation decision (WDS direction 1, conditionally approved)
+
+`webdesk_guard.fn_issue_ceremony_activation(user, token_hash, destination, ttl)` issues a bootstrap activation token. It is
+conditionally approved, subject to the following, each of which is tested.
+
+- **Eligibility.** The function requires a live approval with `administrator_appointment` set, `ceremony_id` not null, status
+  `approved`, and `expires_at > now()`. An account without such an appointment is refused (`ceremony activation needs a live
+  ceremony-backed appointment`). Test: `tests/integration/test_security_closure.py::test_a_ceremony_token_is_refused_without_a_ceremony_backed_appointment`.
+- **Expiry.** Once the appointment window has passed, issuance is refused. Test: `tests/committed/test_deadlines.py::test_a_bootstrap_token_is_refused_once_the_appointment_has_expired`
+  (real clock, installation window of six seconds).
+- **Single use and supersession.** Each issuance supersedes the previous live token. The superseded token cannot be consumed; the
+  newest can be consumed once. Test: `tests/integration/test_security_closure.py::test_a_bootstrap_token_is_single_use_superseded_and_audited`.
+- **Role isolation.** Only `webdesk_ceremony` may execute the function. The application login is refused by privilege
+  (`tests/hardening/test_security_closure.py::test_the_application_role_cannot_call_the_ceremony_activation_function`). The
+  ceremony role's function list is pinned (`tests/hardening/test_privilege_audit.py`, `CEREMONY_EXECUTE`).
+- **Audit.** Each issuance writes a `token.issued` audit row for the account. The single-use test asserts two rows for two issuances.
+- **Savepoint.** A refusal rolls back inside the ceremony role before the caller's role is restored, so no aborted transaction state
+  is left behind (`src/webdesk/tokens/service.py`, `issue`).
+
+Scope: the ceremony role gains one function, so it now executes four guard functions, not three. This extends decision 6. WDS
+approval is recorded here as conditional on the reviewer verifying the list above.
+
+### R-F2 residual and its exact scope
+
+Before this fix, a worker or outbox identity could write `system` audit rows naming any account, so an audit row could appear to
+be an account's own action. The fix is narrow.
+
+- Refused: any event whose actor type is not `system`, and any `system` event whose actor identifier equals an existing account's
+  identifier (`worker audit may not name an account`).
+- Allowed: deployment-defined worker labels (for example `worker-1`, `outbox-worker`, `parser`, `run:<run_id>`).
+
+**Residual that remains:** a worker can still write a `system` event under any label that is not an account identifier, and that
+label is not checked against the deployment's worker list. The label cannot make a row look human or belong to an account, but it
+can make a system event look as if another worker wrote it. WDS direction 2 accepts this residual. The worker identity is a
+deployment dependency: it must be provisioned with its own login (see `docs/PRODUCTION_BOUNDARY.md`), and its labels should be
+enforced by deployment configuration.
+
+### Historical migration exception (narrow, WDS-approved on stated conditions)
+
+Revisions 0027, 0030, 0035 and 0036 were committed earlier on this branch. Commit 4340350 changes their source text: sibling
+revisions are no longer loaded by path, and the same text is kept as literal snapshots. WDS granted a narrow exception on the
+following conditions. Each is verified in the evidence document.
+
+1. Executed `UPGRADE_SQL` and `DOWNGRADE_SQL` are byte-identical to the committed originals (`git show 4340350^:...`).
+2. Revision identifiers and dependencies are unchanged.
+3. Fresh installation and forward migration are verified.
+4. The exception is documented here.
+5. The independent reviewer verifies the equivalence. This is open until the reviewer does so.
+
+No general permission to rewrite committed migrations is granted. Evidence and the resolution are in
+`docs/INCREMENT_3_EVIDENCE.md`, section "Phase 1 review-fix closure".
+
+**Remote history.** The remote-tracking reference in the local clone (`origin/feature/increment-1-foundation`, last fetched
+2026-10-20) does not contain the commits that introduced 0027 to 0036. Whether any shared environment applied those revisions is
+therefore unknown from this repository. WDS must confirm that no environment other than local test databases has applied them. If
+any has, the exception does not cover it, and the migration must not be edited there.
+
+### Follow-up changes after 4340350 (uncommitted at the time of writing)
+
+- R-F2 rule in migration 0039 and its tests (integration suite).
+- Savepoint inside the ceremony role switch (`tokens/service.py`), so a refusal does not leave aborted state.
+- Ceremony tests: eligibility, expiry, single use, audit (integration and committed suites).
+- Reproduction module `tests/hardening/test_review_reproduction.py`, replacing scratch probes.
+
+### Verification (single pass, 2026-10-26, fresh databases)
+
+| Step | Result |
+| --- | --- |
+| Full regression suite (`tests`) | 617 passed, 0 failed, exit 0 |
+| Restricted-login hardening (`tests/hardening`, includes privilege audit and reproduction) | 210 passed, exit 0 |
+| EVAL-F11j (`test_eval_f11j.py`, `test_eval_f11j_extended.py`) | 37 passed, exit 0 |
+| Ruff lint (`src`, `tests`, `migrations`) | clean after one docstring fix; exit 0 |
+| Ruff format | 5 files not formatted, all predating this work and untouched (0017, 0019, 0020, `test_privilege_hardening.py`, `test_reassessment.py`) |
+| Mypy strict (`src/webdesk`) | clean, 56 source files |
+| Migration fresh head, downgrade to 0029, upgrade to head | pass; catalog identical to a fresh head build |
+| One-step downgrade of 0039 | restores the 0038 catalog exactly |
+
+The full suite ran before one docstring-only edit in `tests/integration/test_security_closure.py`. No test logic changed after it.
+
+### Production-only versus non-production blockers
+
+- Non-production acceptance blockers: the reviewer's verification of the historical migration exception (item 5 above); the unresolved
+  remote-history question; ruff formatting on five files that predate this work. None of these affects database behaviour.
+- Production-only blockers (unchanged; see `docs/PRODUCTION_BOUNDARY.md`): trusted authority deployment and signing-key custody;
+  authenticated transport in place of loopback with a bearer secret; separate database identities; worker deployment and isolation;
+  an approved email transport; operational monitoring and recovery; authenticated ceremony operator and verifier identities.
