@@ -33,3 +33,8 @@ Status key: **PASSED** = run and passed, with the commit shown. **NOT EXECUTED â
 - webdesk: `pytest tests/unit` and `mypy src/webdesk`, at the head then current.
 - webdesk: integration and committed tests on a scratch database.
 - CI for each pushed commit once push is authorized.
+
+## Update 26 October 2026 (later)
+- ai_engine at `2988913` (clean-room full-tree export of HEAD): pytest **1253 passed**; ruff check and ruff format --check clean (115 files). Strict mypy not run in the clean-room copy.
+- Webdesk pytest and mypy: NOT EXECUTED â€” APPLICATION CONTROL ERROR 4551. Per the WDS decision, the blocked executables were not retried in this environment. No authorized alternative environment is available to this session. The first authorized route is the GitHub `specialist-ci` run on a pushed commit, which waits for the deferred push.
+- Integration worktree has 9 uncommitted modified files (not from this session). Not committed, not tested.
