@@ -1,5 +1,5 @@
 """
-AI-S04 increment 1: Shift4Shop and Shift4Shop specialist.
+AI-S04: Shift4Shop (formerly 3dcart) specialist.
 
 Every scenario builds synthetic requirements, a real task through the AI-2 task builder, and runs
 the agent through the AI-2 execution wrapper. No Shift4Shop or Shift4Shop documentation is read,
@@ -173,7 +173,7 @@ def test_rest_api_requirement_adds_an_api_integration_option_and_states_no_acces
 # --- Scope and fail-closed behaviour
 
 
-def test_a_requirement_outside_woocommerce_scope_is_refused() -> None:
+def test_a_requirement_outside_this_platform_scope_is_refused() -> None:
     scenario = Scenario(["Users need a dashboard that shows monthly reports."])
     with pytest.raises(UnsupportedRequestError):
         Shift4ShopSpecialist().run(scenario.task, scenario.context)
@@ -264,3 +264,11 @@ def test_version_question_names_the_exact_shift4shop_version() -> None:
     result = Scenario(["Customers need coupons to combine with a checkout discount."]).run()
     texts = [q.question_text for q in result.clarification_questions]
     assert any("exact Shift4Shop (formerly 3dcart) version" in text for text in texts)
+
+
+def test_overlapping_topics_do_not_repeat_wording_in_a_claim() -> None:
+    result = Scenario(["Shift4Shop discounts must stack with coupons."]).run()
+    texts = [c.claim_text for c in result.claims]
+    assert texts
+    assert all("discount rules, discount rules" not in text for text in texts)
+    assert all(text.count("discount rules") <= 1 for text in texts)

@@ -51,7 +51,7 @@ _RELEVANCE_RE = re.compile(
 _TOPICS: tuple[tuple[str, str, str], ...] = (
     ("module", "custom module development", "architecture"),
     ("extension", "extension compatibility", "architecture"),
-    ("deploy", "deployment and hosting", "architecture"),
+    ("deploy*", "deployment and hosting", "architecture"),
     ("architecture", "architectural constraints", "architecture"),
     ("storefront", "storefront presentation", "storefront"),
     ("checkout", "checkout behaviour", "commerce"),
@@ -70,12 +70,19 @@ def is_magento_relevant(statement: str) -> bool:
     return _RELEVANCE_RE.search(statement) is not None
 
 
+def _keyword_pattern(keyword: str) -> str:
+    # A trailing * matches any word form (deploy, deploys, deployed, deployment).
+    if keyword.endswith("*"):
+        return rf"\b{re.escape(keyword[:-1])}\w*\b"
+    return rf"\b{re.escape(keyword)}s?\b"
+
+
 def topic_matches(statement: str) -> list[tuple[str, str, str]]:
     lowered = statement.lower()
     return [
         (keyword, phrase, layer)
         for keyword, phrase, layer in _TOPICS
-        if re.search(rf"\b{re.escape(keyword)}s?\b", lowered)
+        if re.search(_keyword_pattern(keyword), lowered)
     ]
 
 
@@ -142,11 +149,16 @@ class _Builder:
     def add_requirement(self, requirement: AtomicRequirement) -> None:
         rid = requirement.requirement_id or ""
         topics = topic_matches(requirement.normalized_statement)
-        phrase = ", ".join(p for _, p, _ in topics[:2]) or "the requested store behaviour"
+        phrases: list[str] = []
+        for _, p, _ in topics:
+            # Skip a phrase that repeats, or sits inside, one already chosen.
+            if not any(p in chosen or chosen in p for chosen in phrases):
+                phrases.append(p)
+        phrase = ", ".join(phrases[:2]) or "the requested store behaviour"
         keywords = {k for k, _, _ in topics}
         layers = sorted({layer for _, _, layer in topics}) or ["commerce"]
         layer_label = "/".join(layers)
-        query = " ".join(k for k, _, _ in topics) or "magento"
+        query = " ".join(k.rstrip("*") for k, _, _ in topics) or "magento"
         found = self.context.evidence.search(
             project_id=self.task.project_id,
             allowed_collections=self.task.allowed_evidence_collections,
@@ -220,8 +232,14 @@ class _Builder:
             shapes.append(
                 (
                     ApproachType.NATIVE_PLATFORM,
-                    f"Native Magento / Adobe Commerce option for {phrase}",
-                )
+                    f"Native Magento Open Source option for {phrase} (edition not confirmed)",
+                ),
+            )
+            shapes.append(
+                (
+                    ApproachType.NATIVE_PLATFORM,
+                    f"Native Adobe Commerce option for {phrase} (edition not confirmed)",
+                ),
             )
             shapes.append((ApproachType.THIRD_PARTY_APP, f"Third-party app option for {phrase}"))
         if integration:
@@ -282,9 +300,10 @@ class _Builder:
                 proposal_key=hypothesis_key,
                 project_id=self.task.project_id,
                 claim_text=(
-                    f"Native Magento / Adobe Commerce functionality may cover {phrase} "
-                    f"({layer_label} layer); "
-                    "this is an unverified hypothesis."
+                    "Native Magento Open Source or Adobe Commerce functionality "
+                    f"may cover {phrase} ({layer_label} layer); the edition is not confirmed "
+                    "and capabilities may differ between editions; this is an unverified "
+                    "hypothesis."
                 ),
                 claim_type=ClaimType.PLATFORM_CAPABILITY,
                 evidence_status=EvidenceStatus.CONFLICTING

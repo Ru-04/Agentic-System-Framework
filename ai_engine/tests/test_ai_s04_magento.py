@@ -1,5 +1,5 @@
 """
-AI-S04 increment 1: Magento and Magento specialist.
+AI-S04: Magento / Adobe Commerce specialist.
 
 Every scenario builds synthetic requirements, a real task through the AI-2 task builder, and runs
 the agent through the AI-2 execution wrapper. No Magento or Magento documentation is read,
@@ -173,7 +173,7 @@ def test_rest_api_requirement_adds_an_api_integration_option_and_states_no_acces
 # --- Scope and fail-closed behaviour
 
 
-def test_a_requirement_outside_woocommerce_scope_is_refused() -> None:
+def test_a_requirement_outside_this_platform_scope_is_refused() -> None:
     scenario = Scenario(["Users need a dashboard that shows monthly reports."])
     with pytest.raises(UnsupportedRequestError):
         MagentoSpecialist().run(scenario.task, scenario.context)
@@ -266,3 +266,27 @@ def test_edition_is_asked_and_never_assumed_equivalent() -> None:
         or "not assumed equivalent" in statements
         or "capabilities can differ" in statements
     )
+
+
+def test_deployment_wording_is_classified_as_architecture_not_commerce() -> None:
+    result = Scenario(["Magento deployment must be automated for each release."]).run()
+    assert any("deployment and hosting" in c.claim_text for c in result.claims)
+    assert any("architecture layer" in c.claim_text for c in result.claims)
+    assert not any("commerce layer" in c.claim_text for c in result.claims)
+
+
+def test_edition_is_stated_in_the_hypothesis_without_assuming_equivalence() -> None:
+    result = Scenario(["Customers need a module that combines promotions at checkout."]).run()
+    hypotheses = [c.claim_text for c in result.claims if c.claim_text.startswith("Native Magento")]
+    assert hypotheses
+    assert all("Open Source or Adobe Commerce" in text for text in hypotheses)
+    assert all("edition is not confirmed" in text for text in hypotheses)
+    assert not any("Magento / Adobe Commerce functionality" in c.claim_text for c in result.claims)
+
+
+def test_editions_are_separate_options_and_never_one_combined_option() -> None:
+    result = Scenario(["Customers need a module that combines promotions at checkout."]).run()
+    summaries = [s.summary for s in result.candidate_solutions]
+    assert any("Native Magento Open Source option" in s for s in summaries)
+    assert any("Native Adobe Commerce option" in s for s in summaries)
+    assert not any("Magento / Adobe Commerce option" in s for s in summaries)

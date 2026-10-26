@@ -176,7 +176,7 @@ def test_rest_api_requirement_adds_an_api_integration_option_and_states_no_acces
 # --- Scope and fail-closed behaviour
 
 
-def test_a_requirement_outside_woocommerce_scope_is_refused() -> None:
+def test_a_requirement_outside_this_platform_scope_is_refused() -> None:
     scenario = Scenario(["Users need a dashboard that shows monthly reports."])
     with pytest.raises(UnsupportedRequestError):
         BigCommerceSpecialist().run(scenario.task, scenario.context)

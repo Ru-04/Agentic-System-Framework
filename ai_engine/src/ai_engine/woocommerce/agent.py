@@ -141,7 +141,12 @@ class _Builder:
     def add_requirement(self, requirement: AtomicRequirement) -> None:
         rid = requirement.requirement_id or ""
         topics = topic_matches(requirement.normalized_statement)
-        phrase = ", ".join(p for _, p, _ in topics[:2]) or "the requested store behaviour"
+        phrases: list[str] = []
+        for _, p, _ in topics:
+            # Skip a phrase that repeats, or sits inside, one already chosen.
+            if not any(p in chosen or chosen in p for chosen in phrases):
+                phrases.append(p)
+        phrase = ", ".join(phrases[:2]) or "the requested store behaviour"
         keywords = {k for k, _, _ in topics}
         layers = sorted({layer for _, _, layer in topics}) or ["commerce"]
         layer_label = "/".join(layers)
