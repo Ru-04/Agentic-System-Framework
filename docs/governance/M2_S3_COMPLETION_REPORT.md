@@ -61,3 +61,17 @@ Recorded separately in the commit and in section 8 once checked. Do not treat an
 - Approved evidence source per platform (D08): WDS Authorized Approver. Proposals in `SPRINT4_EVIDENCE_SOURCE_PROPOSALS_2026-10-23.md`.
 - QA-07 runtime authority enforcement: required before any integration. Owner: engineering, scheduled for M3 S6.
 - Independent Sprint 3 QA: a qualified reviewer who did not author this work. Not assigned.
+
+## 9. Completion status, 26 October 2026
+
+**Sprint 3 acceptance: NOT ACCEPTED.** Completion work is in place. Mandatory checks at the current head are NOT EXECUTED, and PG independent QA is not done.
+
+1. Six specialist statuses: Shift4Shop, WooCommerce, BigCommerce, Magento, Standalone Applications and Middleware Applications each have a profile and the shared executable base (PlatformSpecialist) in src/webdesk. None has an approved evidence source. None has a real platform investigation. Synthetic AI-S04 agents exist in ai_engine for Shift4Shop, WooCommerce, BigCommerce and Magento only.
+2. Architecture compatibility: docs/governance/ARCHITECTURE_COMPATIBILITY_ASSESSMENT_2026-10-26.md. No merge. Preferred direction WebDesk primary with adapters, pending WDS decision.
+3. Files created or changed in this completion step: docs/governance/ARCHITECTURE_COMPATIBILITY_ASSESSMENT_2026-10-26.md (new); this report (section 9). Earlier Sprint 3 files: see sections 1 and 2.
+4. Test results: ruff check src tests migrations passed and ruff format --check passed (155 files) at 2630ab6. Webdesk pytest tests/unit and mypy src/webdesk: NOT EXECUTED — APPLICATION CONTROL ERROR 4551. Last verified: 536 unit tests passed at e3ba3b7 (state at that commit; not a pass for 2630ab6). Strict mypy last verified clean at e3ba3b7. Integration and committed tests: 223 passed at an earlier code state; not re-run.
+5. Remaining defects: (a) Standalone and Middleware have no AI Engine agent, so the two frameworks differ for them; (b) the two frameworks have no shared contract or adapter; (c) the working tree of the integration worktree has uncommitted edits to AI-S04 agents, not from this session; (d) declared actions are checked once per run, not during execution (QA-07 dependency).
+6. PG independence and QA: declaration not completed. PG completes it personally. Independence PENDING. No PG review, finding or signature recorded.
+7. Sprint 3 acceptance status: NOT ACCEPTED (see above).
+8. Milestone 1 dependencies: PG independence and Sprint 1, 2 and 3 QA; 55-pair human labels (0 of 55); specification reconciliation with a version-bound approval; independent Milestone 1 testing; CI on the pushed commit (push deferred).
+9. Sprint 4 readiness: NOT READY. Sprint 4 needs approved evidence sources per platform (none approved, D08), the architecture decision, and Sprint 3 acceptance. No Sprint 4 work has started.
