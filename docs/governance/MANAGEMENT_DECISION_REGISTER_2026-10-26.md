@@ -46,3 +46,21 @@ Source: WDS Authorized Approver, chat, 26 October 2026 ("Formal Approval and Con
 | SRC-02 | Shift4Shop source discovery only. No invented domain. No retrieval without source-specific authorization. | Approved for discovery only. Discovery candidate recorded; ownership not yet verified |
 | QA-01 | PG nominated Independent QA Reviewer and Authorized QA Acceptance Signatory. PG personally confirms independence. Assistant does not fill PG declaration, labels, findings or signature. | Approved (restates the 26 Oct decision). Independence PENDING |
 | TEST-01 | Run current-head tests through an authorized environment only. Do not bypass error 4551. Record NOT EXECUTED if unavailable. | Approved. Not achieved: no authorized environment available in this session |
+
+## M2 Sprint 3 engineering approval (26 October 2026, chat)
+Source: WDS management approval, chat, 26 October 2026, stated by the approver as "I, AS (Arushi Sharma), acting as WDS Authorized Approver". Recorded as stated. No handwritten or cryptographic signature is recorded or required by this entry. Management authorization only: not QA acceptance, not PG review.
+
+- **Decision:** ENGINEERING ACCEPTED WITH CONDITIONS, FORMAL SPRINT ACCEPTANCE PENDING.
+- **Bound to:** implementation `3969a8f`; documentation `5105628`.
+- **Approved scope:** six specialist foundations on the shared base; seven-specialist canonical compatibility; adapter v0.2; synthetic non-production vertical slice; associated unit, integration, typing and lint evidence; Sprint 3 engineering and governance documents; preparation for M2 Sprint 4.
+- **Not authorized:** unconditional Sprint 3 acceptance; unapproved live retrieval; live model execution; production integration; pushes or protected-branch merges; changes to the frozen 4-milestone, 9-sprint plan.
+
+| Condition | Responsible owner | Status |
+|---|---|---|
+| PG verifies independence personally, performs independent QA, and signs | PG | PENDING |
+| 55-pair Shopify relevance review | Independent qualified reviewer (not yet named for this review) | PENDING, 0 of 55 |
+| Required CI and hardening tests performed | Engineering, via authorized CI run on a pushed commit | PENDING (push deferred); hardening not run locally |
+| Official evidence sources require separate approval | WDS approver, per source | PENDING; none approved |
+| QA-07 runtime authorization implemented before applicable production integration | Engineering (M3 S6) | OPEN; production blocked |
+| Milestone 1 acceptance dependencies | WDS and independent reviewers | OPEN |
+| No platform declared technically verified from synthetic tests alone | Standing rule | Enforced |
