@@ -75,3 +75,11 @@ Recorded separately in the commit and in section 8 once checked. Do not treat an
 7. Sprint 3 acceptance status: NOT ACCEPTED (see above).
 8. Milestone 1 dependencies: PG independence and Sprint 1, 2 and 3 QA; 55-pair human labels (0 of 55); specification reconciliation with a version-bound approval; independent Milestone 1 testing; CI on the pushed commit (push deferred).
 9. Sprint 4 readiness: NOT READY. Sprint 4 needs approved evidence sources per platform (none approved, D08), the architecture decision, and Sprint 3 acceptance. No Sprint 4 work has started.
+
+## 10. Sprint 3 architecture and acceptance preparation (26 October 2026)
+- Reviewed commit for Sprint 3 QA: webdesk `564d0d1` (this branch, local; push deferred). Reference commit for the platform code: `e3ba3b7` plus the governance commits after it. Integration reference: `052d853`.
+- Architecture: `ADAPTER_CONTRACT_PROPOSAL_2026-10-26.md` (proposal; not implemented; WDS approval needed).
+- Evidence sources: `OFFICIAL_EVIDENCE_SOURCE_REGISTER_2026-10-26.md` (nothing approved; default deny).
+- Uncommitted integration changes: `UNCOMMITTED_CHANGES_STATUS_2026-10-26.md`.
+- Tests: clean-room ai_engine at `052d853` 1257 passed, ruff clean. Webdesk pytest and mypy at `564d0d1`: NOT EXECUTED, APPLICATION CONTROL ERROR 4551. No authorized alternative runner available to this session; the first route is the GitHub specialist-ci run on a pushed commit (push deferred).
+- Sprint 3 acceptance: NOT ACCEPTED. PG independence declaration: not completed by PG; PG completes it personally.
