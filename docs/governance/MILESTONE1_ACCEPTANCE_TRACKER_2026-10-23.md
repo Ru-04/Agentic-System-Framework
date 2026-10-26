@@ -96,3 +96,12 @@ No independent reviewer has been assigned. A reviewer must not have authored the
 - **Human QA reviewer:** PG. PG's role, qualifications, independence and sign-off are **not yet verified** (see the PG checklist above).
 - **Developer assignment:** Standalone Applications and Middleware Applications: BD (as reported). BD is an authorship-unverified contributor, so BD does not count as independent for this work.
 - **Push:** deferred by WDS. The branch stays local until access is restored.
+
+## PG authority and independent tests (reported in chat, 26 October 2026)
+
+- **PG, as reported:** WDS approver, QA developer, authorized to sign off. Recorded as reported. PG's role, qualifications and independence (PG did not author the reviewed work) are **not yet verified** in the repository.
+- **Sign-off:** not entered by the assistant. PG signs personally.
+- **Independent tests run in this session (26 October 2026):**
+  - `ai_engine` integration commit `2f16db0` (and later `16607e6`): clean-room export of the full tree, `uv sync --extra dev`, `pytest`: **1190 passed**; `ruff check src tests`: clean. Strict mypy was run on the in-place worktree earlier (99 files, clean) but could not run in the clean-room copy because of a path-length DLL error.
+  - `webdesk` branch head `3d695c6`: `ruff check src tests migrations` and `ruff format --check src tests`: clean. `pytest tests/unit` and `mypy` could **not be run today**: the environment's Application Control policy blocked the tool executables (os error 4551). Previous run at the Sprint 3 head: 536 passed.
+- **Not human QA.** These are automated test runs performed in this session. They do not replace PG's review.
