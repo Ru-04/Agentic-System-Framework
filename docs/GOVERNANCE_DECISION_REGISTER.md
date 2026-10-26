@@ -404,3 +404,19 @@ The full suite ran before one docstring-only edit in `tests/integration/test_sec
 - Production-only blockers (unchanged; see `docs/PRODUCTION_BOUNDARY.md`): trusted authority deployment and signing-key custody;
   authenticated transport in place of loopback with a bearer secret; separate database identities; worker deployment and isolation;
   an approved email transport; operational monitoring and recovery; authenticated ceremony operator and verifier identities.
+
+## P-INC3-AI-SCAN-07 — AI read v1 scan-status ruling (post-baseline clarification, 2026-10-26)
+
+WDS ruling on the scan-status question raised against `ai-read/v1`. This is a clarification recorded after the S0 baseline. It
+rewrites no approved specification.
+
+- Gate 1 source eligibility is unchanged. `not_scanned` remains eligible for authorized Foundation processing where scanning is
+  unavailable (`REQUIREMENT_SCHEMA.md` `RunInputSnapshot` and R1; `ARCHITECTURE.md` quarantine "when scanning is available").
+- The AI v1 read path may return `not_scanned` content to a verified principal that is in scope, unexpired, unrevoked and
+  authorized under the existing rules. Quarantined and restricted content are denied for every principal.
+- External transmission of real client content to an AI provider is not authorized by a `not_scanned` status. It needs a
+  separately accepted content-safety, disclosure and deployment policy.
+- Non-production content-read tests may use synthetic fixtures, including `not_scanned` sources.
+- Production integration remains blocked.
+
+Contract text reflecting this: `docs/AI_FOUNDATION_READ_CONTRACT_v1.md` section 13A.

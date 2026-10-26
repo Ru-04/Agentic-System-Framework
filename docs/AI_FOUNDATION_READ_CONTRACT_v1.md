@@ -195,6 +195,24 @@ Limits are in section 6. Any `limit` outside its range is refused as `invalid_re
   `ai-read/v2`.
 - A server that receives an unknown version refuses the request with `contract_version_unsupported`. It never falls back.
 
+## 13A. Scan status, eligibility and transmission scope (WDS ruling, post-baseline clarification)
+
+WDS ruling (recorded in `docs/GOVERNANCE_DECISION_REGISTER.md`, P-INC3-AI-SCAN-07). Three different questions are separated:
+
+1. **Gate 1 source eligibility (approved specification, unchanged).** `scan_status = not_scanned` remains eligible for authorized
+   Foundation processing (`REQUIREMENT_SCHEMA.md`: `RunInputSnapshot` selects versions with `scan_status != quarantined`; R1 first-run
+   rule). `ARCHITECTURE.md` quarantines failed malware scans "when scanning is available". No Gate 1 component produces `clean`.
+2. **Foundation-to-AI read authorization (this contract).** An AI principal may read a source version only if the version is not
+   quarantined, not restricted (D-AI-2), and readable by the bound human under the existing rules, within the principal's
+   project and run, and while the credential is valid. `not_scanned` versions satisfy this. Metadata and run-status reads are
+   governed by the same credential checks.
+3. **External model transmission (not part of v1).** Sending any source content to an external AI provider is not authorized by
+   this contract. A `not_scanned` status does not authorize it. That requires a separately accepted content-safety, disclosure and
+   deployment policy. v1 content reads are for the AI engine inside the Foundation boundary and for non-production testing with
+   synthetic fixtures.
+
+Quarantined and restricted content remain denied for every principal. This clarification changes no approved specification text.
+
 ## 14. Governance statement
 
 No AI output creates verified, approved, accepted or governance status. v1 has no AI output path. Governance status is owned

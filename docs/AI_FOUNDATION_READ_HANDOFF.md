@@ -50,7 +50,7 @@ drops the table and functions. Audit rows are kept.
 
 ## 4. Tests
 
-- `tests/committed/test_ai_read_v1.py`: 24 cases over the real HTTP stack, restricted application role and in-process authority.
+- `tests/committed/test_ai_read_v1.py`: 28 cases over the real HTTP stack, restricted application role and in-process authority.
   Positive: issuance (token stored as hash only), run, project and version reads, segments and content. Negative: wrong token,
   human session on AI routes, other run, other project, quarantined, restricted with a restricted grant, explicit revocation,
   rotation, 60-second expiry (real clock), cancelled run (state injection), removed membership, disabled human, administrator
@@ -59,28 +59,43 @@ drops the table and functions. Audit rows are kept.
 - `tests/hardening/test_privilege_audit.py`: pins updated for the new application and authority functions (17 pass).
 - `tests/hardening/test_review_reproduction.py` and the earlier F1–F4 modules: still pass.
 
-## 5. Results (2026-10-26, one ordered pass on fresh databases)
+## 5. Results (2026-10-26, one ordered pass on freshly rebuilt databases, after all corrections)
 
-- Full suite: 645 passed, 1 error. The error is a teardown error (see section 6).
-- Ruff lint: clean (`src`, `tests`, `migrations`).
-- Ruff format: five files not formatted, all pre-existing (`docs/RUFF_FORMAT_EXCEPTIONS.md`).
-- Mypy strict: clean, 57 source files.
-- Migration fresh head, downgrade and upgrade: catalog-identical; 0041 one-step downgrade equals the 0040 catalog.
+| Step | Result | Exit |
+|---|---|---|
+| Rebuild of integration and hardening databases | migrated to head 0041 | 0 |
+| Full regression suite (`tests`) | 649 passed, 0 failed, 0 errors | 0 |
+| AI v1 contract tests (`tests/committed/test_ai_read_v1.py`, 28 cases, part of the full-suite run) | passed, including non-empty parsed segments | 0 (full-suite run) |
+| Restricted-login hardening (`tests/hardening`, privilege audit, reproductions, part of the full-suite run) | passed | 0 (full-suite run) |
+| Ruff lint (`src`, `tests`, `migrations`) | all checks passed | 0 |
+| Ruff format | 6 files not formatted, all documented in `docs/RUFF_FORMAT_EXCEPTIONS.md` (3 frozen migrations, committed revision 0040, 2 tests) | 1 (documented exceptions) |
+| Mypy strict (`src/webdesk`) | no issues, 57 source files | 0 |
+| Migration fresh head, downgrade and upgrade chain | upgrade head ok, downgrade to 0029 ok, upgrade to head ok, catalog equals fresh head | 0 |
+| Migration 0041 one-step downgrade | catalog equals the 0040 catalog exactly | 0 |
 
-## 6. Open issues and limitations
+## 6. Closure of issues raised in the previous review
 
-1. **Teardown error in the full run.** One committed-suite test (`test_a_quarantined_version_is_never_listed_or_read`) reported an
-   ERROR at fixture teardown: PostgreSQL refused `DROP DATABASE … WITH (FORCE)` because a session of another role was still open.
-   The test passes alone (re-run). The likely cause is a connection that an earlier committed test left open. The same class of
-   shared-cluster isolation issue was seen in the previous increment. It is not fixed here. It needs a harness fix before a
-   final acceptance run.
-2. Malformed requests refused before database work (missing contract header or scheme, bad identifier or limit) produce no audit
-   row, because they have no principal or project (contract section 10).
-3. No requirement, evidence, citation or analysis-result tables exist in Foundation. Under D-AI-4 they are required for the later
-   write contract. They are a gap, not a v1 need.
-4. The authority transport is loopback with a shared bearer secret (decision 7). The issuance route inherits that transport.
-5. The 60-second expiry test takes about 66 seconds.
-6. The run-state tests inject state (`cancelled`, `completed`) directly through the owner, to test the read gate in isolation.
+1. **Teardown error (resolved).** The test database was dropped with `WITH (FORCE)`, which hid sessions left attached by
+   earlier tests. Three observations: (a) idle owner-role connections were left by test engines that kept pooled connections;
+   (b) the CLI installation engine in `src/webdesk/cli/install.py` was never disposed, which left a session attached to a test
+   database after the in-process CLI tests; (c) the failing "permission denied to terminate" error came from a session of
+   another role, and I did not capture its role in a run. Changes: test engines use `NullPool` (committed fixture, HTTP intake and
+   AI tests); the drop no longer uses `FORCE` and fails naming any attached session; the CLI disposes its engine on every path.
+   The ordered full run then reported 0 errors. That is one run, so the result is a single observation, not a proof of absence.
+2. **Scan-status rule (ruled by WDS).** Recorded in `docs/AI_FOUNDATION_READ_CONTRACT_v1.md` section 13A and
+   `docs/GOVERNANCE_DECISION_REGISTER.md` P-INC3-AI-SCAN-07. No approved specification text is changed.
+   - Gate 1 source eligibility: `not_scanned` remains eligible for authorized Foundation processing
+     (`REQUIREMENT_SCHEMA.md` `RunInputSnapshot` and R1; `ARCHITECTURE.md` quarantines failed scans "when scanning is available").
+   - AI v1 read authorization: a verified principal in scope may read non-quarantined, non-restricted content it is authorized
+     for. Quarantined and restricted content is denied for every principal.
+   - External model transmission: not authorized by `not_scanned`. Needs a separate content-safety, disclosure and deployment
+     policy. Production integration remains blocked.
+3. **Segment tests were vacuous (found and fixed).** The earlier segment assertions passed with no segments, because segments
+   are produced only by the worker's parse step, which the test uploads never ran. The test upload now runs the parse step through
+   the worker role, and the segment tests require non-empty results.
+4. **Review gaps (added).** Bound-human Analyst role revocation refuses reads; a quarantined refusal is audited durably with its
+   reason; text segments are cut to 4,000 characters with `text_truncated`; a request refused before database work writes no
+   audit row (contract section 10 limitation).
 
 ## 7. Requirements for independent review
 
@@ -93,9 +108,10 @@ drops the table and functions. Audit rows are kept.
 
 ## 8. Readiness
 
-- **READ CONTRACT READY (for independent contract review).** It is internally consistent, WDS-approved, and implemented.
-  This is not an acceptance.
-- **NON-PRODUCTION INTEGRATION READY FOR REVIEW.** Implemented and tested in an isolated non-production environment, with one open
-  harness issue (section 6.1). Not accepted.
+- **READ CONTRACT READY (for independent contract review).** Internally consistent, WDS-approved, implemented, and tested.
+  Not an acceptance.
+- **NON-PRODUCTION INTEGRATION READY FOR INDEPENDENT REVIEW.** The full suite passes with 0 errors, and the migration and
+  privilege checks pass. Independent acceptance is a separate gate.
 - **PRODUCTION INTEGRATION BLOCKED.** The authority transport is loopback with a shared secret (decision 7), production
-  deployment is not approved, and email and secrets handling are out of scope. Evidence: `docs/PRODUCTION_BOUNDARY.md`.
+  deployment is not approved, and external model transmission is not authorized (contract section 13A). Evidence:
+  `docs/PRODUCTION_BOUNDARY.md`.
