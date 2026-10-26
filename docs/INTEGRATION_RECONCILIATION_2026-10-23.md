@@ -113,3 +113,4 @@
 - AI-S04 is not in the frozen 4-milestone, 9-sprint baseline. Its scope is not verified (section 8). The commit message says it stays pending WDS scope confirmation.
 - Checks at `ac1ef7e`: ai_engine pytest 1220 passed (the 1190 baseline plus 30 new tests); ruff and strict mypy clean. Results are in `docs/governance/TEST_EVIDENCE_REGISTER_2026-10-26.md` on the webdesk branch.
 - Not reverted. Whether this increment is kept, or moved out of AI-S04, needs a WDS decision.
+- **WDS decision (26 October 2026, reported in chat):** keep `ac1ef7e` on `integration/ai-s01-s02-s03`. Scope status: still not verified against the frozen baseline. It stays in place; no reversion. Scope confirmation is still needed, because AI-S04 is not in the frozen 9-sprint plan.
