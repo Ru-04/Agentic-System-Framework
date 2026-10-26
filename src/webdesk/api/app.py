@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 
+from webdesk.api.ai import ContractError, ai_router, contract_error_response
 from webdesk.api.errors import DOMAIN_ERRORS, body_for, status_for
 from webdesk.api.routes import router
 from webdesk.authority.client import AuthorityClient
@@ -40,5 +41,8 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.add_exception_handler(ContractError, contract_error_response)
+    # The AI routes are mounted first: their paths must not fall through to the generic run route.
+    app.include_router(ai_router)
     app.include_router(router)
     return app

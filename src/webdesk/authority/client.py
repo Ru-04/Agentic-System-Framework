@@ -73,6 +73,16 @@ class AuthorityClient:
         )
         return uuid.UUID(str(reply["grant_id"]))
 
+    def issue_ai_principal(
+        self, proof: uuid.UUID, run: uuid.UUID, ttl_seconds: int
+    ) -> tuple[uuid.UUID, str]:
+        """Issue an AI service principal for a run. The token is returned once and never stored."""
+        reply = self._post(
+            "/v1/ai-principal/issue",
+            {"proof_id": str(proof), "run_id": str(run), "ttl_seconds": str(ttl_seconds)},
+        )
+        return uuid.UUID(str(reply["principal_id"])), str(reply["token"])
+
     def revoke_read_grant(self, session_token: str, grant: uuid.UUID) -> bool:
         reply = self._post(
             "/v1/read-grant/revoke",

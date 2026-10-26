@@ -10,6 +10,7 @@ public surface and adds the operation-proof issuance that only the authority may
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -281,3 +282,62 @@ class ReadGrantRefused(AuthError):
 
     An AuthError, so the authority commits the denial audit (see server._run).
     """
+
+
+AI_PRINCIPAL_REFUSALS = (
+    "ai_ttl_out_of_range",
+    "run_not_found",
+    "run_not_active",
+    "project_not_active",
+    "proof_missing",
+    "proof_spent",
+    "proof_expired",
+    "proof_operation_mismatch",
+    "proof_resource_mismatch",
+    "proof_session_not_live",
+    "proof_role_not_held",
+    "proof_permission_not_held",
+)
+
+
+class AIPrincipalRefused(AuthError):
+    """A refused AI principal issuance. The reason is the database's named refusal."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def issue_ai_principal(
+    conn: Connection, *, proof: uuid.UUID, run: uuid.UUID, ttl_seconds: int
+) -> tuple[uuid.UUID, str]:
+    """Issue an AI service principal for one run (WDS D-AI-1). Returns the principal and its token.
+
+    The authority generates the token and stores only its SHA-256 hash, through the guard function.
+    The database consumes the operation proof and derives the bound human from it. A refusal is
+    audited and then raised as ``AIPrincipalRefused``. The token value is never logged or audited.
+    """
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    try:
+        with conn.begin_nested():
+            principal = conn.execute(
+                text("SELECT webdesk_guard.fn_issue_ai_principal_with_proof(:p, :r, :h, :t)"),
+                {"p": proof, "r": run, "h": token_hash, "t": ttl_seconds},
+            ).scalar_one()
+    except DBAPIError as exc:
+        reason = (str(exc.orig).splitlines() or ["ai_principal_refused"])[0].strip()
+        if reason not in AI_PRINCIPAL_REFUSALS:
+            raise
+        record_event(
+            conn,
+            actor_type="system",
+            actor_id="ai-principal-issuer",
+            event_type="ai.principal.denied",
+            outcome="denied",
+            error_class=reason,
+            record_refs=[str(run)],
+            details={"contract": "ai-read/v1"},
+        )
+        raise AIPrincipalRefused(reason) from exc
+    return uuid.UUID(str(principal)), token

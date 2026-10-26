@@ -144,6 +144,16 @@ def _revoke_read_grant(conn: Connection, body: dict[str, Any], _ip: str) -> dict
     return {"revoked": revoked}
 
 
+def _ai_principal_issue(conn: Connection, body: dict[str, Any], _ip: str) -> dict[str, Any]:
+    principal, token = authority.issue_ai_principal(
+        conn,
+        proof=uuid.UUID(_body_field(body, "proof_id")),
+        run=uuid.UUID(_body_field(body, "run_id")),
+        ttl_seconds=int(_body_field(body, "ttl_seconds")),
+    )
+    return {"principal_id": str(principal), "token": token}
+
+
 ROUTES: dict[str, Callable[[Connection, dict[str, Any], str], dict[str, Any]]] = {
     "/v1/login": _login,
     "/v1/activate": _activate,
@@ -153,6 +163,7 @@ ROUTES: dict[str, Callable[[Connection, dict[str, Any], str], dict[str, Any]]] =
     "/v1/proof": _proof,
     "/v1/read-grant": _read_grant,
     "/v1/read-grant/revoke": _revoke_read_grant,
+    "/v1/ai-principal/issue": _ai_principal_issue,
 }
 
 
