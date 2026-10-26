@@ -38,3 +38,12 @@ Status key: **PASSED** = run and passed, with the commit shown. **NOT EXECUTED â
 - ai_engine at `2988913` (clean-room full-tree export of HEAD): pytest **1253 passed**; ruff check and ruff format --check clean (115 files). Strict mypy not run in the clean-room copy.
 - Webdesk pytest and mypy: NOT EXECUTED â€” APPLICATION CONTROL ERROR 4551. Per the WDS decision, the blocked executables were not retried in this environment. No authorized alternative environment is available to this session. The first authorized route is the GitHub `specialist-ci` run on a pushed commit, which waits for the deferred push.
 - Integration worktree has 9 uncommitted modified files (not from this session). Not committed, not tested.
+
+## Current-head results at 36eb0e6 + uncommitted adapter v0.2 work (26 October 2026)
+Note: the Application Control block on webdesk pytest and mypy did not apply in this session when re-attempted (no restriction was changed or bypassed). Results below are from this session and are current-head evidence only for the uncommitted working tree described.
+- pytest tests/unit: **572 passed** (536 prior + 36 new adapter v0.2 tests), 1 warning.
+- mypy --strict src/webdesk: **clean**, 84 source files.
+- ruff check src tests migrations: **clean**. ruff format --check src tests: **clean** (158 files).
+- pytest tests/integration tests/committed (scratch database created and dropped): **223 passed**.
+- Hardening tests (tests/hardening): NOT EXECUTED locally; require CI-provisioned roles.
+- Not claimed: final QA acceptance. Adapter code is uncommitted; this run does not establish a commit as passing.
