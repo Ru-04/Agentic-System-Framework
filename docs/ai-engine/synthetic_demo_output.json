@@ -1,0 +1,624 @@
+{
+  "demonstration": "synthetic",
+  "contract": "ai-read/v1",
+  "flow": [
+    "synthetic client brief",
+    "Requirement Analysis Agent",
+    "atomic requirements",
+    "Shopify Specialist",
+    "evidence-linked proposed findings",
+    "clarification questions",
+    "human-review-required output"
+  ],
+  "foundation_access": {
+    "project": {
+      "project_id": "10000000-0000-4000-8000-000000000001",
+      "name": "Synthetic Storefront Brief",
+      "data_classification": "confidential",
+      "status": "active",
+      "revision": 1
+    },
+    "run_status": "running",
+    "source_versions_visible": 3,
+    "source_versions_in_fixture": 5,
+    "segments_read": 6,
+    "model_attempts": 2
+  },
+  "requirement_analysis": {
+    "run_id": "20000000-0000-4000-8000-000000000001",
+    "project_id": "10000000-0000-4000-8000-000000000001",
+    "status": "completed",
+    "requirements": [
+      {
+        "requirement_id": "REQ-001",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "origin": "client_explicit",
+        "original_wording": "Rebuild the product pages of our Shopify store so shoppers can filter by size and colour.",
+        "normalized_statement": "Rebuild Shopify product pages with size and colour filters.",
+        "requirement_type": "functional",
+        "status": "normalized",
+        "materiality": "unassessed",
+        "source_refs": [
+          {
+            "source_id": "30000000-0000-4000-8000-000000000001",
+            "source_version_id": "40000000-0000-4000-8000-000000000001",
+            "version": 1,
+            "segment_id": "50000000-0000-4000-8000-00000000000a",
+            "relation": "supports",
+            "supporting_quote": "Rebuild the product pages of our Shopify store so shoppers can filter by size and colour."
+          }
+        ],
+        "evidence_status": "not_applicable",
+        "confidence": "high",
+        "ambiguities": [],
+        "missing_information": [],
+        "dependency_ids": [],
+        "platform_refs": [
+          "shopify"
+        ],
+        "specialist_category_ids": [
+          "shopify_specialist"
+        ],
+        "clarification_question_ids": []
+      },
+      {
+        "requirement_id": "REQ-002",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "origin": "client_explicit",
+        "original_wording": "Checkout in our Shopify store must show a delivery-date picker for a delivery day.",
+        "normalized_statement": "Show a delivery-date picker at checkout.",
+        "requirement_type": "functional",
+        "status": "normalized",
+        "materiality": "unassessed",
+        "source_refs": [
+          {
+            "source_id": "30000000-0000-4000-8000-000000000001",
+            "source_version_id": "40000000-0000-4000-8000-000000000001",
+            "version": 1,
+            "segment_id": "50000000-0000-4000-8000-00000000000b",
+            "relation": "supports",
+            "supporting_quote": "Checkout in our Shopify store must show a delivery-date picker for a delivery day."
+          }
+        ],
+        "evidence_status": "not_applicable",
+        "confidence": "high",
+        "ambiguities": [],
+        "missing_information": [],
+        "dependency_ids": [],
+        "platform_refs": [
+          "shopify"
+        ],
+        "specialist_category_ids": [
+          "shopify_specialist"
+        ],
+        "clarification_question_ids": []
+      },
+      {
+        "requirement_id": "REQ-003",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "origin": "client_explicit",
+        "original_wording": "Orders from our Shopify store must sync to our ERP every night, and the sync should be fast.",
+        "normalized_statement": "Synchronise Shopify orders to the ERP every night.",
+        "requirement_type": "integration",
+        "status": "needs_clarification",
+        "materiality": "unassessed",
+        "source_refs": [
+          {
+            "source_id": "30000000-0000-4000-8000-000000000001",
+            "source_version_id": "40000000-0000-4000-8000-000000000001",
+            "version": 1,
+            "segment_id": "50000000-0000-4000-8000-00000000000c",
+            "relation": "supports",
+            "supporting_quote": "Orders from our Shopify store must sync to our ERP every night, and the sync should be fast."
+          }
+        ],
+        "evidence_status": "not_applicable",
+        "confidence": "medium",
+        "ambiguities": [
+          "fast"
+        ],
+        "missing_information": [
+          "ERP system name and API",
+          "measurable target for 'fast'"
+        ],
+        "dependency_ids": [],
+        "platform_refs": [
+          "shopify"
+        ],
+        "specialist_category_ids": [
+          "shopify_specialist"
+        ],
+        "clarification_question_ids": [
+          "Q-AI-001"
+        ]
+      },
+      {
+        "requirement_id": "REQ-004",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "origin": "client_explicit",
+        "original_wording": "The loyalty points feature should be easy to use.",
+        "normalized_statement": "Loyalty points feature with an easy user experience.",
+        "requirement_type": "ux",
+        "status": "needs_clarification",
+        "materiality": "unassessed",
+        "source_refs": [
+          {
+            "source_id": "30000000-0000-4000-8000-000000000001",
+            "source_version_id": "40000000-0000-4000-8000-000000000001",
+            "version": 1,
+            "segment_id": "50000000-0000-4000-8000-00000000000d",
+            "relation": "supports",
+            "supporting_quote": "The loyalty points feature should be easy to use."
+          }
+        ],
+        "evidence_status": "not_applicable",
+        "confidence": "low",
+        "ambiguities": [
+          "easy"
+        ],
+        "missing_information": [
+          "measurable target for 'easy'"
+        ],
+        "dependency_ids": [],
+        "platform_refs": [],
+        "specialist_category_ids": [],
+        "clarification_question_ids": [
+          "Q-AI-002"
+        ]
+      },
+      {
+        "requirement_id": "REQ-005",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "origin": "client_explicit",
+        "original_wording": "Also keep the 3dcart store catalogue in step with Shopify.",
+        "normalized_statement": "Keep the 3dcart catalogue in step with the Shopify catalogue.",
+        "requirement_type": "integration",
+        "status": "normalized",
+        "materiality": "unassessed",
+        "source_refs": [
+          {
+            "source_id": "30000000-0000-4000-8000-000000000002",
+            "source_version_id": "40000000-0000-4000-8000-000000000002",
+            "version": 1,
+            "segment_id": "50000000-0000-4000-8000-00000000000e",
+            "relation": "supports",
+            "supporting_quote": "Also keep the 3dcart store catalogue in step with Shopify."
+          }
+        ],
+        "evidence_status": "not_applicable",
+        "confidence": "medium",
+        "ambiguities": [],
+        "missing_information": [],
+        "dependency_ids": [
+          "REQ-003"
+        ],
+        "platform_refs": [
+          "3dcart",
+          "shopify"
+        ],
+        "specialist_category_ids": [
+          "shopify_specialist"
+        ],
+        "clarification_question_ids": []
+      }
+    ],
+    "clarification_questions": [
+      {
+        "question_id": "Q-AI-001",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "question_text": "Please provide ERP system name and API; measurable target for 'fast' for: Synchronise Shopify orders to the ERP every night.",
+        "reason": "Requirement wording has ambiguous terms or missing targets.",
+        "related_requirement_ids": [
+          "REQ-003"
+        ],
+        "status": "open",
+        "impact_if_unanswered": null
+      },
+      {
+        "question_id": "Q-AI-002",
+        "project_id": "10000000-0000-4000-8000-000000000001",
+        "question_text": "Please provide measurable target for 'easy' for: Loyalty points feature with an easy user experience.",
+        "reason": "Requirement wording has ambiguous terms or missing targets.",
+        "related_requirement_ids": [
+          "REQ-004"
+        ],
+        "status": "open",
+        "impact_if_unanswered": null
+      }
+    ],
+    "routing_recommendations": [
+      {
+        "category_id": "3dcart_shift4shop_specialist",
+        "outcome": "unavailable",
+        "requirement_ids": [
+          "REQ-005"
+        ],
+        "reason": "3dcart / Shift4Shop Specialist is registered but not implemented."
+      },
+      {
+        "category_id": "shopify_specialist",
+        "outcome": "selected",
+        "requirement_ids": [
+          "REQ-001",
+          "REQ-002",
+          "REQ-003",
+          "REQ-005"
+        ],
+        "reason": "Requirement references shopify; Shopify Specialist is registered."
+      }
+    ],
+    "limitations": [
+      "Requirements are proposals. No requirement is approved or accepted for scope.",
+      "1 source segment(s) were truncated at 4,000 characters."
+    ],
+    "errors": [],
+    "registry_version": "0.3.10-foundation-gate1-review"
+  },
+  "specialist": {
+    "agent_id": "specialist:shopify_specialist",
+    "agent_kind": "specialist",
+    "status": "completed_with_gaps",
+    "started_at": "2026-10-26T12:00:00Z",
+    "finished_at": "2026-10-26T12:00:00Z",
+    "errors": [],
+    "output": {
+      "task_id": "TASK-SHOPIFY-001",
+      "category_id": "shopify_specialist",
+      "status": "completed_with_gaps",
+      "candidate_solutions": [
+        {
+          "solution_id": "SOL-REQ-001-storefront_theme-native",
+          "approach_type": "native",
+          "summary": "Customise the Online Store theme with sections and theme settings.",
+          "requirement_ids": [
+            "REQ-001"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-STOREFRONT_THEME"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-001-storefront_theme-third_party_app",
+          "approach_type": "third_party_app",
+          "summary": "Install a theme app or filter app from the Shopify App Store.",
+          "requirement_ids": [
+            "REQ-001"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-STOREFRONT_THEME"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-001-storefront_theme-custom_development",
+          "approach_type": "custom_development",
+          "summary": "Develop a custom theme section or a headless storefront.",
+          "requirement_ids": [
+            "REQ-001"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-STOREFRONT_THEME"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-002-checkout_extensibility-native",
+          "approach_type": "native",
+          "summary": "Use checkout UI extensions where the store plan permits checkout customisation.",
+          "requirement_ids": [
+            "REQ-002"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-CHECKOUT_EXTENSIBILITY"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-002-checkout_extensibility-third_party_app",
+          "approach_type": "third_party_app",
+          "summary": "Install a delivery-date app that renders at checkout.",
+          "requirement_ids": [
+            "REQ-002"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-CHECKOUT_EXTENSIBILITY"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-002-checkout_extensibility-custom_development",
+          "approach_type": "custom_development",
+          "summary": "Build a custom checkout extension; availability depends on the store plan.",
+          "requirement_ids": [
+            "REQ-002"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-CHECKOUT_EXTENSIBILITY"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-003-api_integration-native",
+          "approach_type": "native",
+          "summary": "Use the Shopify Admin API and webhooks for order and product data.",
+          "requirement_ids": [
+            "REQ-003"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-API_INTEGRATION"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-003-api_integration-third_party_app",
+          "approach_type": "third_party_app",
+          "summary": "Use an ERP connector app that already synchronises Shopify orders.",
+          "requirement_ids": [
+            "REQ-003"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-API_INTEGRATION"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        },
+        {
+          "solution_id": "SOL-REQ-003-api_integration-custom_development",
+          "approach_type": "custom_development",
+          "summary": "Build a middleware integration that consumes webhooks and calls the Admin API.",
+          "requirement_ids": [
+            "REQ-003"
+          ],
+          "feasibility_status": "unknown",
+          "evidence_status": "unverified",
+          "evidence_refs": [
+            "SYN-SHOPIFY-API_INTEGRATION"
+          ],
+          "prerequisites": [
+            "Store plan and permissions confirmed"
+          ],
+          "limitations": [
+            "Not verified against official Shopify documentation"
+          ]
+        }
+      ],
+      "integration_dependencies": [
+        {
+          "dependency_id": "DEP-REQ-003-ERP",
+          "description": "The external system endpoint, data direction and sync schedule must be identified before integration design.",
+          "requirement_ids": [
+            "REQ-003"
+          ],
+          "evidence_refs": [
+            "SYN-SHOPIFY-API_INTEGRATION"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "claim_id": "CLM-REQ-001-storefront_theme",
+          "claim_text": "Shopify provides a native route for storefront theme; not verified against official documentation.",
+          "claim_type": "platform_capability",
+          "evidence_status": "unverified",
+          "feasibility_status": "unknown",
+          "evidence_refs": [
+            "SYN-SHOPIFY-STOREFRONT_THEME"
+          ],
+          "requirement_ids": [
+            "REQ-001"
+          ],
+          "platform_context": "shopify",
+          "version_context": null,
+          "uncertainty_note": "Synthetic evidence only; no source retrieved."
+        },
+        {
+          "claim_id": "CLM-REQ-002-checkout_extensibility",
+          "claim_text": "Shopify provides a native route for checkout extensibility; not verified against official documentation.",
+          "claim_type": "platform_capability",
+          "evidence_status": "unverified",
+          "feasibility_status": "unknown",
+          "evidence_refs": [
+            "SYN-SHOPIFY-CHECKOUT_EXTENSIBILITY"
+          ],
+          "requirement_ids": [
+            "REQ-002"
+          ],
+          "platform_context": "shopify",
+          "version_context": null,
+          "uncertainty_note": "Synthetic evidence only; no source retrieved."
+        },
+        {
+          "claim_id": "CLM-REQ-003-api_integration",
+          "claim_text": "Shopify provides a native route for api integration; not verified against official documentation.",
+          "claim_type": "platform_capability",
+          "evidence_status": "unverified",
+          "feasibility_status": "unknown",
+          "evidence_refs": [
+            "SYN-SHOPIFY-API_INTEGRATION"
+          ],
+          "requirement_ids": [
+            "REQ-003"
+          ],
+          "platform_context": "shopify",
+          "version_context": null,
+          "uncertainty_note": "Synthetic evidence only; no source retrieved."
+        }
+      ],
+      "evidence": [
+        {
+          "evidence_id": "SYN-SHOPIFY-STOREFRONT_THEME",
+          "origin": "synthetic_fixture",
+          "publisher": "Synthetic fixture (not an official Shopify source)",
+          "document_url": null,
+          "checked_at": null,
+          "applies_to_platform": "shopify",
+          "applies_to_version": null,
+          "evidence_status": "unverified",
+          "relevance_summary": "Placeholder for official shopify.dev documentation on storefront_theme; not retrieved.",
+          "limitations": [
+            "No approved retrieval service in this increment"
+          ]
+        },
+        {
+          "evidence_id": "SYN-SHOPIFY-CHECKOUT_EXTENSIBILITY",
+          "origin": "synthetic_fixture",
+          "publisher": "Synthetic fixture (not an official Shopify source)",
+          "document_url": null,
+          "checked_at": null,
+          "applies_to_platform": "shopify",
+          "applies_to_version": null,
+          "evidence_status": "unverified",
+          "relevance_summary": "Placeholder for official shopify.dev documentation on checkout_extensibility; not retrieved.",
+          "limitations": [
+            "No approved retrieval service in this increment"
+          ]
+        },
+        {
+          "evidence_id": "SYN-SHOPIFY-API_INTEGRATION",
+          "origin": "synthetic_fixture",
+          "publisher": "Synthetic fixture (not an official Shopify source)",
+          "document_url": null,
+          "checked_at": null,
+          "applies_to_platform": "shopify",
+          "applies_to_version": null,
+          "evidence_status": "unverified",
+          "relevance_summary": "Placeholder for official shopify.dev documentation on api_integration; not retrieved.",
+          "limitations": [
+            "No approved retrieval service in this increment"
+          ]
+        }
+      ],
+      "clarification_questions": [
+        {
+          "question_id": "Q-AI-201",
+          "project_id": "10000000-0000-4000-8000-000000000001",
+          "question_text": "Which Shopify plan is the store on, and does it allow checkout changes?",
+          "reason": "Checkout customisation depends on plan and permission.",
+          "related_requirement_ids": [
+            "REQ-002"
+          ],
+          "status": "open",
+          "impact_if_unanswered": null
+        },
+        {
+          "question_id": "Q-AI-202",
+          "project_id": "10000000-0000-4000-8000-000000000001",
+          "question_text": "Which ERP system receives the order sync, and what is its API?",
+          "reason": "The integration target is named only generically.",
+          "related_requirement_ids": [
+            "REQ-003"
+          ],
+          "status": "open",
+          "impact_if_unanswered": null
+        },
+        {
+          "question_id": "Q-AI-203",
+          "project_id": "10000000-0000-4000-8000-000000000001",
+          "question_text": "Which Shopify capability does this requirement depend on?",
+          "reason": "No Shopify topic matched the requirement wording.",
+          "related_requirement_ids": [
+            "REQ-005"
+          ],
+          "status": "open",
+          "impact_if_unanswered": null
+        }
+      ],
+      "human_review_items": [
+        {
+          "item_id": "REV-REQ-001",
+          "reason": "Confirm each option against official Shopify documentation and the store plan before any estimate or scope decision.",
+          "requirement_ids": [
+            "REQ-001"
+          ]
+        },
+        {
+          "item_id": "REV-REQ-002",
+          "reason": "Confirm each option against official Shopify documentation and the store plan before any estimate or scope decision.",
+          "requirement_ids": [
+            "REQ-002"
+          ]
+        },
+        {
+          "item_id": "REV-REQ-003",
+          "reason": "Confirm each option against official Shopify documentation and the store plan before any estimate or scope decision.",
+          "requirement_ids": [
+            "REQ-003"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The store is a Shopify store (platform stated by the source).",
+        "Store plan and admin permissions are unverified."
+      ],
+      "errors": [
+        "no Shopify topic for REQ-005"
+      ],
+      "registry_version": "0.3.10-foundation-gate1-review"
+    }
+  },
+  "flags": {
+    "scope_approved": false,
+    "estimate_committed": false,
+    "sow_published": false,
+    "foundation_writes": 0,
+    "external_model_calls": 0,
+    "evidence_is_synthetic": true,
+    "human_review_required": true
+  }
+}

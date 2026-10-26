@@ -32,7 +32,7 @@ requires = ["hatchling==1.25.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/webdesk"]
+packages = ["src/webdesk", "src/webdesk_ai"]
 
 [tool.ruff]
 line-length = 100
@@ -50,7 +50,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/webdesk"]
+files = ["src/webdesk", "src/webdesk_ai"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
