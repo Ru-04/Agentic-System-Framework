@@ -25,9 +25,17 @@ from urllib.parse import urlsplit
 
 @dataclass(frozen=True)
 class ScopedHost:
+    """One host with its permitted paths.
+
+    ``paths`` follow ``exact`` (True: equality; False: prefix on a segment boundary).
+    ``exact_paths`` are always equality matches, so one host can permit a few exact pages
+    without permitting their children. Empty by default, so existing entries are unchanged.
+    """
+
     host: str
     paths: tuple[str, ...]
     exact: bool = False
+    exact_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,11 +49,23 @@ class VendorAllowlist:
             raise ValueError("allowlist hosts must be non-blank lowercase hostnames")
         if set(self.hosts) & {entry.host for entry in self.scoped}:
             raise ValueError("a host cannot be both unscoped and scoped")
+        seen: set[str] = set()
         for entry in self.scoped:
-            if not entry.paths or any(not p.startswith("/") for p in entry.paths):
-                raise ValueError("each scoped host needs paths that start with '/'")
-            if any(_unsafe_path(p) for p in entry.paths):
-                raise ValueError("scoped paths must not contain dot segments or encoding")
+            # Duplicate scoped entries for one host are refused, not merged or ignored. The
+            # matcher decides on the first entry for a host, so a second entry would be silently
+            # dead. Merge the paths into a single ScopedHost instead.
+            if entry.host in seen:
+                raise ValueError(
+                    f"duplicate scoped host {entry.host!r}: merge its paths into one entry"
+                )
+            seen.add(entry.host)
+            if not (entry.paths or entry.exact_paths):
+                raise ValueError("each scoped host needs at least one path")
+            for p in (*entry.paths, *entry.exact_paths):
+                if not p.startswith("/"):
+                    raise ValueError("each scoped path must start with '/'")
+                if _unsafe_path(p):
+                    raise ValueError("scoped paths must not contain dot segments or encoding")
 
     def permits(self, url: str) -> bool:
         if not url.isascii() or any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in url):
@@ -67,6 +87,8 @@ class VendorAllowlist:
             if parts.hostname == entry.host:
                 if parts.query or _unsafe_path(parts.path):
                     return False
+                if parts.path in entry.exact_paths:
+                    return True
                 return any(_matches(parts.path, p, entry.exact) for p in entry.paths)
         return False
 
