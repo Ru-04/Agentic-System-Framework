@@ -107,3 +107,9 @@
 - **Recorded as reported.** Reviewed commit: `c43cda0`. Integration commit that carries it: `2f16db0`.
 - **Earlier conflicting records:** the implementation report still says acceptance was not given. Those records are left as they are. The approval in this section is the later WDS decision and supersedes them only as far as WDS states.
 - **Still open:** the written approval record (date, scope, authority) that the approver is asked to provide. The register's "WDS Project Owner" label should be reconciled with the approver's actual role.
+
+## 16. Commit found on the integration branch (26 October 2026)
+- `ac1ef7e` (author `toarushiS`): "AI-S04 increment: WooCommerce and BigCommerce specialists (isolated, synthetic evidence only)". It was not made in the 26 Oct session that recorded this file.
+- AI-S04 is not in the frozen 4-milestone, 9-sprint baseline. Its scope is not verified (section 8). The commit message says it stays pending WDS scope confirmation.
+- Checks at `ac1ef7e`: ai_engine pytest 1220 passed (the 1190 baseline plus 30 new tests); ruff and strict mypy clean. Results are in `docs/governance/TEST_EVIDENCE_REGISTER_2026-10-26.md` on the webdesk branch.
+- Not reverted. Whether this increment is kept, or moved out of AI-S04, needs a WDS decision.
