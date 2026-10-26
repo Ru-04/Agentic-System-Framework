@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import LIMITS, activate_user
 from tests.support.people import _email, install_two_contacts_with_window
@@ -238,12 +237,17 @@ def test_replacement_recovery_creates_a_pending_activation_contact_with_an_appoi
 def test_a_bootstrap_token_is_refused_once_the_appointment_has_expired(
     committed_engine: Engine,
 ) -> None:
-    """WDS direction 1: the ceremony activation needs a live appointment, so it expires with it."""
+    """WDS direction 1: the ceremony activation needs a live appointment, so it expires with it.
+
+    The approval window and the appointment window are the same here, so once the window lapses the
+    H-11 approval-liveness check refuses the issue before the database guard is reached. The
+    database refusal is covered by ``tests/integration/test_security_closure.py``.
+    """
     _first, second, _appointment = _install(committed_engine, WINDOW)
     time.sleep(WINDOW.total_seconds() + 1)
     with committed_engine.begin() as conn:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
-        with pytest.raises(DBAPIError) as exc:
+        with pytest.raises(tokens.TokenError) as exc:
             with conn.begin_nested():
                 tokens.issue(
                     conn,
@@ -255,4 +259,4 @@ def test_a_bootstrap_token_is_refused_once_the_appointment_has_expired(
                     actor=None,
                     ceremony=True,
                 )
-    assert "ceremony-backed appointment" in str(exc.value.orig)
+    assert exc.value.internal == "approval_not_live"

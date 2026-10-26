@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -41,13 +42,55 @@ def _denied(conn: Connection, actor: uuid.UUID, reason: str) -> None:
     )
 
 
-def _map_trigger_refusal(message: str) -> tuple[int, str]:
+def _appointment_refusal(
+    conn: Connection, target: uuid.UUID, appointment: uuid.UUID | None
+) -> tuple[int, str]:
+    """Classify an appointment refusal for the API (WDS F11f and F11h, status codes of record).
+
+    - No appointment supplied: 403 ``appointment_required``.
+    - Appointment absent, not an approved administrator appointment, or for another account: 403
+      ``appointment_not_held``.
+    - Appointment expired or already consumed: 409 ``appointment_consumed_or_expired``.
+    The database has already refused the grant. This reads state only to choose the code.
+    """
+    if appointment is None:
+        return 403, "appointment_required"
+    row = conn.execute(
+        text(
+            """SELECT user_id, status, administrator_appointment,
+                      expires_at <= now() AS lapsed
+               FROM user_contact_approvals WHERE approval_id = :a"""
+        ),
+        {"a": appointment},
+    ).one_or_none()
+    if (
+        row is None
+        or str(row.user_id) != str(target)
+        or row.status != "approved"
+        or not row.administrator_appointment
+    ):
+        return 403, "appointment_not_held"
+    consumed = (
+        conn.execute(
+            text("SELECT 1 FROM role_assignments WHERE appointment_approval_id = :a"),
+            {"a": appointment},
+        ).first()
+        is not None
+    )
+    if bool(row.lapsed) or consumed:
+        return 409, "appointment_consumed_or_expired"
+    return 409, "refused"
+
+
+def _map_trigger_refusal(
+    conn: Connection, message: str, target: uuid.UUID, appointment: uuid.UUID | None
+) -> tuple[int, str]:
     """Translate a database refusal into a neutral API status and stable reason."""
     text_lower = message.lower()
-    if "consumed" in text_lower or "expired" in text_lower:
-        return 409, "appointment_consumed_or_expired"
-    if "appointment" in text_lower:
-        return 409, "appointment_required"
+    if "consumable appointment is required" in text_lower or "install appointment" in text_lower:
+        return 403, "appointment_required"
+    if "appointment is invalid" in text_lower:
+        return _appointment_refusal(conn, target, appointment)
     if "active administrator grantor" in text_lower:
         return 403, "not_administrator"
     if "must be active" in text_lower:
@@ -97,7 +140,9 @@ def assign_role(
         )
     except SQLAlchemyError as exc:
         original = getattr(exc, "orig", None)
-        status, reason = _map_trigger_refusal(str(original or exc))
+        status, reason = _map_trigger_refusal(
+            conn, str(original or exc), target, appointment_approval_id
+        )
         _denied(conn, actor, reason)
         raise RoleServiceError(status, reason) from exc
 

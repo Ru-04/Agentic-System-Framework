@@ -46,8 +46,10 @@ def owner_engine() -> Iterator[Engine]:
     The login role has no privilege for these. Tests use it only to set up a state the service
     cannot reach.
     """
+    # The hardening database named by the hardening owner URL, the same one the app engine reads.
+    hardening_db = make_url(os.environ["WEBDESK_HARDENING_OWNER_URL"]).database
     url = make_url(os.environ["WEBDESK_TEST_DATABASE_URL"]).set(
-        database="webdesk_hardening", drivername="postgresql+psycopg"
+        database=hardening_db, drivername="postgresql+psycopg"
     )
     engine = create_engine(url.render_as_string(hide_password=False))
     yield engine

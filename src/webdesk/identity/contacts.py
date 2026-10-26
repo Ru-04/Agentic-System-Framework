@@ -369,6 +369,29 @@ def cancel_change(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) ->
     )
 
 
+def reject_change(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) -> None:
+    """Administrator rejects a pending contact change (H-13).
+
+    The requested address's reservation is released. The account's current contact is unchanged.
+    Refusals are audited. The database enforces the same rules (``fn_reject_change_with_proof``).
+    """
+    actor = actor_for(conn, proof, "contact.reject.change", approval_id)
+    _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
+    approval = _pending_or_refuse(conn, actor, approval_id, "change", "contact.change.denied")
+    consume_with(
+        conn,
+        "contact.reject.change",
+        "SELECT webdesk_guard.fn_reject_change_with_proof(:p, :a)",
+        {"p": proof, "a": approval_id},
+    )
+    _audit(
+        conn,
+        actor,
+        "contact.change.rejected",
+        record_refs=[str(approval["user_id"]), str(approval_id)],
+    )
+
+
 def withdraw(
     conn: Connection,
     proof: uuid.UUID,

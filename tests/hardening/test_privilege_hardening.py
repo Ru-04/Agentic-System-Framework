@@ -222,7 +222,9 @@ def test_pv_09_a_contact_revision_change_alone_invalidates_an_issued_proof(
         )
     stale = client.issue_operation_proof(token, "project.membership.add", project)
     integration = create_engine(
-        make_url(os.environ["WEBDESK_INTEGRATION_OWNER_URL"]).set(database="webdesk_hardening")
+        make_url(os.environ["WEBDESK_INTEGRATION_OWNER_URL"]).set(
+            database=make_url(os.environ["WEBDESK_HARDENING_OWNER_URL"]).database
+        )
     )
     try:
         with integration.begin() as conn:

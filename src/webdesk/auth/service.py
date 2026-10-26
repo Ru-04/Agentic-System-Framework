@@ -110,6 +110,22 @@ def _policy_or_audit(conn: Connection, password: str) -> None:
         raise
 
 
+def _denied_token(conn: Connection, exc: TokenError) -> None:
+    """Record a token refusal in the caller's outer transaction (H-10).
+
+    The consumption's own refusal audit is written inside the savepoint and rolls back with it. This
+    row survives, so a refused activation or reset is always visible in the audit log.
+    """
+    _audit(
+        conn,
+        actor_type="system",
+        actor="anonymous",
+        event="token.consume.denied",
+        outcome="denied",
+        error_class=exc.internal,
+    )
+
+
 def activate(conn: Connection, *, token: str, password: str) -> uuid.UUID:
     """Consume an activation token, set the password and activate the account atomically."""
     _policy_or_audit(conn, password)
@@ -125,6 +141,7 @@ def activate(conn: Connection, *, token: str, password: str) -> uuid.UUID:
                 {"u": user_id},
             )
     except TokenError as exc:
+        _denied_token(conn, exc)
         raise AuthError("invalid_token") from exc
     except SQLAlchemyError as exc:
         raise AuthError("activation_refused") from exc
@@ -161,6 +178,7 @@ def reset_password(conn: Connection, *, token: str, password: str) -> uuid.UUID:
                 {"u": user_id},
             )
     except TokenError as exc:
+        _denied_token(conn, exc)
         raise AuthError("invalid_token") from exc
     _audit(
         conn,

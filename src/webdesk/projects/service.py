@@ -303,3 +303,66 @@ def archive_project(
         outcome="success",
         record_refs=[str(project)],
     )
+
+
+def revoke_project_grant(conn: Connection, proof: uuid.UUID, grant: uuid.UUID) -> None:
+    """Revoke one project access grant (H-14). Administrator-only, audited, no self-revocation."""
+    row = conn.execute(
+        text(
+            """SELECT project_id, user_id FROM project_access_grants
+               WHERE grant_id = :g AND revoked_at IS NULL"""
+        ),
+        {"g": grant},
+    ).one_or_none()
+    if row is None:
+        raise ProjectServiceError(404, "grant_not_active")
+    project = uuid.UUID(str(row[0]))
+    actor = actor_for(conn, proof, "project.access.revoke", project)
+    _authorized(conn, actor, Permission.PROJECT_GRANT_MANAGE, "grant.revoke.denied")
+    if uuid.UUID(str(row[1])) == actor:
+        _deny(conn, actor, "grant.revoke.denied", "self_revocation", 403)
+    consume_with(
+        conn,
+        "project.access.revoke",
+        "SELECT webdesk_guard.fn_revoke_project_access_with_proof(:p, :g)",
+        {"p": proof, "g": grant},
+    )
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(actor),
+        event_type="project.access.revoked",
+        outcome="success",
+        record_refs=[str(grant), str(project)],
+    )
+
+
+def revoke_restricted_grant(conn: Connection, proof: uuid.UUID, grant: uuid.UUID) -> None:
+    """Revoke one restricted-content grant (H-14). Administrator-only, audited, not self."""
+    row = conn.execute(
+        text(
+            """SELECT user_id FROM restricted_content_grants
+               WHERE grant_id = :g AND revoked_at IS NULL"""
+        ),
+        {"g": grant},
+    ).one_or_none()
+    if row is None:
+        raise ProjectServiceError(404, "grant_not_active")
+    actor = actor_for(conn, proof, "restricted.revoke", grant)
+    _authorized(conn, actor, Permission.RESTRICTED_GRANT_MANAGE, "grant.revoke.denied")
+    if uuid.UUID(str(row[0])) == actor:
+        _deny(conn, actor, "grant.revoke.denied", "self_revocation", 403)
+    consume_with(
+        conn,
+        "restricted.revoke",
+        "SELECT webdesk_guard.fn_revoke_restricted_grant_with_proof(:p, :g)",
+        {"p": proof, "g": grant},
+    )
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(actor),
+        event_type="restricted.grant.revoked",
+        outcome="success",
+        record_refs=[str(grant)],
+    )
