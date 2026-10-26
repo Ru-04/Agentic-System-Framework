@@ -1,0 +1,228 @@
+{
+  "dataset_version": "synthetic-eval-v1",
+  "gate_passed": true,
+  "metrics": {
+    "decomposition_accuracy": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    },
+    "traceability_rate": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    },
+    "hallucinated_refs_in_output": {
+      "value": 0.0,
+      "target": 0.0,
+      "passed": true
+    },
+    "clarification_completeness": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    },
+    "unsupported_claims_accepted": {
+      "value": 0.0,
+      "target": 0.0,
+      "passed": true
+    },
+    "verified_claims_in_outputs": {
+      "value": 0.0,
+      "target": 0.0,
+      "passed": true
+    },
+    "routing_accuracy": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    },
+    "invalid_schema_detection_rate": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    },
+    "approval_boundary_violations": {
+      "value": 0.0,
+      "target": 0.0,
+      "passed": true
+    },
+    "review_flags_fixed": {
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true
+    }
+  },
+  "cases": [
+    {
+      "case_id": "EV-01-clear-single",
+      "category": "clear_single_platform",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 2,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-02-ambiguous-business",
+      "category": "ambiguous_business",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 2,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-03-multi-platform",
+      "category": "multi_platform",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 3,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-04-contradictory",
+      "category": "contradictory",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 2,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-05-missing-integration",
+      "category": "missing_integration_details",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-06-no-evidence",
+      "category": "no_supporting_evidence",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-07-overlapping",
+      "category": "duplicate_overlapping",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 2,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-08-invalid-reference-repaired",
+      "category": "invalid_source_references",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 2,
+      "rejected_attempts": 1
+    },
+    {
+      "case_id": "EV-09-invalid-reference-persistent",
+      "category": "invalid_source_references",
+      "status": "invalid_output",
+      "passed": true,
+      "failures": [],
+      "requirements": 0,
+      "llm_calls": 2,
+      "rejected_attempts": 2
+    },
+    {
+      "case_id": "EV-10-quarantine-restricted-excluded",
+      "category": "restricted_or_quarantined_exclusion",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 2,
+      "rejected_attempts": 1
+    },
+    {
+      "case_id": "EV-10b-schema-invalid-repaired",
+      "category": "schema_validation",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 2,
+      "rejected_attempts": 1
+    },
+    {
+      "case_id": "EV-11-unsupported-platform",
+      "category": "unsupported_platform",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-12-transient-retry",
+      "category": "clarification_and_retry",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 2,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-13-permanent-failure",
+      "category": "clarification_and_retry",
+      "status": "failed",
+      "passed": true,
+      "failures": [],
+      "requirements": 0,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-14-invalid-specialist",
+      "category": "invalid_specialist_response",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-15-specialist-timeout",
+      "category": "specialist_timeout",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-16-unauthorized-specialist",
+      "category": "authorization_gate",
+      "status": "completed",
+      "passed": true,
+      "failures": [],
+      "requirements": 1,
+      "llm_calls": 1,
+      "rejected_attempts": 0
+    }
+  ]
+}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -29,13 +28,13 @@ from webdesk_ai.contracts import (
     SpecialistTask,
 )
 from webdesk_ai.specialists.base import (
-    EvidenceProvider,
     SpecialistDescriptor,
     SpecialistRegistry,
     route_requirements,
     run_specialist,
     validate_investigation,
 )
+from webdesk_ai.specialists.doubles import FixedSpecialist, RaisingSpecialist, SlowSpecialist
 from webdesk_ai.specialists.shopify import SyntheticShopifyEvidence
 
 NOW = datetime(2026, 10, 26, 12, 0, tzinfo=UTC)
@@ -114,37 +113,6 @@ def _approved_evidence() -> EvidenceReference:
     )
 
 
-class _Fixed:
-    category_id = "shopify_specialist"
-
-    def __init__(self, output: SpecialistInvestigationResult) -> None:
-        self._output = output
-
-    def investigate(
-        self, task: SpecialistTask, evidence: EvidenceProvider
-    ) -> SpecialistInvestigationResult:
-        return self._output
-
-
-class _Raises:
-    category_id = "shopify_specialist"
-
-    def investigate(
-        self, task: SpecialistTask, evidence: EvidenceProvider
-    ) -> SpecialistInvestigationResult:
-        raise RuntimeError("secret internal detail")
-
-
-class _Slow:
-    category_id = "shopify_specialist"
-
-    def investigate(
-        self, task: SpecialistTask, evidence: EvidenceProvider
-    ) -> SpecialistInvestigationResult:
-        time.sleep(1.0)
-        raise AssertionError("should have been abandoned")
-
-
 def test_registry_routes_known_platforms_and_reports_gaps_without_guessing() -> None:
     reqs = (
         _requirement("REQ-001", ("shopify",)),
@@ -197,7 +165,7 @@ def test_valid_output_with_approved_evidence_is_accepted() -> None:
         claims=(_claim(("EV-OFFICIAL-1",), EvidenceStatus.VERIFIED),),
     )
     execution = run_specialist(
-        _Fixed(output), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW
+        FixedSpecialist(output), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW
     )
     assert execution.status is AgentStatus.COMPLETED
     assert execution.output is not None
@@ -210,7 +178,7 @@ def test_verified_claim_backed_only_by_synthetic_evidence_is_rejected() -> None:
         claims=(_claim((synthetic_ref.evidence_id,), EvidenceStatus.VERIFIED),),
     )
     execution = run_specialist(
-        _Fixed(output), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW
+        FixedSpecialist(output), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW
     )
     assert execution.status is AgentStatus.INVALID_OUTPUT
     assert execution.output is None
@@ -260,7 +228,9 @@ def test_external_evidence_needs_a_document_and_check_time() -> None:
 
 
 def test_specialist_exception_becomes_a_failed_status_without_internal_detail() -> None:
-    execution = run_specialist(_Raises(), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW)
+    execution = run_specialist(
+        RaisingSpecialist(), _task(), SyntheticShopifyEvidence(), clock=lambda: NOW
+    )
     assert execution.status is AgentStatus.FAILED
     assert execution.errors == ("specialist failed: RuntimeError",)
     assert execution.output is None
@@ -268,7 +238,10 @@ def test_specialist_exception_becomes_a_failed_status_without_internal_detail() 
 
 def test_slow_specialist_times_out_and_its_output_is_discarded() -> None:
     execution = run_specialist(
-        _Slow(), _task(timeout=0.05), SyntheticShopifyEvidence(), clock=lambda: NOW
+        SlowSpecialist(seconds=5.0),
+        _task(timeout=0.05),
+        SyntheticShopifyEvidence(),
+        clock=lambda: NOW,
     )
     assert execution.status is AgentStatus.TIMEOUT
     assert execution.output is None

@@ -135,6 +135,14 @@ class ShopifySpecialist:
                 for ref in refs:
                     result_evidence.setdefault(ref.evidence_id, ref)
                 ref_ids = tuple(ref.evidence_id for ref in refs)
+                if not refs:
+                    reviews.append(
+                        HumanReviewItem(
+                            item_id=f"REV-EVD-{requirement.requirement_id}-{topic.key}",
+                            reason="No evidence returned for this topic; options stay unverified.",
+                            requirement_ids=(requirement.requirement_id,),
+                        )
+                    )
                 solutions.extend(_solutions(requirement, topic, ref_ids))
                 claims.append(
                     Claim(

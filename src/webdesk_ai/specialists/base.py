@@ -8,12 +8,14 @@ as ``RoutingRecommendation`` values and never starts work on its own.
 
 from __future__ import annotations
 
-import concurrent.futures
+import multiprocessing
+import secrets
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol
+from multiprocessing.connection import Connection
+from typing import Literal, Protocol
 
 from webdesk_ai.contracts import (
     AgentExecutionResult,
@@ -44,7 +46,8 @@ class EvidenceProvider(Protocol):
 
 
 class SpecialistAgent(Protocol):
-    category_id: str
+    @property
+    def category_id(self) -> str: ...
 
     def investigate(
         self, task: SpecialistTask, evidence: EvidenceProvider
@@ -220,42 +223,91 @@ def _claim_errors(claim: Claim, evidence: Mapping[str, EvidenceReference]) -> li
     return []
 
 
+def _child_entry(
+    connection: Connection,
+    agent: SpecialistAgent,
+    task: SpecialistTask,
+    evidence: EvidenceProvider,
+    nonce: str,
+) -> None:
+    """Runs in the child process. Sends exactly one tagged message, then exits."""
+    try:
+        output = agent.investigate(task, evidence)
+        connection.send(("ok", nonce, output))
+    except BaseException as exc:  # the parent only ever sees the class name
+        connection.send(("error", nonce, type(exc).__name__))
+    finally:
+        connection.close()
+
+
 def run_specialist(
     agent: SpecialistAgent,
     task: SpecialistTask,
     evidence: EvidenceProvider,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    start_method: Literal["spawn"] = "spawn",
 ) -> AgentExecutionResult:
-    """Run one specialist with a wall-clock bound and convert every failure into a status.
+    """Run one specialist in a separate process with a hard wall-clock bound.
 
-    A timed-out worker cannot be killed from Python, so its thread is abandoned and its result
-    discarded. The envelope reports ``timeout``; no partial output is returned.
+    The child is terminated when the bound expires, so it cannot keep computing or send a late
+    result. Each execution has its own nonce, and any message that does not carry it is refused.
+    Every failure becomes a status; no partial output is returned.
     """
     started = clock()
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(agent.investigate, task, evidence)
+    context = multiprocessing.get_context(start_method)
+    parent_end, child_end = context.Pipe(duplex=False)
+    nonce = secrets.token_hex(16)
+    process = context.Process(
+        target=_child_entry, args=(child_end, agent, task, evidence, nonce), daemon=True
+    )
+    process.start()
+    child_end.close()
+    message: tuple[str, str, object] | None = None
+    timed_out = False
     try:
-        output = future.result(timeout=task.timeout_seconds)
-    except concurrent.futures.TimeoutError:
-        return _envelope(agent, started, clock, AgentStatus.TIMEOUT, ("specialist timed out",))
-    except Exception as exc:
-        return _envelope(
-            agent, started, clock, AgentStatus.FAILED, (f"specialist failed: {type(exc).__name__}",)
-        )
+        if parent_end.poll(task.timeout_seconds):
+            try:
+                message = parent_end.recv()
+            except EOFError:
+                message = None
+        else:
+            timed_out = True
     finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+        if process.is_alive():
+            process.terminate()
+        process.join(timeout=5)
+        parent_end.close()
 
-    errors = validate_investigation(output, task)
+    if timed_out:
+        return _envelope(agent, started, clock, AgentStatus.TIMEOUT, ("specialist timed out",))
+    if message is None:
+        return _envelope(
+            agent, started, clock, AgentStatus.FAILED, ("specialist ended without a result",)
+        )
+    kind, received_nonce, payload = message
+    if received_nonce != nonce:
+        return _envelope(
+            agent, started, clock, AgentStatus.INVALID_OUTPUT, ("result was not from this run",)
+        )
+    if kind == "error":
+        return _envelope(
+            agent, started, clock, AgentStatus.FAILED, (f"specialist failed: {payload}",)
+        )
+    if not isinstance(payload, SpecialistInvestigationResult):
+        return _envelope(
+            agent, started, clock, AgentStatus.INVALID_OUTPUT, ("output had the wrong type",)
+        )
+    errors = validate_investigation(payload, task)
     if errors:
         return _envelope(agent, started, clock, AgentStatus.INVALID_OUTPUT, tuple(errors))
     return AgentExecutionResult(
         agent_id=f"specialist:{task.category_id}",
         agent_kind="specialist",
-        status=output.status,
+        status=payload.status,
         started_at=started,
         finished_at=clock(),
-        output=output,
+        output=payload,
     )
 
 

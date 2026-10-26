@@ -8,7 +8,7 @@ from uuid import UUID
 from webdesk_ai import synthetic
 from webdesk_ai.catalog import default_registry
 from webdesk_ai.contracts import AgentStatus, RoutingOutcome, SourceSegment
-from webdesk_ai.llm import ScriptedLLM
+from webdesk_ai.models import ScriptedModel
 from webdesk_ai.requirements.agent import (
     RequirementAnalysisAgent,
     detect_ambiguity,
@@ -38,7 +38,7 @@ _SEGMENTS: list[SourceSegment] = [
 
 
 def _analyze(responses: list[str], segments: list[SourceSegment] = _SEGMENTS):  # type: ignore[no-untyped-def]
-    llm = ScriptedLLM(responses)
+    llm = ScriptedModel(outcomes=responses)
     result = RequirementAnalysisAgent(llm, default_registry()).analyze(
         run_id=synthetic.RUN_ID, project_id=synthetic.PROJECT_ID, segments=segments
     )

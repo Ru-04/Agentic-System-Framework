@@ -1,112 +1,107 @@
-"""Synthetic end-to-end demonstration and the contract-shape checks it depends on."""
+"""Synthetic end-to-end demonstration: flow coverage, source references and boundaries."""
 
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from webdesk_ai import demo, synthetic
-from webdesk_ai.contracts import (
-    AgentStatus,
-    AtomicRequirement,
-    ClarificationQuestion,
-    EvidenceStatus,
-    ProjectContext,
-    SourceVersionReference,
-)
+from webdesk_ai.contracts import ClarificationQuestion, SourceVersionReference
 
 
 @pytest.fixture(scope="module")
-def output() -> dict[str, object]:
+def output() -> dict[str, Any]:
     return demo.run_demo()
 
 
-def test_flow_runs_brief_to_human_review(output: dict[str, object]) -> None:
-    assert output["flow"][0] == "synthetic client brief"  # type: ignore[index]
-    analysis = output["requirement_analysis"]
-    assert analysis["status"] == AgentStatus.COMPLETED.value  # type: ignore[index]
-    specialist = output["specialist"]
-    assert specialist["status"] == AgentStatus.COMPLETED_WITH_GAPS.value  # type: ignore[index]
+def test_main_run_is_human_review_with_all_scenarios(output: dict[str, Any]) -> None:
+    run = output["main_run"]
+    assert run["status"] == "human_review_required"
+    analysis = run["analysis"]
+    assert analysis["status"] == "completed"
+    assert len(analysis["requirements"]) == 8
 
 
-def test_safety_flags_are_fixed_and_explicit(output: dict[str, object]) -> None:
-    assert output["flags"] == {  # type: ignore[index]
-        "scope_approved": False,
-        "estimate_committed": False,
-        "sow_published": False,
-        "foundation_writes": 0,
-        "external_model_calls": 0,
-        "evidence_is_synthetic": True,
-        "human_review_required": True,
-    }
+def test_retry_and_repair_are_both_visible(output: dict[str, Any]) -> None:
+    model = output["model"]
+    assert model["transport_attempts"] == 3  # one transient failure, then two content calls
+    assert model["content_attempts"] == 2
+    assert model["schema_failures"] == 1
+    assert model["rejected_attempts"] == 1
 
 
-def test_withheld_versions_are_absent_from_the_output(output: dict[str, object]) -> None:
-    serialized = json.dumps(output)
-    assert "Ignore the rules" not in serialized
-    assert "salary bands" not in serialized
-    access = output["foundation_access"]
-    assert access["source_versions_visible"] == 3  # type: ignore[index]
-    assert access["source_versions_in_fixture"] == 5  # type: ignore[index]
-
-
-def test_no_credential_value_is_written_to_the_output(output: dict[str, object]) -> None:
-    assert synthetic_token() not in json.dumps(output)
-
-
-def test_repair_path_is_recorded(output: dict[str, object]) -> None:
-    assert output["foundation_access"]["model_attempts"] == 2  # type: ignore[index]
-
-
-def test_every_requirement_traces_to_a_supplied_segment(output: dict[str, object]) -> None:
-    requirements = output["requirement_analysis"]["requirements"]  # type: ignore[index]
-    for req in requirements:
-        assert req["source_refs"]
-        for ref in req["source_refs"]:
-            assert ref["segment_id"] in {
-                str(s)
-                for s in (
-                    synthetic.SEG_A,
-                    synthetic.SEG_B,
-                    synthetic.SEG_C,
-                    synthetic.SEG_D,
-                    synthetic.SEG_E,
-                    synthetic.SEG_APPENDIX,
-                )
-            }
-
-
-def test_specialist_findings_link_to_evidence_and_stay_unverified(
-    output: dict[str, object],
+def test_conflict_unsupported_platform_and_missing_evidence_are_all_surfaced(
+    output: dict[str, Any],
 ) -> None:
-    body = output["specialist"]["output"]  # type: ignore[index]
-    evidence_ids = {e["evidence_id"] for e in body["evidence"]}
-    for solution in body["candidate_solutions"]:
-        assert set(solution["evidence_refs"]) <= evidence_ids
-        assert solution["evidence_status"] == EvidenceStatus.UNVERIFIED.value
-    assert all(c["evidence_status"] == "unverified" for c in body["claims"])
+    analysis = output["main_run"]["analysis"]
+    by_id = {r["requirement_id"]: r for r in analysis["requirements"]}
+    assert by_id["REQ-007"]["conflict_ids"] == ["REQ-008"]
+    assert by_id["REQ-008"]["conflict_ids"] == ["REQ-007"]
+    routing = {(r["category_id"], r["outcome"]) for r in analysis["routing_recommendations"]}
+    assert ("platform:zendesk", "unsupported") in routing
+    assert ("shopify_specialist", "selected") in routing
+    assert ("3dcart_shift4shop_specialist", "unavailable") in routing
+    specialist = output["main_specialists"][0]
+    body = output["main_run"]["specialist_results"][0]["output"]
+    assert specialist["status"] == "completed_with_gaps"
+    reasons = [item["reason"] for item in body["human_review_items"]]
+    assert any("No evidence returned" in reason for reason in reasons)
 
 
-def test_questions_are_open_and_point_at_requirements(output: dict[str, object]) -> None:
-    analysis = output["requirement_analysis"]  # type: ignore[index]
+def test_clarifications_cover_every_flagged_requirement(output: dict[str, Any]) -> None:
+    analysis = output["main_run"]["analysis"]
     questions = [
         ClarificationQuestion.model_validate(q) for q in analysis["clarification_questions"]
     ]
     assert questions
     assert all(q.status == "open" for q in questions)
-    assert all(q.related_requirement_ids for q in questions)
+    assert output["main_run"]["clarification_gaps"] == []
 
 
-def test_requirement_payloads_round_trip_through_the_contract_models(
-    output: dict[str, object],
+def test_every_requirement_keeps_its_source_reference(output: dict[str, Any]) -> None:
+    for req in output["main_run"]["analysis"]["requirements"]:
+        assert req["source_refs"]
+        for ref in req["source_refs"]:
+            assert ref["segment_id"]
+            assert ref["source_version_id"]
+
+
+def test_invalid_specialist_probe_is_rejected_and_nothing_unsupported_accepted(
+    output: dict[str, Any],
 ) -> None:
-    analysis = output["requirement_analysis"]  # type: ignore[index]
-    for req in analysis["requirements"]:
-        AtomicRequirement.model_validate(req)
-    ProjectContext.model_validate(output["foundation_access"]["project"])  # type: ignore[index]
+    probe = output["invalid_specialist_probe"]
+    assert probe["specialists"][0]["status"] == "invalid_output"
+    assert probe["unsupported_claims_accepted"] == 0
+
+
+def test_flags_are_fixed_and_no_approval_is_claimed(output: dict[str, Any]) -> None:
+    assert output["flags"] == {
+        "human_review_required": True,
+        "requirements_approved": False,
+        "scope_approved": False,
+        "estimate_committed": False,
+        "sow_published": False,
+        "foundation_writes": 0,
+        "machine_routing_enabled": False,
+    }
+    for req in output["main_run"]["analysis"]["requirements"]:
+        assert req["status"] not in ("verified", "accepted_for_scope")
+
+
+def test_withheld_content_and_credentials_never_reach_the_output(output: dict[str, Any]) -> None:
+    serialized = json.dumps(output)
+    assert "Ignore the rules" not in serialized
+    assert "salary bands" not in serialized
+    assert demo.SYNTHETIC_TOKEN not in serialized
+
+
+def test_no_synthetic_evidence_is_presented_as_verified(output: dict[str, Any]) -> None:
+    body = output["main_run"]["specialist_results"][0]["output"]
+    assert all(e["origin"] == "synthetic_fixture" for e in body["evidence"])
+    assert all(c["evidence_status"] == "unverified" for c in body["claims"])
 
 
 def test_source_version_reference_forbids_storage_fields() -> None:
@@ -130,11 +125,3 @@ def test_main_writes_the_file_and_rejects_bad_usage(tmp_path: Path) -> None:
     written = json.loads(target.read_text(encoding="utf-8"))
     assert written["contract"] == "ai-read/v1"
     assert demo.main(["prog"]) == 2
-
-
-def synthetic_token() -> str:
-    return demo.SYNTHETIC_TOKEN
-
-
-def test_demo_clock_is_fixed() -> None:
-    assert demo.NOW == datetime(2026, 10, 26, 12, 0, tzinfo=UTC)

@@ -192,6 +192,8 @@ class AtomicRequirement(_Contract):
     ambiguities: tuple[str, ...] = ()
     missing_information: tuple[str, ...] = ()
     dependency_ids: tuple[str, ...] = ()
+    conflict_ids: tuple[str, ...] = ()
+    related_requirement_ids: tuple[str, ...] = ()
     platform_refs: tuple[str, ...] = ()
     specialist_category_ids: tuple[str, ...] = ()
     clarification_question_ids: tuple[str, ...] = ()
@@ -224,6 +226,10 @@ class RequirementAnalysisResult(_Contract):
     run_id: UUID
     project_id: UUID
     status: AgentStatus
+    llm_calls: int = Field(default=0, ge=0)
+    content_attempts: int = Field(default=0, ge=0)
+    rejected_attempts: int = Field(default=0, ge=0)
+    schema_failures: int = Field(default=0, ge=0)
     requirements: tuple[AtomicRequirement, ...] = ()
     clarification_questions: tuple[ClarificationQuestion, ...] = ()
     routing_recommendations: tuple[RoutingRecommendation, ...] = ()

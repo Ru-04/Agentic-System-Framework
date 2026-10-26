@@ -175,6 +175,14 @@ class FoundationReadClient:
         self._clock = clock
         self._correlation_id = correlation_id
 
+    @property
+    def run_id(self) -> UUID:
+        return self._run_id
+
+    @property
+    def project_id(self) -> UUID:
+        return self._project_id
+
     # ----- public read operations -------------------------------------------------------------
 
     def get_run(self) -> RunMetadata:
