@@ -28,8 +28,9 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.pool import NullPool
 
 from tests.support.activation import activate_user
 from tests.support.proofs import prove
@@ -65,6 +66,26 @@ def _migrate(url: str) -> None:
             os.environ["WEBDESK_DATABASE_URL"] = previous
 
 
+def _drop_when_detached(conn: Connection, name: str) -> None:
+    """Drop a test database only when no other session is attached to it.
+
+    A session still attached at teardown is a leak in the test that used it, reported by role and
+    application name. ``DROP ... WITH (FORCE)`` is not used: it masks the leak, and this role
+    lacks the rights to terminate other roles' sessions.
+    """
+    attached = conn.execute(
+        text(
+            "SELECT usename, application_name, state FROM pg_stat_activity"
+            " WHERE datname = :d AND pid <> pg_backend_pid()"
+        ),
+        {"d": name},
+    ).all()
+    if attached:
+        leaked = [tuple(map(str, row)) for row in attached]
+        raise AssertionError(f"sessions still attached to {name} at teardown: {leaked}")
+    conn.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
+
+
 @pytest.fixture(scope="session")
 def _template_name() -> Iterator[str]:
     base = os.environ.get("WEBDESK_TEST_DATABASE_URL")
@@ -78,7 +99,7 @@ def _template_name() -> Iterator[str]:
     _migrate(template_url)
     yield name
     with admin.connect() as conn:
-        conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        _drop_when_detached(conn, name)
     admin.dispose()
 
 
@@ -101,13 +122,15 @@ def committed_url(_template_name: str) -> Iterator[str]:
         else:
             os.environ["WEBDESK_DATABASE_URL"] = previous
         with admin.connect() as conn:
-            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            _drop_when_detached(conn, name)
         admin.dispose()
 
 
 @pytest.fixture
 def committed_engine(committed_url: str) -> Iterator[Engine]:
-    engine = create_engine(committed_url.replace("postgresql://", "postgresql+psycopg://"))
+    engine = create_engine(
+        committed_url.replace("postgresql://", "postgresql+psycopg://"), poolclass=NullPool
+    )
     yield engine
     engine.dispose()
 

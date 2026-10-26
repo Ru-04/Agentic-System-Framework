@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 from tests.support.authority import start_in_process_authority
 from tests.support.people import committed_active_user
@@ -39,7 +40,9 @@ def _app_engine(url: str) -> Engine:
     The test engine therefore switches each connection to webdesk_app, so the application role's
     privileges (not the owner's) govern every route.
     """
-    engine = create_engine(url.replace("postgresql://", "postgresql+psycopg://"))
+    engine = create_engine(
+        url.replace("postgresql://", "postgresql+psycopg://"), poolclass=NullPool
+    )
 
     @event.listens_for(engine, "connect")
     def _as_application_role(dbapi_connection: object, _record: object) -> None:

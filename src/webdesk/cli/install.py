@@ -103,8 +103,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("refused: WEBDESK_DATABASE_URL is not configured", file=sys.stderr)
         return 2
 
+    engine = create_engine(settings.database_url.get_secret_value())
     try:
-        engine = create_engine(settings.database_url.get_secret_value())
         result = run_install_audited(
             engine,
             settings,
@@ -119,6 +119,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SQLAlchemyError:
         print("refused: database_unavailable", file=sys.stderr)
         return 2
+    finally:
+        # Release the pooled connections on every path, so the process leaves no session behind.
+        engine.dispose()
 
     print(
         json.dumps(

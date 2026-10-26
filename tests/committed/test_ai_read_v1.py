@@ -17,18 +17,22 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 
 from tests.support.authority import start_in_process_authority
 from tests.support.people import committed_active_user
+from tests.support.privileged import as_worker
 from tests.support.proofs import prove
 from webdesk.api import ai as ai_api
 from webdesk.api.app import create_app
 from webdesk.config import Settings
 from webdesk.identity.disable import disable_user
+from webdesk.intake import parse_service
 from webdesk.projects import service as projects
 from webdesk.ratelimit.limiter import subject_hash
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
+from webdesk.rbac.revoke import revoke_role
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
@@ -44,7 +48,9 @@ def _app_engine(url: str) -> Engine:
     """
     The API's engine. Production connects as the restricted login, a member of ``webdesk_app``.
     """
-    engine = create_engine(url.replace("postgresql://", "postgresql+psycopg://"))
+    engine = create_engine(
+        url.replace("postgresql://", "postgresql+psycopg://"), poolclass=NullPool
+    )
 
     @event.listens_for(engine, "connect")
     def _as_application_role(dbapi_connection: object, _record: object) -> None:
@@ -157,7 +163,12 @@ class Stack:
             files={"file": ("notes.txt", body, "text/plain")},
         )
         assert response.status_code == 200, response.text
-        return str(response.json()["source_version_id"])
+        version = str(response.json()["source_version_id"])
+        if access != "restricted":
+            # Segments are produced by the worker's parse step, through the worker role.
+            with self.engine.begin() as conn:
+                as_worker(conn, parse_service.parse_version, conn, self.store, uuid.UUID(version))
+        return version
 
     def start_run(self) -> str:
         response = self.client.post(
@@ -581,3 +592,70 @@ def test_the_application_role_cannot_call_the_resolver_directly(stack: Stack) ->
                 text("SELECT * FROM webdesk_guard.fn_ai_resolve(repeat('a', 64), :r)"), {"r": run}
             )
     assert str(getattr(exc.value.orig, "sqlstate", None)) == "42501"
+
+
+# --- Review gaps (contract sections 3, 5, 9 and 10) -----------------------------------------
+
+
+def test_revoking_the_bound_humans_analyst_role_refuses_the_principal(stack: Stack) -> None:
+    """Permission change: losing the role (not only membership) also ends every AI read."""
+    run = stack.start_run()
+    token = stack.issue(run)
+    assert stack.client.get(f"/v1/ai/runs/{run}", headers=_ai(token)).status_code == 200
+    with stack.engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        assignment = conn.execute(
+            text(
+                "SELECT assignment_id FROM role_assignments WHERE user_id = :u AND role = 'Analyst'"
+                " AND revoked_at IS NULL"
+            ),
+            {"u": stack.analyst},
+        ).scalar_one()
+        revoke_role(conn, prove(conn, stack.admin, "role.revoke", assignment), assignment)
+    assert stack.client.get(f"/v1/ai/runs/{run}", headers=_ai(token)).status_code == 401
+
+
+def test_a_quarantined_refusal_is_audited_durably_with_its_reason(stack: Stack) -> None:
+    """A resource refusal is answered neutrally, and its reason is committed to the audit log."""
+    quarantined = stack.upload(stack.project, "restricted", b"durable denial body\n")
+    run = stack.start_run()
+    token = stack.issue(run)
+    correlation = str(uuid.uuid4())
+    response = stack.client.get(
+        f"/v1/ai/runs/{run}/source-versions/{quarantined}/content",
+        headers={**_ai(token), "X-Correlation-Id": correlation},
+    )
+    assert response.status_code == 404
+    assert response.json() == {"contract": "ai-read/v1", "error": "not_found"}
+    rows = _audit_rows(stack.engine, correlation)
+    assert [row.event_type for row in rows] == ["ai.read.denied"]
+    assert rows[0].error_class == "quarantined"
+    assert str(quarantined) not in response.text
+
+
+def test_segment_text_is_cut_to_4000_characters_and_flagged(stack: Stack) -> None:
+    long_line = b"x" * 4500 + b"\n"
+    version = stack.upload(stack.project, "internal", long_line)
+    run = stack.start_run()
+    token = stack.issue(run)
+    response = stack.client.get(
+        f"/v1/ai/runs/{run}/source-versions/{version}/segments", headers=_ai(token)
+    )
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert items, "the parse step must have produced segments"
+    assert all(len(item["text_content"]) <= 4000 for item in items)
+    assert any(item["text_truncated"] for item in items)
+
+
+def test_a_request_refused_before_any_database_work_writes_no_audit_row(stack: Stack) -> None:
+    """A refusal before any database work has no principal or project, so it writes no audit row."""
+    run = stack.start_run()
+    token = stack.issue(run)
+    correlation = str(uuid.uuid4())
+    response = stack.client.get(
+        f"/v1/ai/runs/{run}",
+        headers={"Authorization": f"AI-Principal {token}", "X-Correlation-Id": correlation},
+    )
+    assert response.status_code == 400
+    assert _audit_rows(stack.engine, correlation) == []
