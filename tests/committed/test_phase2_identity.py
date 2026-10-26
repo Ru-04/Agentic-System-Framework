@@ -203,3 +203,27 @@ def test_appointment_refusals_are_403_when_not_held_and_409_when_lapsed(
             409,
             "appointment_consumed_or_expired",
         )
+
+
+# --- H-10 on the approval path: a token refused after its approval lapses --------------------
+
+
+def test_an_activation_refused_after_its_approval_lapses_is_audited_through_activate(
+    committed_engine: Engine, committed_url: str
+) -> None:
+    """H-10 with H-11: ``auth.activate`` refuses on a lapsed approval and the denial survives."""
+    app = _app_engine(committed_url)
+    with committed_engine.begin() as conn:
+        _first, second, _appointment = install_two_contacts_with_window(conn, WINDOW)
+    transport = CaptureTransport()
+    _issue_activation(app, second, transport)
+    token = _token(transport)
+    time.sleep(WINDOW.total_seconds() + 1)
+
+    def attempt(conn: Connection) -> None:
+        auth.activate(conn, token=token, password="Phase2-Password-Only-12345")
+
+    with pytest.raises(AuthError):
+        run_in_transaction(app, attempt)
+    assert _count(committed_engine, "token.consume.denied", "approval_not_live") == 1
+    assert _unconsumed(committed_engine, second) == 1

@@ -19,6 +19,7 @@ Requires WEBDESK_TEST_DATABASE_URL (owner role, ``CREATEDB``). The admin connect
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -39,6 +40,7 @@ from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
 
 REPO = Path(__file__).resolve().parents[1]
+DETACH_WAIT_SECONDS = 5.0
 
 
 class _Clock:
@@ -69,17 +71,24 @@ def _migrate(url: str) -> None:
 def _drop_when_detached(conn: Connection, name: str) -> None:
     """Drop a test database only when no other session is attached to it.
 
-    A session still attached at teardown is a leak in the test that used it, reported by role and
-    application name. ``DROP ... WITH (FORCE)`` is not used: it masks the leak, and this role
-    lacks the rights to terminate other roles' sessions.
+    The check waits up to ``DETACH_WAIT_SECONDS`` for backends to exit before it reports a session. A
+    connection the test really holds stays open, so it is still reported after the wait, by user,
+    application name, backend type, start time and current query. ``DROP ... WITH (FORCE)`` is not
+    used: it masks the leak, and this role lacks the rights to terminate other roles' sessions.
     """
-    attached = conn.execute(
-        text(
-            "SELECT usename, application_name, state FROM pg_stat_activity"
-            " WHERE datname = :d AND pid <> pg_backend_pid()"
-        ),
-        {"d": name},
-    ).all()
+    deadline = time.monotonic() + DETACH_WAIT_SECONDS
+    while True:
+        attached = conn.execute(
+            text(
+                "SELECT usename, application_name, state, backend_type, backend_start,"
+                " left(query, 120) FROM pg_stat_activity"
+                " WHERE datname = :d AND pid <> pg_backend_pid()"
+            ),
+            {"d": name},
+        ).all()
+        if not attached or time.monotonic() >= deadline:
+            break
+        time.sleep(0.1)
     if attached:
         leaked = [tuple(map(str, row)) for row in attached]
         raise AssertionError(f"sessions still attached to {name} at teardown: {leaked}")

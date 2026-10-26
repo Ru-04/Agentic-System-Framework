@@ -32,6 +32,20 @@ Base: `3a38685` (branch `feature/increment-1-foundation`). Migration head before
 
 Round-trip check: see section 5.
 
+### Review follow-up: migration 0043 (additive, `0043_phase2_review_fixes`)
+
+Raised by the independent review of `f736064`. Changes:
+
+- `webdesk_guard.fn_validate_operation_proof` (the body deployed at 0042, verified equal to the live definition)
+  gains the three Phase 2 operations in its Administrator list. The review had called this a release blocker. Recheck
+  against the deployed definition showed that the operation rules already require an active Administrator for these
+  operations (0042, `operation_authorization_rules`, role `Administrator`), so a revoked Administrator was already refused
+  with `proof_permission_not_held`. The list change makes the Administrator check explicit, as for every other
+  Administrator-only operation.
+- Grant tables: `UPDATE` for `webdesk_guard_owner` is now column-scoped to `revoked_at` (the 0042 grant was table-wide).
+  This matches `source_read_grants` (0037).
+- Downgrade restores the 0042 function text and the table-wide grant.
+
 ## 3. Modified services
 
 | File | Change |
@@ -43,6 +57,21 @@ Round-trip check: see section 5.
 | `src/webdesk/projects/service.py` | `revoke_project_grant()`, `revoke_restricted_grant()` (H-14) |
 
 ## 4. Tests
+
+Review follow-up tests (added with 0043):
+
+- `tests/integration/test_phase2_guards.py`: a revoked Administrator's proof is refused by the database for project and
+  restricted revocations (`proof_role_not_held`); a holder cannot revoke its own grant through the database (both
+  grant kinds); the guard owner's column privilege on the grant tables is `revoked_at` only.
+- `tests/committed/test_phase2_identity.py`: H-10 on the approval path. `auth.activate` refuses a token once its approval
+  has lapsed, and the denial is committed through the production runner.
+- `tests/integration/test_contact_lifecycle.py`: H-13 session effects. A rejected change leaves `session_epoch`,
+  `contact_revision` and `status` unchanged.
+
+Not added, and why: approval-state injection (`approved` to `expired`, or a missing or mismatched approval) through the
+owner. The approval guard refuses owner updates to ceremony-backed approvals, which is the correct protection. Non-live
+approvals are therefore tested by real expiry, as the window-based tests do. The `rejected` and `cancelled` states cannot
+be reached from `approved` (0010 transition rules).
 
 New or changed test code:
 
@@ -68,19 +97,29 @@ by one step, upgrade again, and catalog equality through `pg_get_functiondef` sn
 
 ## 6. Verification results
 
-Run order: rebuild of the Phase 2 databases (`webdesk_p2_integration`, `webdesk_p2_hardening`) to head, then the full
-suite, ruff, mypy and the round trip. Exit codes are from `scratchpad/p2final/status`.
+Final ordered pass on the isolated databases `webdesk_p2_integration` and `webdesk_p2_hardening` (port 5433), run
+after the rebuild to head `0043_phase2_review_fixes`. No other run shared those databases during it. Exit codes are from
+`scratchpad/p2final/status`.
 
 | Step | Result | Exit |
 |---|---|---|
-| Rebuild of `webdesk_p2_integration` and `webdesk_p2_hardening` to head | ok | 0 |
-| Full suite (`pytest tests`) | 659 passed, 0 failed, 0 errors (1 warning, DeprecationWarning from starlette) | 0 |
+| Rebuild both databases to head 0043 | ok | 0 |
+| Full suite (`pytest tests`), which includes the privilege audit (`tests/hardening/test_privilege_audit.py`) | 666 passed, 0 failed, 0 errors (1 warning, starlette DeprecationWarning) | 0 |
 | Ruff check (`src tests migrations`) | All checks passed | 0 |
-| Ruff format `--check` | 6 files would be reformatted, exactly the documented exceptions in `docs/RUFF_FORMAT_EXCEPTIONS.md` (0017, 0019, 0020, 0040, `test_privilege_hardening.py`, `test_reassessment.py`) | 1 (documented exceptions only) |
+| Ruff format `--check` | 6 files would be reformatted: the documented exceptions in `docs/RUFF_FORMAT_EXCEPTIONS.md` (0017, 0019, 0020, 0040, `test_privilege_hardening.py`, `test_reassessment.py`). `test_privilege_hardening.py` was edited in Phase 2 and is still unformatted, which the exceptions policy does not allow. | 1 |
 | Mypy strict (`src/webdesk`) | no issues, 57 source files | 0 |
-| Migration round trip (head, down -1, up) | head catalog (106 functions) and post-round-trip catalog byte-identical (`cmp` of snapshots) | 0 |
+| Migration round trip (head, down -1, up) | head function catalog (106 functions) identical after round trip; downgrade to 0042 identical to the pre-0043 snapshot (`cmp`) | 0 |
 
-Failures found in the first pass and their fixes are listed in section 4 (test-only changes; no Phase 1 assertion weakened).
+Teardown reliability. Two earlier full-suite runs failed at teardown with
+`sessions still attached to <test db>`, on different tests each time (`test_ai_read_v1.py` and `test_http_intake.py` in
+the first, `test_cli_audit.py` in the second). The affected modules pass when run alone (for example
+`tests/committed/test_cli_audit.py`, 3 of 3). The final pass had no teardown errors, but one clean pass does not show
+that teardown is deterministic. The cause is not established. The teardown check now waits up to five seconds for
+backends to exit before reporting a leak. That wait is an unproven mitigation, not a diagnosed fix. The report now
+includes backend type, start time and current query, so the next occurrence can be attributed.
+
+Invalidated runs. An 18-failure result (18 failed, 18 passed) came from a second run of two test modules that overlapped
+with the full-suite run on the same databases. It is not a valid result for the code.
 
 ## 7. Deferred (not in Phase 2 scope)
 

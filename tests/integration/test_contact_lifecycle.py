@@ -448,3 +448,36 @@ def test_an_administrator_rejects_a_contact_change_and_the_current_contact_is_ke
     assert status == "rejected"
     assert reserved_new == 0
     assert _audit_count(conn, "contact.change.rejected") == 1
+
+
+def test_a_rejected_contact_change_leaves_the_session_epoch_and_revision_unchanged(
+    conn: Connection, admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """H-13 session effects: rejecting a change does not revoke sessions or move the contact."""
+    creator, approver = admins
+    _as_app(conn)
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Session"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof-s"
+    )
+    _owner(conn)
+    activate_user(conn, user_id)
+    _as_app(conn)
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user_id), POLICY, user_id, _email()
+    )
+    _owner(conn)
+    before = conn.execute(
+        text("SELECT session_epoch, contact_revision, status FROM users WHERE user_id = :u"),
+        {"u": user_id},
+    ).one()
+    _as_app(conn)
+    contacts.reject_change(conn, prove(conn, approver, "contact.reject.change", change), change)
+    _owner(conn)
+    after = conn.execute(
+        text("SELECT session_epoch, contact_revision, status FROM users WHERE user_id = :u"),
+        {"u": user_id},
+    ).one()
+    assert tuple(before) == tuple(after)
