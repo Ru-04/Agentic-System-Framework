@@ -101,3 +101,9 @@
 - **AI-S02 approval:** "WDS approver gives its approval for AI-S02." Recorded as reported. Reviewed commit `c43cda0`. The scope and the approval record are still to be written down by WDS. The register's role label ("WDS Project Owner") and the approver's stated role should be reconciled in that record.
 - **Standalone Applications and Middleware Applications:** developer assigned is **BD**. Recorded as reported. This adds to, and does not replace, the earlier four-developer allocation. BD's other assignments are not stated.
 - **Push:** deferred by WDS. Local commits stay local until access is restored.
+
+## 15. AI-S02 approval (WDS approver, reported in chat, 23 October 2026)
+- **Statement reported in chat:** "Ai-S02 approved."
+- **Recorded as reported.** Reviewed commit: `c43cda0`. Integration commit that carries it: `2f16db0`.
+- **Earlier conflicting records:** the implementation report still says acceptance was not given. Those records are left as they are. The approval in this section is the later WDS decision and supersedes them only as far as WDS states.
+- **Still open:** the written approval record (date, scope, authority) that the approver is asked to provide. The register's "WDS Project Owner" label should be reconciled with the approver's actual role.
