@@ -64,7 +64,7 @@ _TOPICS: tuple[tuple[str, str, str], ...] = (
     ("api", "API integration", "commerce"),
 )
 _INTEGRATION_KEYWORDS = frozenset({"graphql", "api"})
-_PLACEHOLDER_NOTE = "not verified; no BigCommerce or BigCommerce documentation was consulted"
+_PLACEHOLDER_NOTE = "not verified; no BigCommerce documentation was consulted"
 
 
 def is_bigcommerce_relevant(statement: str) -> bool:
@@ -340,7 +340,7 @@ class _Builder:
                 proposal_key=self.keys.next("RSKP"),
                 description=(
                     f"Synthetic placeholders are unverified; options for {phrase} may not hold on "
-                    "the client's BigCommerce, BigCommerce or app or extension versions."
+                    "the client's BigCommerce platform, API or app and extension versions."
                 ),
                 related_requirement_ids=[rid],
             )
