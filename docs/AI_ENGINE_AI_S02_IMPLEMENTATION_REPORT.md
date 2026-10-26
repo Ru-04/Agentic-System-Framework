@@ -1,6 +1,6 @@
 # AI-S02 Implementation Report (consolidated QA remediation)
 
-Status: **not accepted; not ready for closure.** Branch `feature/ai-s02`, base `39199d2` (AI-S01).
+Status (historical, as written at c43cda0 before the later WDS decision): **not accepted; not ready for closure.** The later formal WDS decision is AI-S02 Engineering APPROVED at c43cda0 for engineering implementation only; see docs/AI_S02_ACCEPTANCE_REGISTER.md. Branch `feature/ai-s02`, base `39199d2` (AI-S01).
 All AI-S02 work is uncommitted. Nothing has been committed, pushed or merged. No provider call is
 enabled. No real client data, production Foundation or provider approval is involved.
 
@@ -157,7 +157,7 @@ Governance (WDS):
    the condition WDS has already set: no commit before the QA remediation passes and no confirmed High
    or Critical is open.
 10. **Typing residual (T-1).** Resolved by WDS decision (fix, no exclusion). Remaining: approve committing
-    the typing-only change, and acceptance of AI-S02 (not given).
+    the typing-only change, and acceptance of AI-S02 was not given when this report was written (historical status). The later formal WDS engineering decision is recorded in docs/AI_S02_ACCEPTANCE_REGISTER.md.
 
 ## 10. Independent review of the typing-only diff
 

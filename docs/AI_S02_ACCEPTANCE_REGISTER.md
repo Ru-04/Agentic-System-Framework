@@ -1,7 +1,6 @@
 # AI-S02 Acceptance Register
 
-Decision: WDS Project Owner, "Close AI-S01 and Start AI-S03", Decision 2, which maintains the AI-S02
-acceptance recorded earlier.
+Decision: WDS Project Owner, "Close AI-S01 and Start AI-S03", Decision 2, which records AI-S02 Engineering as APPROVED at c43cda0 for engineering implementation. The implementation report written at c43cda0 records acceptance as not given at that time (historical status). This register is the authoritative record for the later decision. Real-provider evaluation, production integration and full functional acceptance remain pending.
 
 | Item | Status | Basis |
 |---|---|---|

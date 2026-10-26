@@ -11,8 +11,8 @@ This register separates accepted engineering work from uncompleted production an
 |---|---|---|---|---|
 | AI-S01 | P0 security remediation (AI-5.1), trust boundaries, evidence isolation, operator selection integrity | **Engineering APPROVED / CLOSED** (limited; isolated engineering implementation; not production authorisation or production-security certification) | `feature/ai-engine` `15d660a` (review fix `c1a0b15`) | 388 passed; ruff and strict mypy clean |
 | AI-S02 | LLM port, guarded structured calls, LLM-backed intake and semantic agents, typing remediation | **Engineering APPROVED** (engineering implementation only; not production authorisation). Real-provider evaluation **PENDING** | `feature/ai-s02` `c43cda0` | 958 passed at acceptance; ruff and strict mypy clean |
-| AI-S03 | RAG and evidence retrieval (shared infrastructure for all seven specialist categories) | **IN DEVELOPMENT** (isolated, non-production). **Not accepted.** Independent review FAIL (nine findings) fixed with regression tests; re-review requested | `feature/ai-s03` (new worktree), on `feature/ai-engine` `15d660a` plus AI-S02 changes, uncommitted | 1190 passed (388 AI-1 and AI-S01, 573 AI-S02, 222 AI-S03, 7 Y-1 regression); ruff and strict mypy clean |
-| AI-S04 | Not started | **NOT STARTED.** May not start before AI-S03 acceptance | none | none |
+| AI-S03 | RAG and evidence retrieval (shared infrastructure for all seven specialist categories) | **Engineering APPROVED / CLOSED** at `5dff462` (isolated engineering implementation; not production authorisation). Limitations accepted as documented: 500-candidate window; complete-snapshot empty-query lookup; Foundation integration dependencies; real collections and live sources need separate approval | `feature/ai-s03` `5dff462` | 1190 passed at acceptance on the combined tree; ruff and strict mypy clean |
+| AI-S04 | Commerce specialists: Shopify, WordPress/WooCommerce, BigCommerce, Shift4Shop, Magento / Adobe Commerce | **IN PROGRESS.** Synthetic-scope engineering complete for all five; independent synthetic-scope QA PASS. 35 of 45 reported criteria met. Real-platform criteria (10) not started. **Full sprint acceptance: PENDING** | `integration/ai-s01-s02-s03` `2988913` (nine-file commit); Low corrections uncommitted | 1256 passed on the integration tree; ruff and strict mypy clean |
 
 ## Accepted engineering work versus outstanding requirements
 
@@ -34,8 +34,7 @@ engineering acceptances on the evidence recorded in their records.
 
 1. AI-S01 Engineering: APPROVED / CLOSED (limited), baseline `15d660a`.
 2. AI-S02 Engineering: APPROVED, baseline `c43cda0`. Real-provider functional evaluation: PENDING.
-3. AI-S03 development: AUTHORISED for isolated non-production implementation and testing. Scope: the 13 required
-   functions, the synthetic-only source boundary, and seven-specialist compatibility.
+3. AI-S03 Engineering: APPROVED / CLOSED at the isolated engineering implementation level, baseline `5dff462`.
 
 ## Milestone register (AI-02 Core Intelligence)
 
@@ -45,9 +44,9 @@ engineering acceptances on the evidence recorded in their records.
 | AI-S01 production-security certification | NOT CLAIMED |
 | AI-S02 Engineering | APPROVED |
 | AI-S02 Real-provider evaluation | PENDING |
-| AI-S03 development | IN PROGRESS (isolated) |
-| AI-S03 acceptance | NOT ACCEPTED |
-| AI-S04 | NOT STARTED |
+| AI-S03 development | COMPLETE (isolated engineering implementation) |
+| AI-S03 engineering acceptance | APPROVED / CLOSED at `5dff462` (not production authorisation) |
+| AI-S04 | IN PROGRESS (synthetic scope complete; real-platform criteria and full acceptance PENDING) |
 
 ## Remaining blockers
 
@@ -65,9 +64,8 @@ for it; pgvector execution (needs a database under approval); process isolation 
 
 ## Next authorised tasks
 
-1. Independent re-review of AI-S03 after the nine fixes (requested). Read its verdict, then update QA plan section 6.
-2. A local commit of the AI-S03 work, only on separate WDS authorisation.
-3. AI-S03 acceptance, only on a WDS decision after review.
+1. AI-S04 real-platform criteria (10) and full sprint acceptance, on WDS authorisation.
+2. AI-S05 is not started; it requires separate WDS authorisation.
 
 Not authorised: push or merge of any branch; real client documents; unrestricted vendor research; real LLM providers;
-production deployment; AI-S04 before AI-S03 acceptance.
+production deployment; AI-S04 full acceptance before the real-platform criteria are met; AI-S05 without separate WDS authorisation.
