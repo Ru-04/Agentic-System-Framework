@@ -50,3 +50,11 @@
 3. Confirm access to the QA evidence.
 4. Perform the QA and record findings.
 5. Sign personally. The assistant has not entered any signature or approval for PG.
+
+## 8. Combined package: heads and sprint-separate decisions (26 October 2026)
+- **Heads:** integration `2988913` (local); webdesk `72355df` (local; remote `abf13a9`; push deferred).
+- **Independence declaration:** `docs/governance/PG_INDEPENDENCE_DECLARATION_TEMPLATE_2026-10-26.md`. Blank. PG completes it personally.
+- **Specialist matrix:** `docs/governance/SPECIALIST_IMPLEMENTATION_MATRIX_2026-10-26.md`.
+- **AI-S04 scope reconciliation:** `docs/governance/AI_S04_SCOPE_RECONCILIATION_2026-10-26.md`.
+- **Test status:** `docs/governance/TEST_EVIDENCE_REGISTER_2026-10-26.md`. Webdesk pytest and mypy at the current head are NOT EXECUTED: APPLICATION CONTROL ERROR 4551.
+- **Decisions made separately, one per sprint:** Sprint 1 acceptance; Sprint 2 acceptance (human review 0/55); Sprint 3 acceptance; Milestone 1 acceptance. Each is a separate PG decision (PASS, PASS WITH CONDITIONS or FAIL). The combined package does not merge them.
