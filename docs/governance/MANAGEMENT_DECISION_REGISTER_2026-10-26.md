@@ -77,3 +77,12 @@ Source: WDS Authorized Approver, chat, 26 October 2026, based on verification re
 - **SEC-01 approved and implemented:** duplicate scoped hosts refused with explicit error; exact_paths field added (default empty, existing entries unchanged); redirect and exact-page regression tests added (tests/unit/test_allowlist_sec01.py).
 - **Active sources:** none. Inactive approved configuration: src/webdesk/evidence/approved_boundaries.py (WooCommerce, BigCommerce). Every platform profile keeps approved_source None.
 - Standing: live LLM calls disabled; production blocked by QA-07; pushes deferred; PG review pending; Sprint 3 formal acceptance pending.
+
+## Decisions ADOBE-01, MAGENTO-01, SOURCE-01 (27 October 2026, chat)
+Source: WDS Authorized Approver, chat, "I approve all three", 27 October 2026. Bound to source verification at `40b6746`. Management authorization only.
+- **ADOBE-01 approved:** exact URLs only: `https://developer.adobe.com/commerce/php/` (shared, labelled shared); `.../commerce/webapi/rest/`, `.../commerce/webapi/graphql/`, `.../commerce/extensibility/events/` (Adobe Commerce only). `frontend-core` excluded. No directory trees.
+- **MAGENTO-01 approved with restrictions:** `https://experienceleague.adobe.com/en/docs/commerce-operations/release/notes/magento-open-source/overview` only. Version identification, release history, version applicability. Not proof of general feature support. `devdocs.magento.com` redirects refused; contributor install guide not capability evidence; Open Source feature docs unresolved.
+- **SOURCE-01 confirmed:** WooCommerce `developer.woocommerce.com/docs/*`, `/guides/*`; BigCommerce `docs.bigcommerce.com/developer/docs/*` plus the approved product-catalog page. Unchanged. Not unrestricted retrieval.
+- **Deferred activation:** all sources inactive. Activation needs source verification, Sprint 4 entry, security gates, and a separate activation approval.
+- **Configuration:** exact-page entries added to `src/webdesk/evidence/approved_boundaries.py` under separate edition keys (adobe_commerce, shared_adobe_magento_open_source, magento_open_source_release_notes). Still inactive. No profile reads them.
+- **Tests:** `tests/unit/test_sprint4_exact_pages.py` added. Status NOT EXECUTED: pytest and mypy blocked by Application Control error 4551 on 27 October 2026. Ruff format check passes. The configuration and tests are uncommitted until they run.
