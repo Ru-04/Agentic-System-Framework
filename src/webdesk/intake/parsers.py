@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 from email import policy as email_policy
 from email.message import EmailMessage
@@ -23,6 +24,8 @@ from typing import Any, cast
 
 from docx import Document
 from pypdf import PdfReader
+
+from webdesk.intake import limits
 
 EXTRACTION_VERSION = "v1"
 PARSER_LIBRARY_VERSION = "pypdf-5.1.0+python-docx-1.1.2"
@@ -67,6 +70,8 @@ def parse_pdf(data: bytes) -> ParseResult:
         raise
     except Exception as exc:
         raise ParserFailure("corrupt_structure") from exc
+    if len(pages) > limits.MAX_PDF_PAGES:
+        raise ParserFailure(limits.PDF_PAGE_LIMIT)
 
     segments: list[SegmentDraft] = []
     flagged: list[str] = []
@@ -81,7 +86,23 @@ def parse_pdf(data: bytes) -> ParseResult:
     return ParseResult(_status(segments, flagged), segments, flagged)
 
 
+def _check_archive(data: bytes) -> None:
+    """Refuse a ZIP container whose uncompressed size or inflate ratio exceeds the limits (H-31)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            infos = archive.infolist()
+    except zipfile.BadZipFile as exc:
+        raise ParserFailure("corrupt_structure") from exc
+    uncompressed = sum(info.file_size for info in infos)
+    compressed = max(1, sum(info.compress_size for info in infos))
+    if uncompressed > limits.MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+        raise ParserFailure(limits.ARCHIVE_SIZE_LIMIT)
+    if uncompressed / compressed > limits.MAX_ARCHIVE_RATIO:
+        raise ParserFailure(limits.ARCHIVE_RATIO_LIMIT)
+
+
 def parse_docx(data: bytes) -> ParseResult:
+    _check_archive(data)
     try:
         document = Document(io.BytesIO(data))
     except Exception as exc:
