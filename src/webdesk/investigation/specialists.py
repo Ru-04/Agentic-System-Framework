@@ -9,6 +9,7 @@ Synthetic findings are labelled ``[SYNTHETIC]`` and are never reported as verifi
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -111,6 +112,47 @@ PROVIDER_ACTIONS: Final[frozenset[str]] = frozenset(
     {Action.READ_EVIDENCE.value, Action.PROPOSE_CANDIDATES.value, Action.DECLARE_UNKNOWNS.value}
 )
 
+# A requirement needs at least this many distinct specific terms before any investigation runs.
+MIN_SPECIFIC_TERMS: Final = 3
+
+_STOPWORDS: Final[frozenset[str]] = frozenset(
+    {
+        "and",
+        "are",
+        "but",
+        "can",
+        "does",
+        "for",
+        "from",
+        "has",
+        "have",
+        "how",
+        "into",
+        "its",
+        "not",
+        "our",
+        "the",
+        "their",
+        "them",
+        "they",
+        "this",
+        "that",
+        "use",
+        "what",
+        "which",
+        "who",
+        "will",
+        "with",
+        "your",
+    }
+)
+
+
+def specific_terms(text: str) -> frozenset[str]:
+    """Distinct words of three or more characters that are not common stopwords."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return frozenset(word for word in words if len(word) >= 3 and word not in _STOPWORDS)
+
 
 def canonical_capability(specialist_id: SpecialistId) -> str:
     return REGISTRY_CAPABILITY_IDS[specialist_id]
@@ -133,6 +175,16 @@ class InvestigationProvider:
         return PROVIDER_ACTIONS
 
     def run(self, request: SpecialistInput) -> Mapping[str, object]:
+        if len(specific_terms(request.task)) < MIN_SPECIFIC_TERMS:
+            return self._response(
+                request,
+                [],
+                [
+                    "clarification required: the requirement names fewer than "
+                    f"{MIN_SPECIFIC_TERMS} specific terms; no investigation was run",
+                    "feasibility is not determined by this specialist",
+                ],
+            )
         findings: list[dict[str, object]] = []
         unknowns: list[str] = []
         for capability in CATALOG[self.specialist]:
@@ -163,13 +215,20 @@ class InvestigationProvider:
                 reason = result.reason or "; ".join(result.unknowns)
                 unknowns.append(f"{capability.name}: {result.outcome.value}: {reason}")
         unknowns.append("feasibility is not determined by this specialist")
-        status = "incomplete"
+        return self._response(request, findings, unknowns)
+
+    def _response(
+        self,
+        request: SpecialistInput,
+        findings: list[dict[str, object]],
+        unknowns: list[str],
+    ) -> Mapping[str, object]:
         return {
             "contract_version": "1.0.0",
             "request_id": request.request_id,
             "workspace_id": request.workspace_id,
             "specialist_id": self.specialist.value,
-            "status": status,
+            "status": "incomplete",
             "findings": findings,
             "unknowns": unknowns,
         }
