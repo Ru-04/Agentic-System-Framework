@@ -26,6 +26,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
+from webdesk.ceremony.dbclock import database_now
 from webdesk.ceremony.install import Clock, InstallationError, load_signed_authorization
 from webdesk.config import Settings
 from webdesk.identity.email import EmailPolicyError, policy_from_settings
@@ -138,7 +139,8 @@ def apply_recovery(
     ``activation_window`` is the appointment deadline. Production passes nothing and gets the
     approved 24-hour window. Only tests pass another value (GD-003, governance register).
     """
-    now = clock.now()
+    # H-21: the ceremony clock is the database clock. The injected window is only a duration.
+    now = database_now(conn)
     deadline = now + activation_window
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))

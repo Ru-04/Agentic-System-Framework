@@ -145,6 +145,7 @@ WORKER_EXECUTE = frozenset(
         "fn_worker_lock_run",
         "fn_worker_mark_inputs_changed",
         "fn_worker_mark_version",
+        "fn_worker_reap_expired",
         "fn_worker_record_audit",
         "fn_worker_renew_lease",
         "fn_worker_requeue_job",
