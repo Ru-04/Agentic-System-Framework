@@ -86,3 +86,11 @@ Source: WDS Authorized Approver, chat, "I approve all three", 27 October 2026. B
 - **Deferred activation:** all sources inactive. Activation needs source verification, Sprint 4 entry, security gates, and a separate activation approval.
 - **Configuration:** exact-page entries added to `src/webdesk/evidence/approved_boundaries.py` under separate edition keys (adobe_commerce, shared_adobe_magento_open_source, magento_open_source_release_notes). Still inactive. No profile reads them.
 - **Tests:** `tests/unit/test_sprint4_exact_pages.py` added. Status NOT EXECUTED: pytest and mypy blocked by Application Control error 4551 on 27 October 2026. Ruff format check passes. The configuration and tests are uncommitted until they run.
+
+## Sprint 3 formal management acceptance (27 October 2026, chat)
+Source: WDS management decision, chat, 27 October 2026, stated as "I, AS (Arushi Sharma), acting as WDS Authorized Approver". Recorded as stated. No signature recorded.
+- **S3-ACCEPT-01 APPROVED:** M2 Sprint 3 engineering deliverables accepted, bound to `3969a8f` and `5105628`, with associated foundations and governance records. Supersedes ENGINEERING ACCEPTED WITH CONDITIONS. Not extended to Sprint 4 changes or to untested working-tree changes.
+- **S3-QA-01 REPORTED BY MANAGEMENT:** PG QA completion and PASS (no defects) reported by WDS management. PG personal sign-off: PENDING VERIFICATION. PG independence declaration: PENDING VERIFICATION. No PG-signed record exists in the repository (only the blank template).
+- **S3-GATE-01:** formal gate closure PENDING. Current-head tests partly NOT EXECUTED; CI and hardening OPEN; 55-pair review OPEN. See `SPRINT3_ACCEPTANCE_RECONCILIATION_2026-10-27.md`.
+- **S4-PREP-01:** uncommitted `approved_boundaries.py` and `test_sprint4_exact_pages.py` preserved. NOT EXECUTED (Application Control 4551). Not claimed as verified or accepted.
+- Standing: no push; live LLM disabled; production blocked (QA-07); no unapproved retrieval; Milestone 1 acceptance separate.

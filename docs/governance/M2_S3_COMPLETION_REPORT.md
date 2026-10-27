@@ -94,3 +94,8 @@ Recorded separately in the commit and in section 8 once checked. Do not treat an
 - ENGINEERING ACCEPTED WITH CONDITIONS, FORMAL SPRINT ACCEPTANCE PENDING. Bound to `3969a8f` and `5105628`. Recorded in `MANAGEMENT_DECISION_REGISTER_2026-10-26.md`.
 - PG independent QA: PENDING. PG completes the declaration personally.
 - Remaining conditions and owners: see the register entry.
+
+## 13. Formal management acceptance (27 October 2026)
+- WDS management acceptance: APPROVED, bound to `3969a8f` and `5105628`.
+- PG QA: reported by management (PASS, no defects). PG personal sign-off and declaration: PENDING VERIFICATION.
+- Formal gate closure: PENDING. See `SPRINT3_ACCEPTANCE_RECONCILIATION_2026-10-27.md` for the evidence still required.
