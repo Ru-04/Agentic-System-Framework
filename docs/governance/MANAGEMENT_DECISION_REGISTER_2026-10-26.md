@@ -94,3 +94,9 @@ Source: WDS management decision, chat, 27 October 2026, stated as "I, AS (Arushi
 - **S3-GATE-01:** formal gate closure PENDING. Current-head tests partly NOT EXECUTED; CI and hardening OPEN; 55-pair review OPEN. See `SPRINT3_ACCEPTANCE_RECONCILIATION_2026-10-27.md`.
 - **S4-PREP-01:** uncommitted `approved_boundaries.py` and `test_sprint4_exact_pages.py` preserved. NOT EXECUTED (Application Control 4551). Not claimed as verified or accepted.
 - Standing: no push; live LLM disabled; production blocked (QA-07); no unapproved retrieval; Milestone 1 acceptance separate.
+
+## PUSH-01, CI-01, ACCESS-01 (27 October 2026, chat)
+Source: WDS Authorized Approver, chat, "I approve all three", 27 October 2026. Verified at HEAD `fab9230`; remote tip `abf13a9` (fast-forward, no divergence).
+- **PUSH-01 approved:** normal, non-force push of `claude/webdesk-specialist-baseline-v1-3b21b1` to origin. No protected-branch merge, no deployment, no production activation. Uncommitted changes excluded.
+- **CI-01 approved:** run existing CI checks against the pushed committed SHA. Do not claim uncommitted Sprint 4 configuration passed CI.
+- **ACCESS-01 approved:** restoration of authorized GitHub write access through normal administration. No credential modification or bypass by the assistant.
