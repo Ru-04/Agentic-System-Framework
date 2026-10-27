@@ -40,4 +40,4 @@ The same verifier passed F2, F4 and F5 outright and passed F1 and F3 except for 
 
 Gate after the second remediation: full suite 1640 passed, 3 skipped (lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`); AI-S08 65 tests; ruff and strict mypy clean.
 
-A second independent verification of this final text has not been run. The verdict on the complete remediation is therefore not recorded here as PASS.
+Final independent verdict on commit `f01f76d0fe8e4ad185c46aecacb5351640d133d9` (code identical to `36bc9ec`; the diff touches four documents): PASS. Recommendation: accept engineering scope. Clean export of `f01f76d`: 1576 passed, 0 skipped; ruff check, ruff format --check and strict mypy (138 files) clean; AI-S08 file 65 passed. The development worktree additionally holds 67 collected tests in three untracked Foundation files (64 pass, 3 skip); those files are not part of the commit. No outstanding findings. Formal acceptance remains with WDS.

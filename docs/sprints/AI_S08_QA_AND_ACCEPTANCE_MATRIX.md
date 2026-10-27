@@ -72,7 +72,7 @@ QA remediation tests: `test_an_empty_estimate_is_never_complete`; `test_a_blocke
 | Governance review compatibility | Met (item 21; governance bridge tests) |
 | No autonomous commercial approvals | Met (item 20) |
 | Green complete test and static-analysis gates | Met at checkpoint |
-| Independent QA PASS | Pending |
+| Independent QA PASS | Met on `f01f76d` (targeted verification; see the QA findings register) |
 | WDS formal acceptance | Pending |
 
 ## 5. Known limitations
