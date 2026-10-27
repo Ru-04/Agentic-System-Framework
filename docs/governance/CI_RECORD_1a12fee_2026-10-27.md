@@ -30,3 +30,12 @@ A job is marked successful only when all its steps succeed, and no step in this 
 ## Not covered by this CI record
 - The uncommitted Sprint 4 configuration (`src/webdesk/evidence/approved_boundaries.py`) and its tests (`tests/unit/test_sprint4_exact_pages.py`). They are not in commit `1a12fee`, so CI did not run them. They are NOT verified.
 - PG's independent QA, the 55-pair Shopify review, and the Milestone 1 controls. Unchanged by this record.
+
+## Validation run for the Sprint 4 configuration (CI-01, throwaway branch)
+- Branch: `claude/sprint4-config-validation` (not merged; throwaway).
+- Tested commit: `8f7ba79` (base `1a12fee` plus only the two approved files).
+- Workflow: `specialist-ci` run #26: https://github.com/Ru-04/Agentic-System-Framework/actions/runs/40515435697. Status: **Success**. Duration 2m 58s.
+- Jobs: `lint-type-unit` and `postgres-tests`, both successful. Job success confirmed. Per-test counts are not visible in the public logs (sign-in required).
+- File comparison: the two files in the development worktree match `8f7ba79` exactly, ignoring CRLF line endings.
+- Promotion: committed locally to the development branch as `186fd3b` (the two files only). **Not pushed.**
+- Source activation: none. All evidence sources remain inactive. No profile reads the configuration.
