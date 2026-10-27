@@ -22,6 +22,7 @@ from sqlalchemy.engine import Connection
 from tests.integration.test_intake_db import NOTES, _ingest, _segment_count, _setup
 from tests.support.privileged import as_worker
 from webdesk.intake import limits, parse_service
+from webdesk.intake.isolation import Runner, run_in_process, run_isolated
 from webdesk.intake.parsers import (
     ParseResult,
     ParserFailure,
@@ -55,8 +56,10 @@ def store(tmp_path: Path) -> ContentStore:
     return ContentStore(tmp_path / "root")
 
 
-def _parse(conn: Connection, store: ContentStore, version: uuid.UUID) -> str:
-    return as_worker(conn, parse_service.parse_version, conn, store, version)
+def _parse(
+    conn: Connection, store: ContentStore, version: uuid.UUID, runner: Runner = run_isolated
+) -> str:
+    return as_worker(conn, parse_service.parse_version, conn, store, version, runner=runner)
 
 
 def _version_state(conn: Connection, version: uuid.UUID) -> tuple[str, dict[str, object] | None]:
@@ -131,7 +134,7 @@ def test_a_partial_extraction_records_the_regions_it_could_not_extract(
         )
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", partial)
-    assert _parse(conn, store, result.source_version_id) == "partial"
+    assert _parse(conn, store, result.source_version_id, run_in_process) == "partial"
     status, error = _version_state(conn, result.source_version_id)
     assert status == "partial"
     assert error == {"class": "partial", "flagged_regions": ["pdf_page:2"]}
@@ -165,7 +168,7 @@ def test_a_segment_write_failure_of_any_kind_fails_only_that_version(
         )
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", unserialisable)
-    assert _parse(conn, store, broken.source_version_id) == "failed"
+    assert _parse(conn, store, broken.source_version_id, run_in_process) == "failed"
     assert _version_state(conn, broken.source_version_id)[1] == {"class": "segment_write_failed"}
     assert _segment_count(conn, broken.source_version_id) == 0
     monkeypatch.undo()

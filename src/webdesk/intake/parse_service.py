@@ -24,6 +24,7 @@ from sqlalchemy.engine import Connection
 
 from webdesk.audit.service import record_worker_event
 from webdesk.intake import limits
+from webdesk.intake.isolation import Runner, run_isolated
 from webdesk.intake.parsers import (
     EXTRACTION_VERSION,
     PARSERS,
@@ -77,8 +78,13 @@ def parse_version(
     version_id: uuid.UUID,
     *,
     actor_id: str = "parser",
+    runner: Runner = run_isolated,
 ) -> str:
-    """Parse one pending version. Returns its resulting parse status."""
+    """Parse one pending version. Returns its resulting parse status.
+
+    ``runner`` executes the parser. The default is the isolated child process (H-32). Tests that
+    inject a parser pass ``run_in_process``.
+    """
     row = conn.execute(
         text("SELECT * FROM webdesk_guard.fn_worker_begin_parse(:v)"),
         {"v": version_id},
@@ -101,12 +107,12 @@ def parse_version(
     if len(data) > limits.MAX_INPUT_BYTES:
         return _fail(conn, version_id, project, limits.INPUT_TOO_LARGE, actor_id)
 
-    parser = PARSERS.get(str(mime))
-    if parser is None:
+    if str(mime) not in PARSERS:
         return _fail(conn, version_id, project, "unsupported_mime", actor_id)
 
+    # H-32: by default the parse runs in a child process with a timeout and no database privilege.
     try:
-        result: ParseResult = parser(data)
+        result: ParseResult = runner(str(mime), data)
     except ParserFailure as exc:
         return _fail(conn, version_id, project, exc.reason, actor_id)
     except Exception:

@@ -209,6 +209,9 @@ def test_an_unreadable_page_gives_partial_and_keeps_the_good_pages(
         def __init__(self, text: str | None) -> None:
             self._text = text
 
+        def get_contents(self) -> None:
+            return None
+
         def extract_text(self) -> str:
             if self._text is None:
                 raise RuntimeError("bad page")
@@ -252,8 +255,8 @@ def test_markdown_records_its_heading_path_and_paragraph_index() -> None:
 def test_text_lines_get_line_range_locators() -> None:
     result = parse_text(b"first line\n\nthird line\n")
     assert [s.locator for s in result.segments] == [
-        {"line_start": 1, "line_end": 1},
-        {"line_start": 3, "line_end": 3},
+        {"line_start": 1, "line_end": 1, "char_start": 0, "char_end": 10},
+        {"line_start": 3, "line_end": 3, "char_start": 12, "char_end": 22},
     ]
 
 
