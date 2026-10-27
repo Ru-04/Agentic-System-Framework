@@ -1,0 +1,1260 @@
+{
+  "environment": {
+    "commit": "base 3e79d01 plus AI-S10 working tree",
+    "python": "3.12.10"
+  },
+  "results": [
+    {
+      "actual": "project 13.0/20.0/32.0",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "sums equal the oracle exactly",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-01",
+      "severity": "critical",
+      "title": "Low/Likely/High oracle: hand-computed totals"
+    },
+    {
+      "actual": "2 of 2 unordered triples refused",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "refused",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-02",
+      "severity": "critical",
+      "title": "Ordering is enforced; unordered hours refused"
+    },
+    {
+      "actual": "likely 12.0; lines 1",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "counted once",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-03",
+      "severity": "critical",
+      "title": "Duplicate work counted once in project totals"
+    },
+    {
+      "actual": "excluded ('LINE-001',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "excluded line listed; complete False",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-04",
+      "severity": "critical",
+      "title": "Missing estimate lines are excluded and listed; totals incomplete"
+    },
+    {
+      "actual": "fingerprint, revisions and requirement IDs carried",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "fingerprint and requirement revisions recorded",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S08"
+      ],
+      "scenario_id": "EST-05",
+      "severity": "major",
+      "title": "Governance traceability and fingerprint carried to the draft"
+    },
+    {
+      "actual": "needs_inputs",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "needs_inputs, no numbers",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-06",
+      "severity": "critical",
+      "title": "Unverified numerical basis gives no numbers"
+    },
+    {
+      "actual": "needs_inputs",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "needs_inputs (stale)",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-07",
+      "severity": "major",
+      "title": "Requirement revision mismatch makes the line stale"
+    },
+    {
+      "actual": "forbidden field names: []",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no such field exists",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-08",
+      "severity": "critical",
+      "title": "Estimate has no rates, weighting or contingency"
+    },
+    {
+      "actual": "statuses ['indicative']",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "draft_status constant; no approved status",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-09",
+      "severity": "critical",
+      "title": "Draft-only estimate state"
+    },
+    {
+      "actual": "status indicative; complete True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "indicative and complete",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "EST-10",
+      "severity": "major",
+      "title": "Zero-hour boundary counted as a numeric zero, not as missing"
+    },
+    {
+      "actual": "status not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "NOT_EVIDENCE_VERIFIED with MAJOR finding",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-01",
+      "severity": "critical",
+      "title": "COMPLETED specialist output with zero evidence is not evidence-verified"
+    },
+    {
+      "actual": "evidence_backed",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "EVIDENCE_BACKED",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-02",
+      "severity": "major",
+      "title": "Valid verified provenance backs a relevant claim"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-03",
+      "severity": "critical",
+      "title": "Stripped provenance does not back"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "not backed; MISSING_REVIEW_PARAMETER",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-04",
+      "severity": "critical",
+      "title": "Missing authorised collection set prevents backing"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-05",
+      "severity": "critical",
+      "title": "Missing freshness window prevents backing"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "SERVED_RECORD_MISMATCH; not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-06",
+      "severity": "critical",
+      "title": "Mismatched served record is reported and does not back"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "STALE_EVIDENCE_CITED; not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-07",
+      "severity": "major",
+      "title": "Stale evidence does not back"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "SUPERSEDED_EVIDENCE_CITED; not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-08",
+      "severity": "major",
+      "title": "Superseded evidence does not back"
+    },
+    {
+      "actual": "conflicted",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "CONFLICTED",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S08"
+      ],
+      "scenario_id": "EVID-09",
+      "severity": "critical",
+      "title": "Conflicting evidence yields CONFLICTED"
+    },
+    {
+      "actual": "not_evidence_verified",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "not backed",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-10",
+      "severity": "critical",
+      "title": "Unverified hypothesis with citations does not back"
+    },
+    {
+      "actual": "blocker reported",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "CITATION_OUTSIDE_SERVED blocker",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-11",
+      "severity": "critical",
+      "title": "Fabricated citation of an unserved record is a blocker"
+    },
+    {
+      "actual": "classes ['coverage_gap', 'missing_clarification', 'missing_review_parameter', 'not_evidence_verified']",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "COVERAGE_GAP",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-12",
+      "severity": "major",
+      "title": "Insufficient requirement coverage is reported"
+    },
+    {
+      "actual": "missing clarification reported",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "MISSING_CLARIFICATION",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-13",
+      "severity": "major",
+      "title": "Missing clarification is reported for an evidence gap"
+    },
+    {
+      "actual": "specialist output unchanged by review",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "output dump unchanged",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-14",
+      "severity": "critical",
+      "title": "Reviewer findings do not alter original specialist outputs"
+    },
+    {
+      "actual": "requirement readiness blocked",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "blocker present in estimate and SOW",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "EVID-15",
+      "severity": "critical",
+      "title": "Governance blockers cannot be silently erased downstream"
+    },
+    {
+      "actual": "off-topic summary status evidence_backed",
+      "classification": "A-isolated-synthetic",
+      "dependency": "semantic relevance requires human or approved model review (governance decision)",
+      "expected": "a relevant-sounding but off-topic summary backs; screen is lexical",
+      "outcome": "open_limitation",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "EVID-16",
+      "severity": "critical",
+      "title": "Evidence sufficiency is lexical, not semantic (AI-S07 relevance screen)"
+    },
+    {
+      "actual": "LLM provider and model decision (D-12) and live-call approval",
+      "classification": "C-real-provider",
+      "dependency": "LLM provider and model decision (D-12) and live-call approval",
+      "expected": "provider results meet approved thresholds",
+      "outcome": "blocked",
+      "references": [
+        "D-12"
+      ],
+      "scenario_id": "EXT-01",
+      "severity": "major",
+      "title": "Real-provider semantic evaluation of requirement analysis"
+    },
+    {
+      "actual": "source-access approval and sandbox credentials; none granted",
+      "classification": "D-vendor-documentation-or-sandbox",
+      "dependency": "source-access approval and sandbox credentials; none granted",
+      "expected": "sandbox behaviour matches vendor docs",
+      "outcome": "blocked",
+      "references": [
+        "D-02",
+        "AI-S04"
+      ],
+      "scenario_id": "EXT-02",
+      "severity": "major",
+      "title": "Authorised test-store and sandbox investigation"
+    },
+    {
+      "actual": "Foundation UI and human participants; not available",
+      "classification": "E-full-platform-human-workflow",
+      "dependency": "Foundation UI and human participants; not available",
+      "expected": "human reviewers complete the workflow",
+      "outcome": "blocked",
+      "references": [
+        "AI-S10 spec section 3"
+      ],
+      "scenario_id": "EXT-03",
+      "severity": "major",
+      "title": "Full-platform human workflow and UAT"
+    },
+    {
+      "actual": "production environment, configuration decisions and external review",
+      "classification": "F-production-security-readiness",
+      "dependency": "production environment, configuration decisions and external review",
+      "expected": "penetration and configuration review passes",
+      "outcome": "blocked",
+      "references": [
+        "GOVERNANCE"
+      ],
+      "scenario_id": "EXT-04",
+      "severity": "major",
+      "title": "Production security and readiness checks"
+    },
+    {
+      "actual": "Foundation API not available to the engine",
+      "classification": "B-foundation-integration",
+      "dependency": "Foundation API not available to the engine",
+      "expected": "reads return authoritative records",
+      "outcome": "blocked",
+      "references": [
+        "AI-S02",
+        "AI-S04"
+      ],
+      "scenario_id": "EXT-05",
+      "severity": "major",
+      "title": "Foundation requirement and evidence APIs (authoritative reads)"
+    },
+    {
+      "actual": "Foundation-issued operator authorisation not implemented",
+      "classification": "B-foundation-integration",
+      "dependency": "Foundation-issued operator authorisation not implemented",
+      "expected": "confirmations issued by a Foundation operator session",
+      "outcome": "blocked",
+      "references": [
+        "R-2"
+      ],
+      "scenario_id": "EXT-06",
+      "severity": "major",
+      "title": "Authenticated operator confirmations (R-2)"
+    },
+    {
+      "actual": "Foundation test environment and approval; tests are skipped, not passed",
+      "classification": "B-foundation-integration",
+      "dependency": "Foundation test environment and approval; tests are skipped, not passed",
+      "expected": "three tests pass in the Foundation environment",
+      "outcome": "blocked",
+      "references": [
+        "AI-S02",
+        "AI-S04"
+      ],
+      "scenario_id": "EXT-07",
+      "severity": "major",
+      "title": "Skipped Foundation integration tests (three)"
+    },
+    {
+      "actual": "WDS decisions",
+      "classification": "A-isolated-synthetic",
+      "dependency": "WDS decisions",
+      "expected": "each decision is recorded as open in the governance register",
+      "outcome": "open_limitation",
+      "references": [
+        "A-4",
+        "C-15",
+        "GP-1",
+        "D-05",
+        "D-06",
+        "D-07"
+      ],
+      "scenario_id": "EXT-08",
+      "severity": "critical",
+      "title": "Governance decisions still open (A-4, C-15, GP-1, D-05, D-06/D-07)"
+    },
+    {
+      "actual": "7 outcomes; fingerprint carried; estimate likely 42.0; SOW pending",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "each stage yields its output; governance fingerprint carried to estimate and SOW",
+      "outcome": "pass",
+      "references": [
+        "AI-S06",
+        "AI-S07",
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "PIPE-01",
+      "severity": "critical",
+      "title": "Full synthetic pipeline: routing, confirmation, execution, review, estimate, SOW"
+    },
+    {
+      "actual": "line readiness blocked=True; SOW blocker visible=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "blocked readiness in estimate and in SOW risks",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "PIPE-02",
+      "severity": "critical",
+      "title": "Governance blocker stays visible through estimate and SOW"
+    },
+    {
+      "actual": "status evidence_backed; authorises_anything False",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "reviewer authorises nothing; SOW approval stays pending",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S09"
+      ],
+      "scenario_id": "PIPE-03",
+      "severity": "critical",
+      "title": "EVIDENCE_BACKED is not approval (no approval reached downstream)"
+    },
+    {
+      "actual": "not re-executed by AI-S10; see tests/test_requirement_analysis.py",
+      "classification": "A-isolated-synthetic",
+      "dependency": "not re-executed by AI-S10; see tests/test_requirement_analysis.py",
+      "expected": "covered by the named accepted test file, which the committed gate runs",
+      "outcome": "delegated",
+      "references": [
+        "AI-1",
+        "AI-2"
+      ],
+      "scenario_id": "PIPE-04",
+      "severity": "info",
+      "title": "Lead intake and semantic requirement analysis"
+    },
+    {
+      "actual": "not re-executed by AI-S10; see tests/test_ai_s03_retrieval.py",
+      "classification": "A-isolated-synthetic",
+      "dependency": "not re-executed by AI-S10; see tests/test_ai_s03_retrieval.py",
+      "expected": "covered by the named accepted test file, which the committed gate runs",
+      "outcome": "delegated",
+      "references": [
+        "AI-S03"
+      ],
+      "scenario_id": "PIPE-05",
+      "severity": "info",
+      "title": "Evidence retrieval over the admitted index"
+    },
+    {
+      "actual": "attempts [2]; specialist calls 14",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "every category makes exactly max_attempts (2) calls and ends transient",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "REC-01",
+      "severity": "major",
+      "title": "Transient specialist failure is retried, and the retry is bounded"
+    },
+    {
+      "actual": "attempts [1]; specialist calls 7",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "every category makes one call; no retry follows a permanent status",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "REC-02",
+      "severity": "major",
+      "title": "Permanent specialist refusal is not retried"
+    },
+    {
+      "actual": "withheld ['shopify_specialist'] evidence_unavailable, no evidence; others ran=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the withheld category uses no evidence and reports evidence_unavailable; no other collection is substituted; the other categories run",
+      "outcome": "pass",
+      "references": [
+        "AI-S06",
+        "AI-S07"
+      ],
+      "scenario_id": "REC-03",
+      "severity": "critical",
+      "title": "Partial authorisation refuses the affected category with no fallback"
+    },
+    {
+      "actual": "a requirement belongs to another project",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "SOW refuses a requirement from another project",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SEC-01",
+      "severity": "critical",
+      "title": "Cross-project requirement access refused by the SOW"
+    },
+    {
+      "actual": "status unsupported",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "claim cannot back; unauthorised collection blocker",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "SEC-02",
+      "severity": "critical",
+      "title": "Cross-collection evidence refused by the reviewer"
+    },
+    {
+      "actual": "status needs_inputs; issues 1",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "line is needs_inputs with no numbers",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "SEC-03",
+      "severity": "critical",
+      "title": "Unauthorised source reference gives no estimate numbers"
+    },
+    {
+      "actual": "stale revision reported",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "stale revision is an integrity issue",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SEC-04",
+      "severity": "major",
+      "title": "Requirement revision mismatch is reported as stale"
+    },
+    {
+      "actual": "refused: mock confirmation is not permitted on the production path",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "ConfirmationRefused",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-05",
+      "severity": "critical",
+      "title": "Forged (mock) confirmation refused on the production path"
+    },
+    {
+      "actual": "second use refused: this run is no longer awaiting confirmation",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "second confirmation refused",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-06",
+      "severity": "critical",
+      "title": "Replayed confirmation refused on a second use"
+    },
+    {
+      "actual": "refused: confirmation has expired",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "ConfirmationRefused",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-07",
+      "severity": "critical",
+      "title": "Expired confirmation refused"
+    },
+    {
+      "actual": "refused: confirmation is bound to another run",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "ConfirmationRefused",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-08",
+      "severity": "critical",
+      "title": "Confirmation bound to another run is refused"
+    },
+    {
+      "actual": "parameters ['agent', 'clock', 'context', 'execution_id', 'registry', 'task']; gated=False",
+      "classification": "A-isolated-synthetic",
+      "dependency": "R-1 open: not a production authorisation boundary",
+      "expected": "run_specialist takes no confirmation or actor; limitation present",
+      "outcome": "open_limitation",
+      "references": [
+        "R-1"
+      ],
+      "scenario_id": "SEC-09",
+      "severity": "critical",
+      "title": "Direct specialist execution bypass (legacy run_specialist ungated) \u2014 R-1"
+    },
+    {
+      "actual": "flagged=True; approval pending_human_approval",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "flagged; approval state unchanged",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SEC-10",
+      "severity": "critical",
+      "title": "Prompt injection in client requirement text is data, not instruction"
+    },
+    {
+      "actual": "hostile status evidence_backed; benign evidence_backed",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "review status and authorisation unchanged",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "SEC-11",
+      "severity": "critical",
+      "title": "Prompt injection in retrieved evidence does not change review status"
+    },
+    {
+      "actual": "validation refused the contradictory output",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "validation refuses the output",
+      "outcome": "pass",
+      "references": [
+        "AI-2",
+        "AI-S07"
+      ],
+      "scenario_id": "SEC-12",
+      "severity": "critical",
+      "title": "Malformed or contradictory specialist output is refused"
+    },
+    {
+      "actual": "input refused=True; status refused=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "refused",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SEC-13",
+      "severity": "critical",
+      "title": "Approval-state promotion is refused at every input and status boundary"
+    },
+    {
+      "actual": "reviewer flagged unsupported verified claim=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "reviewer flags unsupported verified claim",
+      "outcome": "pass",
+      "references": [
+        "AI-S07"
+      ],
+      "scenario_id": "SEC-14",
+      "severity": "critical",
+      "title": "Unsupported verified-claim assertion is refused"
+    },
+    {
+      "actual": "unauthorised numbers=None; authorised likely=12.0",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no numbers",
+      "outcome": "pass",
+      "references": [
+        "AI-S08"
+      ],
+      "scenario_id": "SEC-15",
+      "severity": "critical",
+      "title": "Unauthorised historical estimate reference is refused"
+    },
+    {
+      "actual": "2 messages inspected; sentinel absent=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "sentinel absent from messages",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SEC-16",
+      "severity": "critical",
+      "title": "Error messages do not leak sentinel secrets"
+    },
+    {
+      "actual": "reviewer and estimator inputs unchanged",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "inputs unchanged after execution",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S08"
+      ],
+      "scenario_id": "SEC-17",
+      "severity": "major",
+      "title": "Inputs to reviewer and estimator are not mutated"
+    },
+    {
+      "actual": "Foundation audit and run-state persistence; not implemented",
+      "classification": "B-foundation-integration",
+      "dependency": "Foundation audit and run-state persistence; not implemented",
+      "expected": "every run and refusal persisted and tamper-evident",
+      "outcome": "blocked",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-18",
+      "severity": "major",
+      "title": "Durable, tamper-evident audit of runs, confirmations and refusals"
+    },
+    {
+      "actual": "12 sections plus overview",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "twelve section identifiers including overview",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-01",
+      "severity": "major",
+      "title": "All supported sections are present"
+    },
+    {
+      "actual": "unrepresented ('REQ-SYN-0002',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "unrepresented listed; traceability rows",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-02",
+      "severity": "critical",
+      "title": "Requirement-to-deliverable coverage and traceability"
+    },
+    {
+      "actual": "1 out-of-scope item(s)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "exclusion labelled as proposal requiring confirmation",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-03",
+      "severity": "major",
+      "title": "In-scope and out-of-scope are represented accurately"
+    },
+    {
+      "actual": "assumptions and milestones explicitly unsupported",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "explicit not_supported labels",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-04",
+      "severity": "critical",
+      "title": "Unsupported sections are explicitly unsupported, not filled"
+    },
+    {
+      "actual": "DLV-2 readiness {'REQ-SYN-0002': 'blocked'}",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "blocker in risks and deliverable readiness",
+      "outcome": "pass",
+      "references": [
+        "AI-S07",
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-05",
+      "severity": "critical",
+      "title": "Governance blockers carried through the SOW"
+    },
+    {
+      "actual": "{'REQ-SYN-0002': 'provisional'}",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "provisional readiness shown",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-06",
+      "severity": "major",
+      "title": "Provisional estimates remain provisional"
+    },
+    {
+      "actual": "needs_inputs line LINE-002 carries no numbers",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no number for the line or its deliverable",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-07",
+      "severity": "critical",
+      "title": "needs_inputs values remain nonnumeric in the SOW"
+    },
+    {
+      "actual": "PARTIAL: 1 unresolved line(s). This is not the complete proj",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "banner PARTIAL; complete False",
+      "outcome": "pass",
+      "references": [
+        "AI-S08",
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-08",
+      "severity": "critical",
+      "title": "Incomplete totals are visibly identified"
+    },
+    {
+      "actual": "date-like match: none",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no date pattern in output",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-09",
+      "severity": "critical",
+      "title": "No invented milestones dates, fixed calendar dates or durations"
+    },
+    {
+      "actual": "pricing-like property names: []",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no price, rate, discount, signature fields",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-10",
+      "severity": "critical",
+      "title": "No fabricated pricing or rate fields"
+    },
+    {
+      "actual": "approval pending_human_approval",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "pending_human_approval; approver None",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-11",
+      "severity": "critical",
+      "title": "No autonomous approval; draft lifecycle"
+    },
+    {
+      "actual": "flagged; approval unchanged",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "flagged; approval unchanged",
+      "outcome": "pass",
+      "references": [
+        "AI-S09"
+      ],
+      "scenario_id": "SOW-12",
+      "severity": "critical",
+      "title": "Client text is rendered as data, injection-safe"
+    },
+    {
+      "actual": "D-10 approved template, section contract and export tests",
+      "classification": "E-full-platform-human-workflow",
+      "dependency": "D-10 approved template, section contract and export tests",
+      "expected": "output matches the approved house template and renders to DOCX/PDF",
+      "outcome": "blocked",
+      "references": [
+        "D-10"
+      ],
+      "scenario_id": "SOW-13",
+      "severity": "major",
+      "title": "WDS house-template fidelity and DOCX/PDF export"
+    },
+    {
+      "actual": "7 identities; verify_identities passed",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "seven identities; verify_identities passes",
+      "outcome": "pass",
+      "references": [
+        "AI-S04",
+        "AI-S05",
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-01",
+      "severity": "critical",
+      "title": "Registry identities are complete and compatible"
+    },
+    {
+      "actual": "legacy capability CAP-3D-CART-SHIFT-SHOPIFY",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "category three_d_cart_shift_shopify_specialist keeps capability CAP-3D-CART-SHIFT-SHOPIFY",
+      "outcome": "pass",
+      "references": [
+        "AI-S04",
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-02",
+      "severity": "critical",
+      "title": "Legacy Shift4Shop identity is preserved"
+    },
+    {
+      "actual": "refused: no operator confirmation is in force for this run",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "execute refuses when no confirmation is recorded",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-08",
+      "severity": "critical",
+      "title": "No execution without operator confirmation (all seven)"
+    },
+    {
+      "actual": "7 outcomes, one per confirmed category",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "outcomes cover every confirmed category exactly once",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-09",
+      "severity": "major",
+      "title": "Confirmed execution yields one outcome per routed category"
+    },
+    {
+      "actual": "categories ()",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "no category is routed for an unsupported platform",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-10",
+      "severity": "major",
+      "title": "Unsupported platform request is refused (no category routed)"
+    },
+    {
+      "actual": "routed ('bigcommerce_specialist', 'shopify_specialist')",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "both categories are routed and the requirement is listed for each",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-11",
+      "severity": "major",
+      "title": "Multi-specialist overlap routes every matching category"
+    },
+    {
+      "actual": "seeded evidence kinds ['synthetic_mock']",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "every seeded record is synthetic mock evidence",
+      "outcome": "pass",
+      "references": [
+        "AI-S04",
+        "AI-S05"
+      ],
+      "scenario_id": "SPEC-12",
+      "severity": "critical",
+      "title": "Synthetic evidence is labelled as mock, never as verified vendor evidence"
+    },
+    {
+      "actual": "validation refused a specialist VERIFIED claim",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "validation refuses a VERIFIED claim from a specialist",
+      "outcome": "pass",
+      "references": [
+        "AI-2",
+        "AI-S07"
+      ],
+      "scenario_id": "SPEC-13",
+      "severity": "critical",
+      "title": "Specialist claim may not assert VERIFIED status (contract)"
+    },
+    {
+      "actual": "not re-executed by AI-S10; see tests/test_ai_s06_orchestration.py",
+      "classification": "A-isolated-synthetic",
+      "dependency": "not re-executed by AI-S10; see tests/test_ai_s06_orchestration.py",
+      "expected": "covered by the named accepted test file, which the committed gate runs",
+      "outcome": "delegated",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-14",
+      "severity": "info",
+      "title": "Partial and failed investigations; transient retry bounded"
+    },
+    {
+      "actual": "approved source-access matrix and per-vendor allowlist (D-02); none granted",
+      "classification": "D-vendor-documentation-or-sandbox",
+      "dependency": "approved source-access matrix and per-vendor allowlist (D-02); none granted",
+      "expected": "each specialist's claims checked against approved official vendor documentation",
+      "outcome": "blocked",
+      "references": [
+        "AI-S04",
+        "D-02"
+      ],
+      "scenario_id": "SPEC-15",
+      "severity": "major",
+      "title": "Real vendor-documentation validation for each of the seven specialists"
+    },
+    {
+      "actual": "platform approval; no sandbox or test store authorised",
+      "classification": "E-full-platform-human-workflow",
+      "dependency": "platform approval; no sandbox or test store authorised",
+      "expected": "end-to-end run against each approved platform sandbox",
+      "outcome": "blocked",
+      "references": [
+        "AI-S10 spec section 10"
+      ],
+      "scenario_id": "SPEC-16",
+      "severity": "major",
+      "title": "Real-platform acceptance for each of the seven platforms"
+    },
+    {
+      "actual": "routed ('shopify_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R01",
+      "severity": "critical",
+      "title": "Requirement routes to Shopify only"
+    },
+    {
+      "actual": "routed ('wordpress_woocommerce_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R02",
+      "severity": "critical",
+      "title": "Requirement routes to WooCommerce/WordPress only"
+    },
+    {
+      "actual": "routed ('bigcommerce_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R03",
+      "severity": "critical",
+      "title": "Requirement routes to BigCommerce only"
+    },
+    {
+      "actual": "routed ('three_d_cart_shift_shopify_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R04",
+      "severity": "critical",
+      "title": "Requirement routes to Shift4Shop (legacy identity) only"
+    },
+    {
+      "actual": "routed ('magento_adobe_commerce_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R05",
+      "severity": "critical",
+      "title": "Requirement routes to Magento Open Source/Adobe Commerce only"
+    },
+    {
+      "actual": "routed ('standalone_applications_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R06",
+      "severity": "critical",
+      "title": "Requirement routes to Standalone applications only"
+    },
+    {
+      "actual": "routed ('middleware_applications_specialist',)",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "expected": "the proposal routes exactly the matching category",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SPEC-R07",
+      "severity": "critical",
+      "title": "Requirement routes to Middleware applications only"
+    }
+  ],
+  "summary": {
+    "by_classification": {
+      "A-isolated-synthetic": {
+        "delegated": 3,
+        "open_limitation": 3,
+        "pass": 74
+      },
+      "B-foundation-integration": {
+        "blocked": 4
+      },
+      "C-real-provider": {
+        "blocked": 1
+      },
+      "D-vendor-documentation-or-sandbox": {
+        "blocked": 2
+      },
+      "E-full-platform-human-workflow": {
+        "blocked": 3
+      },
+      "F-production-security-readiness": {
+        "blocked": 1
+      }
+    },
+    "by_outcome": {
+      "blocked": 11,
+      "delegated": 3,
+      "open_limitation": 3,
+      "pass": 74
+    },
+    "synthetic_executed": 74,
+    "synthetic_failed": 0,
+    "synthetic_passed": 74,
+    "total_scenarios": 91
+  }
+}
