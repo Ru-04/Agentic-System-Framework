@@ -28,7 +28,7 @@ def _request(specialist: SpecialistId, *, workspace: str = WS) -> AdapterRequest
             "capability_id": canonical_capability(specialist),
             "requirement_ids": ["REQ-SYN-1"],
             "evidence_refs": [],
-            "task": "security check",
+            "task": "product variation pricing for the store",
             "allowed_actions": ["read_evidence"],
             "operator_confirmed": True,
         }
