@@ -259,3 +259,47 @@ def test_audit_record_does_not_contain_page_text() -> None:
     )
     record = audit_record(request, response)
     assert secret not in str(record)
+
+
+# --- Shopify: connected to the engine through its inactive approved boundary -----------------
+
+
+def test_shopify_synthetic_page_on_an_approved_host_is_labelled_synthetic() -> None:
+    page = _page(
+        "https://shopify.dev/docs/apps/plans",
+        "Plan feature availability for apps.",
+        platform="shopify",
+    )
+    response = call_adapter(
+        InvestigationProvider(SpecialistId.SHOPIFY, (page,), "1.0"),
+        _request(SpecialistId.SHOPIFY, task="plan feature availability"),
+    )
+    assert response.status == "incomplete"
+    assert len(response.findings) == 1
+    assert response.findings[0].statement.startswith("[SYNTHETIC]")
+
+
+def test_shopify_page_outside_the_plan_scopes_is_refused() -> None:
+    page = _page(
+        "https://www.shopify.com/features",
+        "Plan feature availability for apps.",
+        platform="shopify",
+    )
+    response = call_adapter(
+        InvestigationProvider(SpecialistId.SHOPIFY, (page,), "1.0"),
+        _request(SpecialistId.SHOPIFY, task="plan feature availability"),
+    )
+    assert response.findings == ()
+
+
+def test_shopify_pricing_page_on_the_approved_scope_is_accepted() -> None:
+    page = _page(
+        "https://www.shopify.com/pricing",
+        "Plan feature availability for apps.",
+        platform="shopify",
+    )
+    response = call_adapter(
+        InvestigationProvider(SpecialistId.SHOPIFY, (page,), "1.0"),
+        _request(SpecialistId.SHOPIFY, task="plan feature availability"),
+    )
+    assert len(response.findings) == 1
