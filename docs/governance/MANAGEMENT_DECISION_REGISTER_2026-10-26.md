@@ -100,3 +100,10 @@ Source: WDS Authorized Approver, chat, "I approve all three", 27 October 2026. V
 - **PUSH-01 approved:** normal, non-force push of `claude/webdesk-specialist-baseline-v1-3b21b1` to origin. No protected-branch merge, no deployment, no production activation. Uncommitted changes excluded.
 - **CI-01 approved:** run existing CI checks against the pushed committed SHA. Do not claim uncommitted Sprint 4 configuration passed CI.
 - **ACCESS-01 approved:** restoration of authorized GitHub write access through normal administration. No credential modification or bypass by the assistant.
+
+## Retrospective and Sprint 3 / Sprint 4 decisions (27 October 2026, chat)
+Source: WDS Authorized Approver, chat, 27 October 2026, stated as "I, AS (Arushi Sharma), acting as WDS Authorized Approver". Recorded as stated. No signature recorded.
+- **A1 APPROVED RETROSPECTIVELY:** retain `db9e785` (documentation-only, CI run #27 record). Record that the push exceeded its approval scope when made; WDS then authorised retaining it. Commit-specific ratification only. Not blanket approval for future pushes. No revert. No history rewrite.
+- **A2 APPROVED AND CONFIRMED:** M2 Sprint 3 formal management acceptance against `3969a8f` and `5105628`, with associated seven-specialist foundation deliverables and governance records. Foundation-level only. Does not claim real evidence-backed platform investigation. Not extended to later Sprint 4 changes.
+- **A3:** WDS confirmation of PG QA outcome APPROVED. PG QA result as reported by WDS: PASS, no defects reported. PG personal independence declaration: PENDING VERIFICATION (no PG-completed declaration in repository). PG personal review and sign-off: PENDING VERIFICATION (no PG-signed record in repository). Not treated as verified.
+- **A4 AUTHORIZED:** commencement of M2 Sprint 4 engineering within frozen scope, non-production, deterministic investigation development and security testing. Does not authorise bypassing independent QA, unapproved documentation, live LLM calls, or production integration. Sprint 4 formal acceptance and source activation remain separate gates.
