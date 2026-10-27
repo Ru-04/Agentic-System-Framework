@@ -27,7 +27,7 @@ Review notes not treated as defects:
 
 ## Gate after remediation
 
-- Full suite: 1640 passed, 3 skipped. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`.
+- Full suite: 1640 passed, 3 skipped. Scope note: the counts include 64 tests in three untracked Foundation files (`ai_engine/tests/test_ai_s02_s04_acceptance_distinctions.py`, `test_ai_s02_s04_boundaries.py`, `test_ai_s02_s04_integration.py`), which are not committed. The committed tree alone collects 1576 tests. The 3 skips are in the untracked file. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`.
 - AI-S08 focused: 65 tests, all passing.
 - Ruff check and format check: clean. Strict mypy across source and tests: clean.
 - AI-S01 to AI-S07 contract, orchestration, applications and governance paths: unchanged against HEAD.

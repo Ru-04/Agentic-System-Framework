@@ -36,7 +36,7 @@ Built-in float addition was chosen because the AI-S02 import guard permits only 
 ## 4. Test results
 
 Final candidate, after the completion pass:
-- `pytest -q`: 1640 passed, 3 skipped. The three skips are the Foundation integration tests at `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, visibly skipped and not run offline.
+- `pytest -q`: 1640 passed, 3 skipped. Scope note: the counts include 64 tests in three untracked Foundation files (`ai_engine/tests/test_ai_s02_s04_acceptance_distinctions.py`, `test_ai_s02_s04_boundaries.py`, `test_ai_s02_s04_integration.py`), which are not committed. The committed tree alone collects 1576 tests. The 3 skips are in the untracked file. The three skips are the Foundation integration tests at `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, visibly skipped and not run offline.
 - AI-S08 focused: 65 tests in `test_ai_s08_estimation.py`, all passing.
 - AI-S05, AI-S06 and AI-S07 focused: 254 passed. AI-S01 to AI-S04 focused subset: 239 passed.
 - `ruff check .`: clean. `ruff format --check .`: clean. `mypy --strict src tests`: no issues in 141 files.

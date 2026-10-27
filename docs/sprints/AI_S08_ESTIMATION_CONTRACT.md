@@ -50,7 +50,7 @@ Readiness never removes a line from totals. Totals always show the numbers the l
 
 ## 6. Validation (fail closed)
 
-Refused with an `EstimationInputError`. Error messages name fields and error types only: list positions appear as `<index>`, mapping keys and unknown field names appear as `<key>`, and requirement and task identifiers are never echoed. Refused:
+Refused with an `EstimationInputError`. Error messages name fields and error types only: list positions and integer mapping keys appear as `<index>`, other mapping keys and unknown field names appear as `<key>`, and requirement and task identifiers are never echoed. Refused:
 - Malformed identifiers (requirement, task, implementation key, reference, version, category).
 - Non-finite, negative, unordered or non-float hours. Integers are stored as floats; text and booleans are refused.
 - A discipline outside the seven, or the same discipline twice on one task.
