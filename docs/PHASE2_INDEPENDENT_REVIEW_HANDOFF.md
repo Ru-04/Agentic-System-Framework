@@ -14,8 +14,9 @@ Ready for independent Phase 2 review, not accepted. Caveats the reviewer must we
 - A temporary probe file may remain untracked in the worktree until removed.
 
 
-- Implemented and verified locally: full suite 659 passed, 0 failed; ruff check clean; mypy strict clean;
-  migration 0042 round trip catalog-identical.
+- Implemented and verified locally (ordered pass at `c80b0d5`'s code): full suite 666 passed, 0 failed, 0 errors;
+  ruff check clean; mypy strict clean; migration 0043 round trip (head, down to 0042, up) with the downgrade
+  matching the 0042 function snapshot. Ruff format: six documented exceptions.
 - Not accepted. Phase 2 is not declared accepted. Phase 1 independent acceptance is a separate gate and is not recorded
   here.
 
