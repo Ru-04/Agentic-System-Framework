@@ -31,6 +31,8 @@ Test file: `ai_engine/tests/test_ai_s08_estimation.py`. Every calculation is che
 | 21 | Compatibility with AI-S01 to AI-S07 | `test_the_offline_pipeline_runs_orchestration_review_then_estimation`; the AI-S01–S07 suites run in the gate |
 | 22 | Offline AI-S09 handoff suitability | `test_the_draft_serialises_to_json_and_is_deterministic` |
 
+QA remediation tests: `test_an_empty_estimate_is_never_complete`; `test_a_blocker_without_requirement_ids_blocks_readiness`; `test_tasks_without_hours_appear_in_the_unassigned_bucket`; `test_error_messages_do_not_echo_mapping_keys_extra_fields_or_identifiers`; `test_a_missing_governance_assessment_names_a_count_not_identifiers`; `test_an_estimate_with_no_requirements_is_incomplete_and_needs_inputs`; `test_an_integer_mapping_key_does_not_leak_its_value`.
+
 ## 2. Security and integrity tests (brief section 5)
 
 | Control | Tests |
@@ -53,8 +55,8 @@ Test file: `ai_engine/tests/test_ai_s08_estimation.py`. Every calculation is che
 
 ## 3. Gate results (at this checkpoint)
 
-- Full suite: 1633 passed, 3 skipped. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, not run offline.
-- AI-S08 focused: 58 tests, all passing.
+- Full suite: 1640 passed, 3 skipped. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, not run offline.
+- AI-S08 focused: 65 tests, all passing (58 at checkpoint, plus 7 QA regression tests).
 - AI-S05, AI-S06 and AI-S07 focused: 254 passed. AI-S01 to AI-S04 focused: 239 passed.
 - Ruff check and format check: clean. Strict mypy across source and tests: clean.
 - AI-S01 to AI-S07 contract, orchestration, applications and governance paths: unchanged against HEAD.

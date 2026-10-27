@@ -263,7 +263,7 @@ class EstimateDraft(ContractModel):
     governance_fingerprint: str | None
     specialist_result_refs: Mapping[SpecialistCategoryId, str]
     lines: tuple[EstimateLine, ...]
-    by_discipline: Mapping[Discipline, Totals]
+    by_discipline: Mapping[str, Totals]
     by_requirement: Mapping[RequirementId, Totals]
     by_work_category: Mapping[WorkCategory, Totals]
     project: Totals
@@ -273,10 +273,31 @@ class EstimateDraft(ContractModel):
     calculation_provenance: str
 
 
+_FIELD_NAMES = frozenset(
+    (
+        *ThreePoint.model_fields,
+        *ResourceAllocation.model_fields,
+        *EstimateBasis.model_fields,
+        *RequirementSnapshot.model_fields,
+        *TaskInput.model_fields,
+        *GovernanceSummary.model_fields,
+        *EstimateRequest.model_fields,
+    )
+)
+
+
+def _segment(part: object) -> str:
+    """Positions and known field names are shown; mapping keys and unknown names are not."""
+    if isinstance(part, int):
+        return "<index>"
+    text = str(part)
+    return text if text in _FIELD_NAMES else "<key>"
+
+
 def sanitized(error: ValidationError) -> EstimationInputError:
     """Turn a pydantic error into a message naming fields and error types, never input values."""
     parts = [
-        f"{'.'.join(str(p) for p in e['loc'])}: {e['type']}"
+        f"{'.'.join(_segment(p) for p in e['loc'])}: {e['type']}"
         for e in error.errors(include_input=False)
     ]
     return EstimationInputError("invalid estimation input: " + "; ".join(parts[:10]))

@@ -40,6 +40,8 @@ from ai_engine.estimation.contracts import (
     worst,
 )
 
+UNASSIGNED = "unassigned"
+
 PROVENANCE = (
     "Per line, hours are the stated low, likely and high of one discipline from one numeric basis. "
     "Totals are sums of estimated line hours (built-in float addition, in line-id order). "
@@ -81,7 +83,9 @@ def _require_governance(
         raise EstimationInputError("governance review belongs to another project")
     missing = sorted(rid for rid in snapshots if rid not in governance.requirement_status)
     if missing:
-        raise EstimationInputError(f"no governance assessment for {', '.join(missing)}")
+        raise EstimationInputError(
+            f"governance has no assessment for {len(missing)} requirement(s)"
+        )
     return governance
 
 
@@ -91,7 +95,7 @@ def _check_snapshots(request: EstimateRequest) -> dict[str, RequirementSnapshot]
         if snapshot.project_id != request.project_id:
             raise EstimationInputError("a requirement snapshot belongs to another project")
         if snapshot.requirement_id in snapshots:
-            raise EstimationInputError(f"duplicate requirement snapshot {snapshot.requirement_id}")
+            raise EstimationInputError("duplicate requirement snapshot")
         snapshots[snapshot.requirement_id] = snapshot
     return snapshots
 
@@ -102,21 +106,17 @@ def _check_tasks(
     tasks: dict[str, TaskInput] = {}
     for task in request.tasks:
         if task.task_id in tasks:
-            raise EstimationInputError(f"duplicate task {task.task_id}")
+            raise EstimationInputError("duplicate task identifier")
         if task.requirement_id not in snapshots:
-            raise EstimationInputError(
-                f"task {task.task_id} refers to a requirement not in the request"
-            )
+            raise EstimationInputError("a task refers to a requirement not in the request")
         for category in task.specialist_category_ids:
             if category not in request.specialist_result_refs:
-                raise EstimationInputError(
-                    f"task {task.task_id} cites an unknown specialist result"
-                )
+                raise EstimationInputError("a task cites an unknown specialist result")
         tasks[task.task_id] = task
     for task in tasks.values():
         unknown = [dep for dep in task.dependencies if dep not in tasks]
         if unknown:
-            raise EstimationInputError(f"task {task.task_id} depends on a task not in the request")
+            raise EstimationInputError("a task depends on a task not in the request")
     return tasks
 
 
@@ -206,7 +206,7 @@ def _sum(values: Iterable[float]) -> float:
     return sum(values, 0.0)
 
 
-def _totals(lines: Iterable[EstimateLine]) -> Totals:
+def _totals(lines: Iterable[EstimateLine], *, incomplete: bool = False) -> Totals:
     selected = list(lines)
     estimated = [line for line in selected if line.status is EstimateStatus.INDICATIVE]
     excluded = tuple(
@@ -218,7 +218,7 @@ def _totals(lines: Iterable[EstimateLine]) -> Totals:
         high=_sum(cast(float, line.high) for line in estimated),
         estimated_line_count=len(estimated),
         excluded_line_ids=excluded,
-        complete=not excluded,
+        complete=not excluded and not incomplete,
     )
 
 
@@ -323,13 +323,18 @@ def estimate(request: EstimateRequest) -> EstimateDraft:
         )
 
     lines_tuple = tuple(lines)
-    by_discipline = {
-        d: _totals(line for line in lines_tuple if line.discipline is d)
+    by_discipline: dict[str, Totals] = {
+        d.value: _totals(line for line in lines_tuple if line.discipline is d)
         for d in Discipline
         if any(line.discipline is d for line in lines_tuple)
     }
+    if any(line.discipline is None for line in lines_tuple):
+        by_discipline[UNASSIGNED] = _totals(line for line in lines_tuple if line.discipline is None)
     by_requirement = {
-        rid: _totals(line for line in lines_tuple if rid in line.requirement_ids)
+        rid: _totals(
+            (line for line in lines_tuple if rid in line.requirement_ids),
+            incomplete=not any(rid in line.requirement_ids for line in lines_tuple),
+        )
         for rid in sorted(snapshots)
     }
     by_work_category = {
@@ -347,6 +352,8 @@ def estimate(request: EstimateRequest) -> EstimateDraft:
     covered = {rid for line in lines_tuple for rid in line.requirement_ids}
     uncovered = sorted(rid for rid in snapshots if rid not in covered)
     outstanding += [f"{rid}: no task estimates this requirement" for rid in uncovered]
+    if not snapshots:
+        outstanding.append("the estimate contains no requirements")
     if governance.escalation_count:
         outstanding.append(
             f"{governance.escalation_count} governance escalation(s) need human review"
@@ -358,8 +365,10 @@ def estimate(request: EstimateRequest) -> EstimateDraft:
     readiness_inputs = [line.readiness for line in lines_tuple] + list(
         requirement_readiness.values()
     )
-    if uncovered:
+    if uncovered or not snapshots:
         readiness_inputs.append(Readiness.NEEDS_INPUTS)
+    if governance.has_blocker:
+        readiness_inputs.append(Readiness.BLOCKED)
     project_readiness = worst(readiness_inputs)
     return EstimateDraft(
         project_id=request.project_id,
@@ -372,7 +381,7 @@ def estimate(request: EstimateRequest) -> EstimateDraft:
         by_discipline=by_discipline,
         by_requirement=by_requirement,
         by_work_category=by_work_category,
-        project=_totals(lines_tuple),
+        project=_totals(lines_tuple, incomplete=bool(uncovered) or not snapshots),
         requirement_readiness=requirement_readiness,
         readiness=project_readiness,
         outstanding_issues=tuple(sorted(outstanding)),

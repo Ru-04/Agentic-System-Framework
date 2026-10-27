@@ -16,8 +16,8 @@ An `EstimateDraft` (`ai_engine/src/ai_engine/estimation/contracts.py`) with:
 ## What AI-S09 must respect
 
 1. An estimate with `status == needs_inputs` has no numbers. Do not fill it in.
-2. `complete == False` means the totals exclude at least one unestimated line. Show the excluded line IDs; do not present the total as the project estimate.
-3. A line with readiness `blocked`, `unresolved` or `provisional` is not established. Carry its readiness into the draft SOW.
+2. `complete == False` means the totals exclude at least one unestimated line, or the estimate is empty, or a requirement has no task. Show the excluded line IDs and the outstanding issues; do not present the total as the project estimate. Lines with no hours sit in the `unassigned` discipline bucket.
+3. A line with readiness `blocked`, `unresolved` or `provisional` is not established. Carry its readiness into the draft SOW. A project readiness of `blocked` can come from a governance blocker that names no requirement.
 4. By-requirement subtotals can include shared lines and do not add to the project total. Use `project` for the overall figure.
 5. Numbers come from caller-supplied bases. The WDS reference dataset and authorised historical data are not provided (C-08, D-04). Record that dependency in the draft SOW.
 6. Governance `evidence_backed` means an admitted record supports the requirement under the AI-S07 gates. It is not an approval, a materiality decision or a commitment.

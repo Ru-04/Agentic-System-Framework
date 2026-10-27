@@ -655,7 +655,7 @@ def test_a_missing_governance_review_is_refused() -> None:
 
 def test_a_requirement_without_a_governance_assessment_is_refused() -> None:
     governance = _governance({REQ1: "evidence_backed"})
-    with pytest.raises(EstimationInputError, match="no governance assessment"):
+    with pytest.raises(EstimationInputError, match="has no assessment"):
         estimate(
             _request(
                 (_task(),), requirements=(_snapshot(REQ1), _snapshot(REQ2)), governance=governance
@@ -775,3 +775,81 @@ def test_a_requirement_with_no_task_makes_the_project_needs_inputs() -> None:
     assert draft.readiness is Readiness.NEEDS_INPUTS
     assert "REQ-SYN-0002: no task estimates this requirement" in draft.outstanding_issues
     assert draft.project.likely == 12.0
+
+
+def test_an_empty_estimate_is_never_complete() -> None:
+    draft = estimate(_request((), requirements=(_snapshot(REQ1), _snapshot(REQ2))))
+    assert draft.lines == ()
+    assert draft.project.complete is False
+    assert draft.project.estimated_line_count == 0
+    assert all(totals.complete is False for totals in draft.by_requirement.values())
+    assert draft.readiness is Readiness.NEEDS_INPUTS
+
+
+def test_a_blocker_without_requirement_ids_blocks_readiness() -> None:
+    governance = _governance({REQ1: "evidence_backed"}, has_blocker=True)
+    draft = estimate(_request((_task(),), requirements=(_snapshot(REQ1),), governance=governance))
+    assert draft.requirement_readiness[REQ1] is Readiness.READY_FOR_REVIEW
+    assert draft.readiness is Readiness.BLOCKED
+
+
+def test_tasks_without_hours_appear_in_the_unassigned_bucket() -> None:
+    tasks = (
+        _task("TSK-001", key="IMP-A", rid=REQ1),
+        _task("TSK-002", key="IMP-B", rid=REQ2, allocations=()),
+    )
+    draft = estimate(_request(tasks))
+    assert draft.by_discipline["frontend"].complete is True
+    assert draft.by_discipline["unassigned"].complete is False
+    assert draft.by_discipline["unassigned"].excluded_line_ids == draft.project.excluded_line_ids
+
+
+def test_error_messages_do_not_echo_mapping_keys_extra_fields_or_identifiers() -> None:
+    raw = _raw_request()
+    raw["specialist_result_refs"] = {"backendSENTINEL9Q": "x"}
+    with pytest.raises(EstimationInputError) as mapping_key:
+        build_request(raw)
+    assert "SENTINEL9Q" not in str(mapping_key.value)
+
+    raw = _raw_request()
+    raw["tasks"][0]["allocations"][0]["hours"]["SENTINEL9Q"] = 1.0
+    with pytest.raises(EstimationInputError) as extra_field:
+        build_request(raw)
+    assert "SENTINEL9Q" not in str(extra_field.value)
+    assert "hours" in str(extra_field.value)
+
+    raw = _raw_request()
+    raw["tasks"].append(dict(raw["tasks"][0], task_id="TSK-SENTINEL9Q"))
+    raw["tasks"].append(dict(raw["tasks"][0], task_id="TSK-SENTINEL9Q"))
+    with pytest.raises(EstimationInputError) as duplicate:
+        estimate(build_request(raw))
+    assert "SENTINEL9Q" not in str(duplicate.value)
+
+
+def test_a_missing_governance_assessment_names_a_count_not_identifiers() -> None:
+    governance = _governance({REQ1: "evidence_backed"})
+    with pytest.raises(EstimationInputError) as info:
+        estimate(
+            _request(
+                (_task(),), requirements=(_snapshot(REQ1), _snapshot(REQ2)), governance=governance
+            )
+        )
+    assert REQ2 not in str(info.value)
+    assert "1 requirement" in str(info.value)
+
+
+def test_an_estimate_with_no_requirements_is_incomplete_and_needs_inputs() -> None:
+    governance = _governance({})
+    draft = estimate(_request((), requirements=(), governance=governance))
+    assert draft.lines == ()
+    assert draft.project.complete is False
+    assert draft.readiness is Readiness.NEEDS_INPUTS
+    assert "the estimate contains no requirements" in draft.outstanding_issues
+
+
+def test_an_integer_mapping_key_does_not_leak_its_value() -> None:
+    raw = _raw_request()
+    raw["specialist_result_refs"] = {987654321: "x"}
+    with pytest.raises(EstimationInputError) as info:
+        build_request(raw)
+    assert "987654321" not in str(info.value)

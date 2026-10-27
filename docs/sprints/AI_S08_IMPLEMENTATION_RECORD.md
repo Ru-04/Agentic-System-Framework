@@ -36,12 +36,23 @@ Built-in float addition was chosen because the AI-S02 import guard permits only 
 ## 4. Test results
 
 Final candidate, after the completion pass:
-- `pytest -q`: 1633 passed, 3 skipped. The three skips are the Foundation integration tests at `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, visibly skipped and not run offline.
-- AI-S08 focused: 58 tests in `test_ai_s08_estimation.py`, all passing.
+- `pytest -q`: 1640 passed, 3 skipped. The three skips are the Foundation integration tests at `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, visibly skipped and not run offline.
+- AI-S08 focused: 65 tests in `test_ai_s08_estimation.py`, all passing.
 - AI-S05, AI-S06 and AI-S07 focused: 254 passed. AI-S01 to AI-S04 focused subset: 239 passed.
 - `ruff check .`: clean. `ruff format --check .`: clean. `mypy --strict src tests`: no issues in 141 files.
 
-## 5. Defects found while building (fixed before this checkpoint)
+## 5. Defects found while building, and independent QA remediation
+
+Independent QA of commit `0a7bfee` returned FAIL (0 blocker, 3 major, 2 minor). Each finding was reproduced and fixed with a regression test. See `AI_S08_QA_FINDINGS_REGISTER.md`.
+
+- MAJOR-1: an empty estimate reported `complete=True`. Fixed: an empty estimate and any requirement with no task are incomplete. Tests: `test_an_empty_estimate_is_never_complete`, `test_a_requirement_with_no_task_makes_the_project_needs_inputs`.
+- MAJOR-2: a blocking finding that named no requirement did not affect readiness. Fixed: `has_blocker` makes project readiness `blocked`. Test: `test_a_blocker_without_requirement_ids_blocks_readiness`.
+- MAJOR-3: error messages echoed mapping keys and extra field names. Fixed: sanitisation shows positions, known field names and `<key>`. Test: `test_error_messages_do_not_echo_mapping_keys_extra_fields_or_identifiers`.
+- MINOR-1: error messages named requirement and task identifiers. Fixed: messages give counts or no identifiers. Test: `test_a_missing_governance_assessment_names_a_count_not_identifiers`.
+- Second verification round (FAIL, two residual defects, both fixed): an estimate with no requirements at all still reported complete, now incomplete and needs inputs (test `test_an_estimate_with_no_requirements_is_incomplete_and_needs_inputs`); integer mapping keys still leaked their value, now shown as `<index>` or `<key>` (test `test_an_integer_mapping_key_does_not_leak_its_value`).
+- MINOR-2: lines with no hours were absent from by-discipline totals. Fixed: an `unassigned` bucket. Test: `test_tasks_without_hours_appear_in_the_unassigned_bucket`.
+
+Defects found while building, fixed before QA:
 
 - Shared-task conflict check compared hours across all disciplines of a task, so a task with two roles conflicted with itself. Fixed: the check is discipline-scoped. Test: `test_a_task_with_two_roles_yields_one_line_per_role_and_discipline_totals`.
 - Integer hours: strict floats accept integers, so the test asserts the stored float. Text is still refused. Test: `test_an_integer_hour_value_is_stored_as_a_float_and_text_is_refused`.

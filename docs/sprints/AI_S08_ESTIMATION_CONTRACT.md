@@ -44,13 +44,13 @@ Per requirement, from the governance status:
 - `unsupported` gives `unresolved`.
 - `conflicted`, or any requirement named in the blocking list, gives `blocked`.
 
-Per line: `needs_inputs` if the line has no numbers, otherwise the most restrictive readiness of the requirements it lists. Per project: the most restrictive of all line and requirement readiness, and `needs_inputs` if any requirement has no task.
+Per line: `needs_inputs` if the line has no numbers, otherwise the most restrictive readiness of the requirements it lists. Per project: the most restrictive of all line and requirement readiness, `needs_inputs` if any requirement has no task, and `blocked` whenever the governance review reports a blocking finding (even one that names no requirement).
 
 Readiness never removes a line from totals. Totals always show the numbers the line holds, and the readiness states beside them.
 
 ## 6. Validation (fail closed)
 
-Refused with an `EstimationInputError` (which names fields and error types, never values):
+Refused with an `EstimationInputError`. Error messages name fields and error types only: list positions appear as `<index>`, mapping keys and unknown field names appear as `<key>`, and requirement and task identifiers are never echoed. Refused:
 - Malformed identifiers (requirement, task, implementation key, reference, version, category).
 - Non-finite, negative, unordered or non-float hours. Integers are stored as floats; text and booleans are refused.
 - A discipline outside the seven, or the same discipline twice on one task.
@@ -66,9 +66,9 @@ Refused with an `EstimationInputError` (which names fields and error types, neve
 1. Tasks with the same implementation key and discipline form one line. Its task IDs and requirement IDs are listed; its hours are counted once.
 2. A line is `needs_inputs` if any member task has an issue (stale revision, no hours, no basis, unauthorised cross-project basis, synthetic fixture not permitted, unconfirmed or stale reference version), or if members disagree on hours, basis or work category.
 3. Totals are the sum of the low, likely and high of estimated lines, in line-ID order, using built-in float addition. There is no weighting, expected value, contingency, confidence score, duration or rate.
-4. Project totals count each estimated line once. `complete` is False whenever any line in the group is unestimated, and the group lists the excluded line IDs.
+4. Project totals count each estimated line once. `complete` is False whenever any line in the group is unestimated, and the group lists the excluded line IDs. An empty estimate, and any requirement with no task, is incomplete: its totals say so, and it is an outstanding issue.
 5. By-requirement totals include every line that lists the requirement. A shared line therefore appears in each requirement's subtotal, and the subtotals do not add to the project total. This is stated in the draft's calculation provenance.
-6. By-discipline and by-work-category totals group lines by their discipline and work category. A line whose members disagree on work category is `needs_inputs`, so a line has one category.
+6. By-discipline and by-work-category totals group lines by their discipline and work category. Lines with no hours have no discipline; they form an `unassigned` bucket in by-discipline totals. A line whose members disagree on work category is `needs_inputs`, so a line has one category.
 
 ## 8. Open policy decisions (recorded; not decided here)
 
