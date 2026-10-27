@@ -39,3 +39,8 @@ A job is marked successful only when all its steps succeed, and no step in this 
 - File comparison: the two files in the development worktree match `8f7ba79` exactly, ignoring CRLF line endings.
 - Promotion: committed locally to the development branch as `186fd3b` (the two files only). **Not pushed.**
 - Source activation: none. All evidence sources remain inactive. No profile reads the configuration.
+
+## Development-branch CI run #27 (commit 694b978)
+- Branch: `claude/webdesk-specialist-baseline-v1-3b21b1`. Remote head confirmed as `694b978` after the approved normal push (fast-forward from `1a12fee`).
+- Workflow: `specialist-ci` run #27, triggered by push. Status: **completed successfully**, duration 3m 0s, as shown on the Actions list.
+- Job-level result is confirmed on the list. Per-job and per-test detail requires sign-in and is not recorded here.
