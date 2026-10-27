@@ -40,7 +40,7 @@ Additional tests: unrepresented-requirement and milestone checks (`test_mileston
 ## 2. Gate results (at this checkpoint)
 
 - Full suite (development worktree): 1712 passed, 3 skipped. The three skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, not run offline.
-- Committed tree, clean export: to be recorded after commit (see the implementation record). The development worktree adds 67 collected tests from three untracked Foundation files (64 pass, 3 skip).
+- Committed tree, clean export of 4e23c41 (after remediation): 1648 passed, 0 skipped; SOW 72 passed; ruff and strict mypy (142 files) clean. The development worktree adds 64 passing tests from three untracked Foundation files. The development worktree adds 67 collected tests from three untracked Foundation files (64 pass, 3 skip).
 - AI-S09 focused: 72 passed.
 - Regression subset (AI-S02 guard and contracts, AI-S05, AI-S06, AI-S07, AI-S08, AI-S09): 474 passed.
 - Ruff check and format check: clean. Strict mypy: clean (145 files).
