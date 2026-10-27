@@ -31,6 +31,7 @@ Governing text: REQUIREMENT_SCHEMA.md 4.4 (ScopeItem), 4.8 (Estimate), 4.9 (Assu
 - `requirements`: requirement ID, project, revision, statement (data), origin (`client_explicit` or `inferred`), disposition (`in_scope` or `proposed_exclusion`), and a rationale required for every proposed exclusion.
 - `overview` (optional): business objective and solution summary as client-supplied or proposed text, with a source reference.
 - `workstreams`, `deliverables` (each with at least one requirement, acceptance criteria if supplied, dependencies, constraints, evidence and finding references, and AI-S08 estimate task IDs), `findings` (AI-S06 specialist category, kind and summary), `tech_notes` (by topic), `assumptions` (key, value and status), `risks`, `questions`, `client_items`, `milestones` (deliverable groupings and dependencies).
+- `specialist_result_refs`: the specialist result references for every finding category. A finding whose category is not listed is refused, with or without an estimate.
 - `governance` (required): an AI-S07 governance summary, copied from the review.
 - `estimate` (optional): an AI-S08 `EstimateDraft`. Without it, no effort is presented.
 
@@ -41,7 +42,7 @@ The request model forbids unknown fields. Approval fields, approver identities, 
 - `document_control`: SOW ID and version, previous version, project, requirement revisions, specialist result references, governance run and fingerprint, estimate version and draft status, generator name, and a source manifest.
 - `approval`: state `pending_human_approval`, required role Approver, the separation rule, and `preparer` and `approver` fixed to None.
 - `overview`, `overview_state`: the business objective is shown only when supplied; otherwise the item reads "not supported by approved input".
-- `sections`: scope_in, scope_out, deliverables, acceptance, technical, resources, milestones, assumptions, client_responsibilities, risks, change_control.
+- `sections`: scope_in (with in-scope requirement statements), scope_out, specialist_findings (with finding summaries), deliverables, acceptance, technical, resources, milestones, assumptions, client_responsibilities, risks, change_control.
 - `workstreams`, `deliverables`, `milestones`: typed views with traceable references and per-item estimate values.
 - `resources`: the AI-S08 draft estimate, presented unchanged, with per-line status and readiness, by-discipline totals with completeness, and a banner that marks partial totals.
 - `traceability`: one row per requirement from requirement to findings, governance status and readiness, estimate lines, deliverables and workstreams.
@@ -49,7 +50,7 @@ The request model forbids unknown fields. Approval fields, approver identities, 
 
 ## 5. Estimate semantics (AI-S08 preserved)
 
-- A `needs_inputs` line has no numbers, and the SOW shows none. A deliverable or workstream with no estimated line shows no value either, and never zero.
+- A `needs_inputs` line has no numbers, and the SOW shows none. A deliverable or workstream with no estimated line shows no value either, and never zero. A discipline bucket with no numeric line is shown as not estimated. A workstream is complete only when every deliverable in it is complete.
 - A total with any excluded line is marked incomplete. Partial totals are labelled PARTIAL and are not presented as the project estimate.
 - Readiness for a requirement is the stricter of the AI-S07 governance readiness in this SOW and the estimate's readiness. A blocker therefore stays visible even when the estimate was built without it.
 - No rate, price, discount, weighting, contingency or expected value exists in the model.
@@ -66,9 +67,12 @@ Reported in `integrity_issues`, never silently dropped:
 - Stale requirement revisions relative to the estimate, or requirements missing from it.
 - Deliverables citing estimate tasks that do not exist.
 - Missing estimate reference (resource effort not supported).
-- Instruction-like text in any source text, flagged as data and not executed.
+- Estimate effort for requirements not in the SOW: the estimate totals include it, so the project total is marked partial and the lines are listed.
+- A workstream that holds only proposed exclusions (contradictory workstream scope).
+- A milestone that groups no deliverable.
+- Instruction-like text in any free-text field (requirement, overview, workstream, deliverable title, description, criteria, dependencies and constraints, finding, technical note, assumption statement and value, risk, question, client item, milestone title), flagged as data and not executed.
 
-Refused at input (`SowInputError`): duplicate identifiers; references to unknown requirements, deliverables, workstreams, findings, specialist results or milestones; dependency cycles in deliverables or milestones; a requirement, governance review or estimate from another project; a missing governance review; a governance review that lacks an assessment for any requirement.
+Refused at input (`SowInputError`), unconditionally: duplicate identifiers; references to unknown requirements, deliverables, workstreams, findings, specialist results or milestones; dependency cycles in deliverables or milestones; a requirement, governance review or estimate from another project; a missing governance review; a governance review that lacks an assessment for any requirement.
 
 ## 7. Milestones and time
 

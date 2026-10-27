@@ -2,7 +2,7 @@
 
 Status: engineering checkpoint. Not formal acceptance. Independent QA of the complete implementation is pending.
 
-Test file: `ai_engine/tests/test_ai_s09_sow.py` (56 tests). Synthetic inputs; estimates produced by the real AI-S08 engine.
+Test file: `ai_engine/tests/test_ai_s09_sow.py` (72 tests, including the independent QA remediation tests). Synthetic inputs; estimates produced by the real AI-S08 engine.
 
 ## 1. Mandatory test coverage (brief section 8)
 
@@ -39,11 +39,11 @@ Additional tests: unrepresented-requirement and milestone checks (`test_mileston
 
 ## 2. Gate results (at this checkpoint)
 
-- Full suite (development worktree): 1696 passed, 3 skipped. The three skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, not run offline.
+- Full suite (development worktree): 1712 passed, 3 skipped. The three skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, not run offline.
 - Committed tree, clean export: to be recorded after commit (see the implementation record). The development worktree adds 67 collected tests from three untracked Foundation files (64 pass, 3 skip).
-- AI-S09 focused: 56 passed.
-- Regression subset (AI-S02 guard and contracts, AI-S05, AI-S06, AI-S07, AI-S08, AI-S09): 458 passed.
-- Ruff check and format check: clean. Strict mypy: clean (144 files).
+- AI-S09 focused: 72 passed.
+- Regression subset (AI-S02 guard and contracts, AI-S05, AI-S06, AI-S07, AI-S08, AI-S09): 474 passed.
+- Ruff check and format check: clean. Strict mypy: clean (145 files).
 - AI-S01 to AI-S08 contract, orchestration, applications, governance and estimation paths: unchanged against HEAD before this sprint's commit.
 
 ## 3. Acceptance criteria (sprint specification section 9 and brief stage 4)

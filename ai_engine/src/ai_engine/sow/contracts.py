@@ -236,6 +236,7 @@ class SowRequest(ContractModel):
     milestones: tuple[MilestoneInput, ...] = ()
     governance: GovernanceSummary | None = None
     estimate: EstimateDraft | None = None
+    specialist_result_refs: dict[SpecialistCategoryId, str] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- outputs
@@ -349,7 +350,7 @@ class ResourceView(ContractModel):
     project_high: float | None
     excluded_line_ids: tuple[str, ...]
     banner: str
-    by_discipline: dict[str, tuple[float, float, float, bool]]
+    by_discipline: dict[str, tuple[float | None, float | None, float | None, bool]]
     lines: tuple[ResourceLine, ...]
 
 

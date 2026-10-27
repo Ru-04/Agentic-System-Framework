@@ -28,11 +28,11 @@ Reused without change: AI-S08 `EstimateDraft`, `GovernanceSummary` and readiness
 ## 3. Test results
 
 Final candidate (this checkpoint):
-- Full suite: 1696 passed, 3 skipped. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, visibly skipped and not run offline.
-- AI-S09 focused: 56 tests in `test_ai_s09_sow.py`, all passing.
-- Regression subset (AI-S02 guard and contracts, AI-S05, AI-S06, AI-S07, AI-S08, AI-S09): 458 passed.
-- Ruff check and format check: clean. Strict mypy across source and tests: clean (144 files).
-- The 1696 count includes tests from three untracked Foundation files in the development worktree (not committed). See the QA and acceptance matrix for the committed-tree count.
+- Full suite (development worktree, including untracked Foundation files): 1712 passed, 3 skipped. The skips are the Foundation tests at lines 357, 362 and 367 of `test_ai_s02_s04_acceptance_distinctions.py`, visibly skipped and not run offline.
+- AI-S09 focused: 72 tests in `test_ai_s09_sow.py`, all passing.
+- Regression subset (AI-S02 guard and contracts, AI-S05, AI-S06, AI-S07, AI-S08, AI-S09): 474 passed.
+- Ruff check and format check: clean. Strict mypy across source and tests: clean (145 files).
+- The 1712 count includes tests from three untracked Foundation files in the development worktree (not committed). See the QA and acceptance matrix for the committed-tree count.
 
 ## 4. Defects found during construction (fixed before this checkpoint)
 

@@ -10,7 +10,7 @@ Status: register for the draft SOW sprint. Entries marked OPEN need a WDS or Fou
 | D-05 | Roles; no self-approval; SOW approver must differ from preparer and submitter | OPEN (Foundation action matrix) | The approval placeholder is `pending_human_approval` with no approver. |
 | Gate F (REVIEW_POLICY) | Approver separation and deny-by-default authorisation | OPEN (Foundation) | Documented in the approval rule; not enforced in the engine. |
 | Gate D (REVIEW_POLICY) | No commitment without an explicit commitment | Policy text present; enforcement is Foundation | The engine never sets commitment; every item is a proposal. |
-| Gate E (REVIEW_POLICY) and D-09 | Critical findings are not waivable; block final approval until resolved or reclassified | Policy text present; enforcement is Foundation | Blockers and critical-type findings stay visible in `risks`; the engine offers no waiver. |
+| Gate E (REVIEW_POLICY) and D-09 | Critical findings are not waivable; block final approval until resolved or reclassified | Policy text present; enforcement is Foundation | Blockers stay visible in `risks`. Severity classes (critical, major, minor) are not computed by this engine; the governance review's findings are carried as status and blocking requirements. The engine offers no waiver. |
 | REQUIREMENT_SCHEMA 9.1 | Materiality defaults to `unassessed`, which gates as material | Policy text present | The engine makes no materiality determination. |
 | REQUIREMENT_SCHEMA 9.1 | Criticality predicates for security, privacy, data integrity, payments, access control, feasibility | OPEN (versioned deterministic policy) | Not computed. |
 | D-07 | Acceptance of inferred requirements | OPEN | Inferred origin is shown as such; no acceptance is recorded. |
