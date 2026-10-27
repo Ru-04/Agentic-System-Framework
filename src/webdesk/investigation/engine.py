@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
-from webdesk.evidence.allowlist import VendorAllowlist
+from webdesk.evidence.allowlist import SHOPIFY_PLAN_SCOPES, VendorAllowlist
 from webdesk.evidence.approved_boundaries import (
     ADOBE_COMMERCE_EXACT,
     ADOBE_SHARED,
@@ -53,8 +53,16 @@ class ClaimKind(StrEnum):
     RELEASE_VERSION = "release_version"
 
 
+# Shopify boundary as approved for the Sprint 2 evaluation (S2-D07 to S2-D09). Registered
+# here as INACTIVE: it is listed in no active set, so only synthetic pages are used.
+SHOPIFY_INACTIVE: Final[VendorAllowlist] = VendorAllowlist(
+    frozenset({"shopify.dev", "help.shopify.com"}),
+    scoped=SHOPIFY_PLAN_SCOPES,
+)
+
 # Approved boundary per (platform, edition). Inactive configuration, as approved.
 BOUNDARIES: Final[dict[tuple[str, Edition], VendorAllowlist]] = {
+    ("shopify", Edition.NOT_APPLICABLE): SHOPIFY_INACTIVE,
     ("woocommerce", Edition.NOT_APPLICABLE): WOOCOMMERCE_DOCS,
     ("bigcommerce", Edition.NOT_APPLICABLE): BIGCOMMERCE_DOCS,
     ("adobe_commerce", Edition.ADOBE_COMMERCE): ADOBE_COMMERCE_EXACT,
