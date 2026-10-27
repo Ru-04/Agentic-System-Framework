@@ -5,6 +5,15 @@ Evidence: `docs/PHASE2_EVIDENCE.md`. Scope: Increment 3 hardening plan Phase 2, 
 
 ## Status
 
+Ready for independent Phase 2 review, not accepted. Caveats the reviewer must weigh:
+
+- Teardown: two earlier full-suite runs failed teardown on different tests with a backend that had no user. The cause
+  is not established. The final ordered pass had no teardown errors. A bounded wait (5 seconds) was added and is
+  exercised; it absorbs closing sessions and still fails persistent ones (see the evidence, section 6).
+- Leftover test databases from earlier failed teardowns remain on the cluster; dropping them was not permitted.
+- A temporary probe file may remain untracked in the worktree until removed.
+
+
 - Implemented and verified locally: full suite 659 passed, 0 failed; ruff check clean; mypy strict clean;
   migration 0042 round trip catalog-identical.
 - Not accepted. Phase 2 is not declared accepted. Phase 1 independent acceptance is a separate gate and is not recorded

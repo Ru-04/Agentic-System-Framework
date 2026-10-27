@@ -118,6 +118,16 @@ that teardown is deterministic. The cause is not established. The teardown check
 backends to exit before reporting a leak. That wait is an unproven mitigation, not a diagnosed fix. The report now
 includes backend type, start time and current query, so the next occurrence can be attributed.
 
+Teardown wait, exercised with a temporary probe (not committed; `tests/committed/test_zz_teardown_probe.py`).
+- A session that closes 2 seconds after the test ends: the test passed, and teardown took 1.93 s. The wait was
+  exercised and absorbed the session.
+- A session that never closes: teardown failed after 5.36 s with
+  `sessions still attached to webdesk_test_3c557c93a5 at teardown: [('webdesk_integration_owner', '', 'idle in transaction', 'client backend', '2026-10-27 12:42:00+00', 'select 1')]`.
+  The wait does not hide a persistent connection; it fails the test and names the backend.
+- Consequence: the probe's database `webdesk_test_3c557c93a5` was left behind, as were other
+  `webdesk_test_*` databases from earlier failed teardowns. Dropping them was denied by the auto-mode permission
+  check, so they remain and need a decision (see the closure report).
+
 Invalidated runs. An 18-failure result (18 failed, 18 passed) came from a second run of two test modules that overlapped
 with the full-suite run on the same databases. It is not a valid result for the code.
 
