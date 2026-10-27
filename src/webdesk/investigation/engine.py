@@ -168,10 +168,16 @@ def investigate(
         if page.edition not in (capability.edition, Edition.SHARED):
             refusals.append(f"edition-exclusive page for {page.edition.value} not applied")
             continue
-        if not boundary.permits(page.url):
+        # A page is checked against the boundary for its own edition. A shared page uses the
+        # shared boundary, so it is not judged against the Adobe Commerce-only list.
+        page_boundary = BOUNDARIES.get((capability.platform, page.edition))
+        if page_boundary is None:
+            refusals.append("no approved boundary for this page's edition")
+            continue
+        if not page_boundary.permits(page.url):
             refusals.append("page URL is outside the approved boundary")
             continue
-        if page.final_url != page.url and not boundary.permits(page.final_url):
+        if page.final_url != page.url and not page_boundary.permits(page.final_url):
             refusals.append("redirect leads outside the approved boundary")
             continue
         if requested_version is None or page.version is None:
