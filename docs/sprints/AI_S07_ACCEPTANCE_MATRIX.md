@@ -23,7 +23,7 @@ Status: engineering completion candidate. Formal acceptance is WDS's decision an
 | 17 | Preserve AI-S01 to AI-S06 security boundaries | Met | Contracts, orchestration and applications unchanged against HEAD (round 4 check) |
 | 18 | Keep the three Foundation integration tests visibly skipped | Met | Skip lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py` |
 | 19 | Quality gate | Met | 1575 passed, 3 skipped; ruff check and format clean; mypy --strict clean (136 files) |
-| 20 | Independent QA PASS on the final candidate | Pending (see QA register) | |
+| 20 | Independent QA PASS on the final candidate | Not claimed. The consolidated QA returned FAIL on documentation; focused re-verifications passed; no new consolidated PASS was issued (see QA register) | |
 | 21 | Governance interpretation approved (D-EVB-1) and D-06/D-09 boundary reconciled | Met for isolated engineering | WDS directive; `AI_S07_D06_D09_RECONCILIATION.md`. Open: D-06 predicates, C-02 verification actor policy, severity mapping |
 | 22 | Local commit of the candidate | Pending final QA | Commit only after a final QA PASS on the frozen candidate (directive stage 4) |
 
