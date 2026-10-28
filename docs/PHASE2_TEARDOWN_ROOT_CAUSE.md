@@ -54,3 +54,8 @@ No `FORCE` drop and no termination of any session was used.
   another engine without a disposal path, the teardown check will name it again.
 - The teardown report still shows an empty application name for hardening backends. Setting
   `application_name` on test engines would make future reports self-identifying. Not done in this sprint.
+
+## Verification on the dedicated cluster
+
+- Three full sequential runs on `127.0.0.1:55442` (`p2-final3-1` to `p2-final3-3`, code `3ffdbbc`): each 681 passed, exit 0, `leftover_dbs=[]`, `attached_sessions=0` after teardown. See `docs/PHASE2_FINAL_GATE_EVIDENCE.md` section 8.
+- The bounded wait in `drop_when_detached` was not changed; a persistent session still fails the run. No run in this verification needed the wait to succeed.

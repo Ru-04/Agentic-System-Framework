@@ -70,3 +70,28 @@ Current counted result: **zero clean runs of three**. The gate is not met.
 Checks run without the database on `250f90a`: `ruff check src tests migrations` passes; `ruff format --check` reports only the five documented exception files; `mypy --strict src/webdesk` passes. Git status: clean.
 
 Not run on a clean window: migration 0042-to-head catalog comparison, privilege audit, AI Read Contract v1 regression.
+
+## 8. Three-run gate on the dedicated cluster (counted)
+
+Cluster: `webdesk-p2-postgres` at `127.0.0.1:55442`, system identifier `7701671162267615270`. Topology and provisioning: `docs/PHASE2_DEDICATED_TEST_CLUSTER.md`.
+Code under test: commit `3ffdbbc` (code unchanged since `111f304`; the later commit only adds the git-ignore entry for the local secrets file). Command for each run: `pytest tests -q -p no:cacheprovider` through the runner, with `WEBDESK_TEST_RUN_ID` set per run.
+
+| Run | Namespace (run id) | Start | Finish | Result | Exit | Leftover namespace DBs | Attached sessions after teardown |
+|---|---|---|---|---|---|---|---|
+| 1 | `p2-final3-1` | 16:49:14 | 16:55:47 | 681 passed, 1 warning | 0 | none | 0 |
+| 2 | `p2-final3-2` | 16:55:48 | 17:02:39 | 681 passed, 1 warning | 0 | none | 0 |
+| 3 | `p2-final3-3` | 17:02:40 | 17:09:52 | 681 passed, 1 warning | 0 | none | 0 |
+
+Failures, errors, teardown leaks: 0 in each run. No `LeakedSessionError`, no `INTERNALERROR`.
+
+Runs that do not count, for the record:
+- Earlier attempts on `dedicated` before provisioning was complete: `p2-focus-a` (focused set, 29 failed, 10 errors: `SET ROLE` denied, integration owner had no SET option on the group roles), `p2-focus-b` (same cause, not fixed yet), `p2-final-1` (677 passed, 4 errors: worker-login ALTER denied, the worker login was pre-created as superuser), `p2-final2-1` (680 passed, 1 failed: duplicate `webdesk_worker` membership row from my superuser grant).
+- Each of those was a provisioning defect fixed in the cluster, not in the code. The fixes are listed in `docs/PHASE2_DEDICATED_TEST_CLUSTER.md`.
+
+Focused set on the dedicated cluster, before the full runs: `p2-focus-c` (73 tests: concurrency, change expiry, identity, recovery status codes, guards, projects, privilege audit, privilege hardening, migration catalog): 73 passed, exit 0.
+
+Checks on `3ffdbbc`: `ruff check src tests migrations` passed; `ruff format --check` reports exactly the five documented exception files; `mypy --strict src/webdesk` passed (57 files).
+
+Coverage: the AI Read Contract v1 tests (`tests/committed/test_ai_read_v1.py`), the migration catalog and downgrade/re-upgrade test (`tests/committed/test_migration_catalog.py`), the privilege audit and restricted-login tests (`tests/hardening/`), and the owner-reset tests (`tests/integration/test_owner_reset.py`) all run inside each full pass above. Their individual results are not separately recorded beyond the totals.
+
+Status: the three-run gate on the dedicated cluster is met for `3ffdbbc`. Independent QA has not accepted the work, and no WDS acceptance is claimed.
