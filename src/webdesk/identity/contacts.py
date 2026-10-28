@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -22,7 +23,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
-from webdesk.authority.proofs import actor_for, consume_row, consume_with
+from webdesk.authority.proofs import ProofRefused, actor_for, consume_row, consume_with
 from webdesk.crypto.contact_box import ContactBox, outbox_aad
 from webdesk.identity.email import ContactEmailPolicy, EmailPolicyError
 from webdesk.rbac.engine import authorize
@@ -37,6 +38,10 @@ class ContactServiceError(Exception):
         super().__init__(f"{status} {reason}")
         self.status = status
         self.reason = reason
+
+
+# Approved contact-change deadline (EVAL-F11d). Production uses this value only.
+CHANGE_WINDOW = timedelta(hours=24)
 
 
 def _actor_can(conn: Connection, actor: uuid.UUID, permission: Permission, *, event: str) -> None:
@@ -255,14 +260,44 @@ def reject_create(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) ->
     )
 
 
+def expire_stale_change_for_email(conn: Connection, normalized: str) -> None:
+    """Expire pending change requests past their deadline that hold ``normalized`` (QA F-07).
+
+    The same transition the expiry sweep applies, for this address only, so a
+    legitimate new request is not blocked until the sweep runs. Each expiry is
+    audited.
+    """
+    expired = conn.execute(
+        text("SELECT approval_id, user_id FROM webdesk_guard.fn_expire_stale_change_for_email(:e)"),
+        {"e": normalized},
+    ).all()
+    for approval_id, user_id in expired:
+        record_event(
+            conn,
+            actor_type="system",
+            actor_id="expiry-on-demand",
+            event_type="approval.expired",
+            outcome="success",
+            record_refs=[str(approval_id), str(user_id)],
+            details={"request_type": "change"},
+        )
+
+
 def request_change(
     conn: Connection,
     proof: uuid.UUID,
     policy: ContactEmailPolicy,
     user_id: uuid.UUID,
     raw_email: str,
+    *,
+    window: timedelta = CHANGE_WINDOW,
 ) -> uuid.UUID:
-    """Ask for an active account's contact to change. An independent admin must approve."""
+    """Ask for an active account's contact to change. An independent admin must approve.
+
+    ``window`` is the approval deadline. Production uses the approved 24 hours.
+    Tests pass a short window (P-INC3-TEST-CLOCK-05); no approval row is
+    back-dated.
+    """
     actor = actor_for(conn, proof, "contact.request.change", user_id)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
     normalized = _normalize(policy, raw_email)
@@ -274,6 +309,7 @@ def request_change(
         raise _refusal(conn, actor, "contact.request.denied", 404, "user_not_found")
     if current[0] != "active":
         raise _refusal(conn, actor, "contact.request.denied", 409, "user_not_active")
+    expire_stale_change_for_email(conn, normalized)
     if _contact_is_reserved(conn, normalized):
         raise _refusal(conn, actor, "contact.request.denied", 409, "contact_reserved")
     try:
@@ -282,8 +318,15 @@ def request_change(
                 consume_with(
                     conn,
                     "contact.request.change",
-                    "SELECT webdesk_guard.fn_request_change_with_proof(:p, :u, :e, :prev)",
-                    {"p": proof, "u": user_id, "e": normalized, "prev": current[1]},
+                    "SELECT webdesk_guard.fn_request_change_with_proof("
+                    ":p, :u, :e, :prev, CAST(:w AS interval))",
+                    {
+                        "p": proof,
+                        "u": user_id,
+                        "e": normalized,
+                        "prev": current[1],
+                        "w": f"{int(window.total_seconds())} seconds",
+                    },
                 )
             )
         )
@@ -335,6 +378,12 @@ def approve_change(
                 "oref": hashlib.sha256(str(old_email).encode("utf-8")).hexdigest(),
             },
         )
+    except ProofRefused as exc:
+        # A concurrent decision on the same approval committed first (QA F-05).
+        if exc.reason == "approval_not_pending":
+            _audit_denial(conn, approver, "contact.change.denied", "not_pending")
+            raise ContactServiceError(409, "not_pending") from exc
+        raise
     except SQLAlchemyError as exc:
         _audit_denial(conn, approver, "contact.change.denied", "approval_refused")
         raise ContactServiceError(409, "approval_refused") from exc
@@ -378,12 +427,19 @@ def reject_change(conn: Connection, proof: uuid.UUID, approval_id: uuid.UUID) ->
     actor = actor_for(conn, proof, "contact.reject.change", approval_id)
     _actor_can(conn, actor, Permission.USER_MANAGE, event="contact.change.denied")
     approval = _pending_or_refuse(conn, actor, approval_id, "change", "contact.change.denied")
-    consume_with(
-        conn,
-        "contact.reject.change",
-        "SELECT webdesk_guard.fn_reject_change_with_proof(:p, :a)",
-        {"p": proof, "a": approval_id},
-    )
+    try:
+        consume_with(
+            conn,
+            "contact.reject.change",
+            "SELECT webdesk_guard.fn_reject_change_with_proof(:p, :a)",
+            {"p": proof, "a": approval_id},
+        )
+    except ProofRefused as exc:
+        # A concurrent decision on the same approval committed first (QA F-05).
+        if exc.reason == "approval_not_pending":
+            _audit_denial(conn, actor, "contact.change.denied", "not_pending")
+            raise ContactServiceError(409, "not_pending") from exc
+        raise
     _audit(
         conn,
         actor,
