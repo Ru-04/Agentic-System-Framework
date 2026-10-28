@@ -103,7 +103,7 @@ def _coverage(conn: Connection) -> tuple[int, int]:
         text(
             """SELECT count(DISTINCT a.user_id) FROM user_contact_approvals a
                WHERE a.administrator_appointment AND a.ceremony_id IS NOT NULL
-                 AND a.status = 'approved' AND a.expires_at > now()
+                 AND a.status = 'approved' AND a.expires_at > clock_timestamp()
                  AND a.appointment_consumed_at IS NULL
                  AND NOT EXISTS (
                      SELECT 1 FROM role_assignments r
