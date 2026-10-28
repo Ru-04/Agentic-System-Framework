@@ -9,6 +9,8 @@ the privilege check (SQLSTATE 42501), not from the body.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -42,9 +44,13 @@ def test_no_public_execute_on_the_disable_function_or_the_trigger_functions(
 
 
 def test_a_login_role_cannot_disable_an_account_by_naming_a_real_administrator(
-    conn: Connection,
+    conn: Connection, world: dict[str, uuid.UUID]
 ) -> None:
-    """The bypass: a real Administrator ID in a direct call. Privilege must refuse it."""
+    """The bypass: a real Administrator ID in a direct call. Privilege must refuse it.
+
+    ``world`` installs the system and activates two Administrators. The test reads them, so it must
+    not depend on another test having run first (QA NoResultFound defect).
+    """
     admin = conn.execute(
         text(
             "SELECT user_id FROM role_assignments"
