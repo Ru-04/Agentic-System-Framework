@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 CONTRACT_VERSION = "ai-read/v1"
 CONTRACT_TAG = "ai-read/v1"
@@ -68,8 +68,8 @@ class AiReadTransport(Protocol):
 
 
 # Contract section 13: additive optional fields are allowed within v1. Forbidden fields
-# (sections 6.1, 8 and 10) are refused by _refuse_forbidden before validation.
-# are refused by _refuse_forbidden before validation, whatever their position.
+# (sections 6.1, 8 and 10) are refused by _refuse_forbidden before validation, whatever
+# their position.
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -211,7 +211,10 @@ class AiReadClient:
                 raise AiReadRefused(
                     "source-version list contained a version outside the read rules"
                 )
-        _check_cursor(page.next_cursor, page.items[-1].source_version_id if page.items else None)
+        ids = [item.source_version_id for item in page.items]
+        if ids != sorted(ids):
+            raise AiReadRefused("source-version list is not in identifier order")
+        _check_cursor(page.next_cursor, ids[-1] if ids else None)
         return page
 
     def segments(
@@ -282,8 +285,11 @@ class AiReadClient:
             raise AiReadRefused("response body does not declare the contract")
         try:
             return model.model_validate(payload)
-        except Exception as error:  # names fields only, never values or credentials
-            raise AiReadRefused("response does not match the contract schema") from error
+        except ValidationError:
+            pass
+        # Raised outside the except block so no validation error (which can hold response
+        # values) is chained onto this refusal.
+        raise AiReadRefused("response does not match the contract schema")
 
 
 def _check_status(status: int) -> None:

@@ -517,3 +517,73 @@ def test_a_segment_request_with_a_malformed_source_version_is_refused_before_any
     with pytest.raises(AiReadRefused, match="not a UUID"):
         client.segments("not-a-uuid")
     assert transport.calls == []
+
+
+def test_source_versions_out_of_identifier_order_are_refused() -> None:
+    first, second = "33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222"
+    page = {
+        "contract": "ai-read/v1",
+        "items": [version(source_version_id=first), version(source_version_id=second)],
+        "next_cursor": None,
+    }
+    client, _ = client_for({f"{BASE}/source-versions": ok(page)})
+    with pytest.raises(AiReadRefused, match="identifier order"):
+        client.source_versions()
+
+
+def test_the_after_cursor_is_sent_in_the_request() -> None:
+    page = {"contract": "ai-read/v1", "items": [], "next_cursor": None}
+    client, transport = client_for({f"{BASE}/source-versions": ok(page)})
+    client.source_versions(after="abc-1")
+    assert transport.calls[0][0].endswith("?limit=50&after=abc-1")
+
+
+def test_default_limits_are_sent_when_none_is_given() -> None:
+    page = {"contract": "ai-read/v1", "items": [], "next_cursor": None}
+    client, transport = client_for(
+        {
+            f"{BASE}/source-versions": ok(page),
+            f"{BASE}/source-versions/{VERSION}/segments": ok(
+                {
+                    "contract": "ai-read/v1",
+                    "source_version_id": VERSION,
+                    "items": [],
+                    "next_cursor": None,
+                }
+            ),
+        }
+    )
+    client.source_versions()
+    client.segments(VERSION)
+    assert transport.calls[0][0].endswith("?limit=50")
+    assert transport.calls[1][0].endswith("?limit=100")
+
+
+def test_a_segment_limit_at_the_upper_bound_is_accepted() -> None:
+    page = {
+        "contract": "ai-read/v1",
+        "source_version_id": VERSION,
+        "items": [],
+        "next_cursor": None,
+    }
+    client, transport = client_for({f"{BASE}/source-versions/{VERSION}/segments": ok(page)})
+    client.segments(VERSION, limit=200)
+    assert transport.calls[0][0].endswith("?limit=200")
+
+
+def test_an_unexpected_400_status_is_refused() -> None:
+    client, _ = client_for(
+        {BASE: AiReadResponse(400, CONTRACT_HEADERS, b'{"error":"invalid_request"}')}
+    )
+    with pytest.raises(AiReadRefused, match="unexpected status 400"):
+        client.run()
+
+
+def test_a_validation_failure_does_not_chain_response_values_onto_the_refusal() -> None:
+    sentinel = "SENTINEL-VALUE-7731"
+    client, _ = client_for({BASE: ok(run_payload(status=sentinel))})
+    with pytest.raises(AiReadRefused) as caught:
+        client.run()
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert sentinel not in str(caught.value)
