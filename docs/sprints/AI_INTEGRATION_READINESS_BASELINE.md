@@ -125,5 +125,5 @@ These are recorded for WDS integration decisions. None is treated as accepted en
 ## 10. Open limitation: run `state` values (contract section 6.1)
 
 - The adapter accepts any string in the run `state` field. Contract section 6.1 says `state` is one of the values allowed by
-  the `workflow_runs.state` check constraint, but does not list them in the v1 document, so the adapter cannot enforce the set.
+  the `workflow_runs.state` check constraint, but does not list them in the v1 document (`docs/AI_FOUNDATION_READ_CONTRACT_v1.md` on `feature/foundation-phase-4`, not on this branch), so the adapter cannot enforce the set.
 - Status: **open, not fixed**. Closing it requires the enumerated values from the Foundation schema (migration 0007 and later).

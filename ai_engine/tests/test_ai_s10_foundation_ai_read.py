@@ -599,3 +599,14 @@ def test_a_non_json_body_does_not_chain_its_content_onto_the_refusal() -> None:
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
     assert sentinel not in str(caught.value)
+
+
+def test_a_valid_utf8_non_json_body_does_not_chain_its_content_onto_the_refusal() -> None:
+    sentinel = "SENTINEL-TEXT-9913"
+    body = ("not json " + sentinel).encode("utf-8")
+    client, _ = client_for({BASE: AiReadResponse(200, CONTRACT_HEADERS, body)})
+    with pytest.raises(AiReadRefused) as caught:
+        client.run()
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert sentinel not in str(caught.value)

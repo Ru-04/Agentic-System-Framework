@@ -7,7 +7,7 @@ Status: the Stage 3 remediation is ready for the Stage 2 re-review. Nothing was 
 - Branch: `integration/ai-s01-s02-s03` in the `integration-baseline` worktree. Base commit: `211d308`.
 - Remediation commit: the full SHA is recorded in the Stage 4 acceptance packet (a commit cannot name its own SHA).
 - Candidate source digest (engine source and AI-S10 test package):
-  `64c86e2603e606c055747520aa680fa638ad877776cd0ae6464f94919c91366f`.
+  `a1bc6fc2d08287a6b974d074ddeabb4147cc1690ee1a4db575c2e3f0ebaa4fb9`.
 - Engine source (`ai_engine/src`): unchanged from `211d308`.
 - The session checkout `webdesk-ai-s02` (`feature/ai-s02`) does **not** contain AI-S06 to AI-S09 code. Do not run
   the AI-S10 gates there.
@@ -17,7 +17,7 @@ Status: the Stage 3 remediation is ready for the Stage 2 re-review. Nothing was 
 From `ai_engine` in the `integration-baseline` worktree (see the reproducibility report, sections 4 and 8):
 
 - AI-S10 files: `tests/test_ai_s10_evaluation.py`, `_evaluator_rules.py`, `_mutations.py`, `_consistency.py` (32 tests).
-- Full suite: 1816 passed, 3 skipped in the development worktree; the committed tree is smaller by the 64
+- Full suite: 1817 passed, 3 skipped in the development worktree; the committed tree is smaller by the 64
   untracked Foundation passes.
 - `ruff check .`, `ruff format --check .`, `mypy --strict src tests`.
 - Regenerate: `PYTHONPATH="src;tests" .venv/Scripts/python.exe -m evaluation.report ../docs/sprints`.

@@ -13,7 +13,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `64c86e2603e606c055747520aa680fa638ad877776cd0ae6464f94919c91366f`
+  `a1bc6fc2d08287a6b974d074ddeabb4147cc1690ee1a4db575c2e3f0ebaa4fb9`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
@@ -58,12 +58,12 @@ number.
 
 | Count | Value | Source |
 |---|---|---|
-| Development worktree: passed | 1816 | full suite on `integration-baseline` at the candidate commit (`9f1e2f5`) |
+| Development worktree: passed | 1817 | full suite on `integration-baseline` at the engineering candidate (see the acceptance packet for the exact SHA) |
 | Development worktree: skipped | 3 | the three Foundation tests (lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`) |
 | Development worktree: failed | 0 | |
 | Untracked Foundation tests (collected) | 67 | `test_ai_s02_s04_acceptance_distinctions.py` (18), `_boundaries.py` (43), `_integration.py` (6) |
 | Untracked Foundation tests: passed / skipped | 64 / 3 | same files |
-| Committed tree: passed | 1752 | measured in a cold clean export of `9f1e2f5`; development passed (1816) minus the untracked Foundation passes (64); re-measure in clean export of the Stage 3 commit |
+| Committed tree: passed | 1753 | measured in a cold clean export of `9f1e2f5`; development passed (1817) minus the untracked Foundation passes (64); re-measure in clean export of the Stage 3 commit |
 | Committed tree: expected skipped | 0 | the skipped tests are untracked |
 | Collected but not run | 0 | no collected test is excluded from the run |
 | External integration criteria not executed | 12 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |
