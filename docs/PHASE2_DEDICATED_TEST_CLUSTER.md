@@ -36,7 +36,8 @@ Group roles (`webdesk_app`, `webdesk_ceremony`, `webdesk_authority`, `webdesk_gu
 2. As `webdesk_owner`, create `webdesk_integration_owner`, `webdesk_test_owner` and `webdesk_app_login`. Set the database owner to `webdesk_integration_owner`.
 3. Migrate the base database to head as `webdesk_integration_owner`.
 4. As `webdesk_owner`, grant `webdesk_app` to `webdesk_app_login` and `webdesk_ceremony` to `webdesk_test_owner`. As `webdesk_owner`, grant the group roles to `webdesk_integration_owner` `WITH INHERIT TRUE, SET TRUE`. The initial grants lacked SET, which made `SET ROLE` fail.
-5. Let the worker-login test create `webdesk_intake_worker_login` as the integration owner. Do not pre-create it as superuser: `ALTER ROLE` in the test then fails, because the integration owner has no ADMIN option on it.
+5. After the base database is at head (migration 0046 creates the group role `webdesk_test_clock`), grant it to the integration owner as the cluster superuser: `GRANT webdesk_test_clock TO webdesk_integration_owner WITH INHERIT TRUE, SET TRUE;`. Only a test cluster grants this role. Production never does, so the contact-change window can only be shortened by a test session (QA D2).
+6. Let the worker-login test create `webdesk_intake_worker_login` as the integration owner. Do not pre-create it as superuser: `ALTER ROLE` in the test then fails, because the integration owner has no ADMIN option on it.
 
 ## Isolation verification
 
