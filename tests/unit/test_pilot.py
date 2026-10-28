@@ -134,4 +134,5 @@ def test_pilot_with_a_verified_decision_retrieves_both_pages_and_audits_the_allo
     authority = replace(pilot_authority(), audit=audit)
     run_pilot(opener, authority)
     assert sorted(opener.calls) == sorted(case.url for case in PILOT_CASES)
-    assert [entry["outcome"] for entry in audit] == ["allowed"]
+    # One audit entry per pilot case: each retrieval is its own verified operation.
+    assert [entry["outcome"] for entry in audit] == ["allowed"] * len(PILOT_CASES)
