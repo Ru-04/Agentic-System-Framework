@@ -5,20 +5,29 @@ Evidence: `docs/PHASE2_EVIDENCE.md`. Scope: Increment 3 hardening plan Phase 2, 
 
 ## Status
 
-Ready for independent Phase 2 review, not accepted. Caveats the reviewer must weigh:
+Remediation of the independent QA report (findings F-01 to F-13) is implemented on this branch and is **ready for
+independent QA re-test**. It is not accepted and not closed by the implementing team.
 
-- Teardown: two earlier full-suite runs failed teardown on different tests with a backend that had no user. The cause
-  is not established. The final ordered pass had no teardown errors. A bounded wait (5 seconds) was added and is
-  exercised; it absorbs closing sessions and still fails persistent ones (see the evidence, section 6).
-- Leftover test databases from earlier failed teardowns remain on the cluster; dropping them was not permitted.
-- A temporary probe file may remain untracked in the worktree until removed.
+- Finding-by-finding matrix: `docs/PHASE2_QA_REMEDIATION_MATRIX.md`.
+- Engineering evidence, verification runs and exit codes: `docs/PHASE2_EVIDENCE.md` (section "QA remediation").
+- Migrations and privileges: `docs/PHASE2_MIGRATION_PRIVILEGE_EVIDENCE.md` (0042 to 0045).
+- Database isolation and cleanup prerequisites: `docs/TEST_DATABASE_ISOLATION.md`.
+- Governance records (status codes, acknowledgement, test window, expiry rule, token delivery scope):
+  `docs/PHASE2_GOVERNANCE_CLARIFICATION.md`.
 
+Limits the re-tester must weigh:
 
-- Implemented and verified locally (ordered pass at `c80b0d5`'s code): full suite 666 passed, 0 failed, 0 errors;
-  ruff check clean; mypy strict clean; migration 0043 round trip (head, down to 0042, up) with the downgrade
-  matching the 0042 function snapshot. Ruff format: six documented exceptions.
-- Not accepted. Phase 2 is not declared accepted. Phase 1 independent acceptance is a separate gate and is not recorded
-  here.
+- **Teardown (F-02).** The cause of the earlier intermittent sessions attached to disposable databases is not
+  established. A bounded five-second wait and a detailed report were added. The wait does not conceal a persistent
+  connection (demonstrated). Repeatability is shown over the sequential runs recorded in the evidence, which is not
+  proof of deterministic cleanup.
+- **Leftover databases (F-12).** Earlier leftovers were not deleted (the cleanup was denied and is not bypassed).
+  Namespaced runs clean up their own labelled databases. Leftovers need an owner decision under the prerequisites in
+  `docs/TEST_DATABASE_ISOLATION.md`.
+- **Token delivery (F-06).** Not implemented here; belongs to the notification and outbox phase.
+- **Sweep scheduling.** The expiry sweep is still not scheduled in production; the on-demand expiry (F-07) covers the
+  contact-change case only.
+- Phase 1 independent acceptance is a separate gate and is not recorded here.
 
 ## What to review
 
