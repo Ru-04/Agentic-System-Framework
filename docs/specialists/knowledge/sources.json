@@ -9,7 +9,7 @@
     "REJECTED",
     "NO APPROVED SOURCE"
   ],
-  "note": "Statuses come from the decision records named in each entry. No source has been retrieved for this manifest. Nothing here is verified platform evidence.",
+  "note": "Statuses come from the decision records named in each entry. Two sources are APPROVED AND ACTIVE for the 28 Oct 2026 read-only pilot. Pilot results are in docs/governance/SOURCE_PILOT_RESULTS_2026-10-28.json. Nothing here is verified platform evidence beyond the pilot results.",
   "sources": [
     {
       "source_id": "shopify_docs",
@@ -39,7 +39,7 @@
       "paths": "/docs/*, /guides/*",
       "approval_reference": "B2 (approved with conditions, 26 Oct 2026); SOURCE-01 (27 Oct 2026)",
       "ownership_status": "PUBLISHER-CONTROLLED (browser check); OWNER STATEMENT NOT FOUND",
-      "status": "APPROVED BUT INACTIVE",
+      "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
         "woocommerce",
         "not_applicable"
@@ -60,7 +60,8 @@
           "observed": "Title 'Getting started | WooCommerce developer docs'. No redirect.",
           "verified_at": "2026-10-28 (browser batch, ~11:32-11:35 UTC)"
         }
-      ]
+      ],
+      "activation_reference": "WDS pilot approval, 28 Oct 2026 (chat). Read-only pilot only; scope: WooCommerce docs (/docs/*) and the BigCommerce product read page."
     },
     {
       "source_id": "bigcommerce_docs_product_page",
@@ -71,7 +72,7 @@
       "paths": "/developer/docs/* and the exact page /developer/api-reference/rest/admin/catalog/products/get-product only",
       "approval_reference": "B1 (26 Oct 2026); SOURCE-01 (27 Oct 2026)",
       "ownership_status": "PUBLISHER-CONTROLLED (browser check); OWNER STATEMENT NOT FOUND",
-      "status": "APPROVED BUT INACTIVE",
+      "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
         "bigcommerce",
         "not_applicable"
@@ -86,7 +87,8 @@
           "observed": "Redirected inside the approved path /developer/docs/*. og:site_name 'BigCommerce'; links to support.bigcommerce.com. 'Built with Fern' is third-party tooling and is not evidence of ownership.",
           "verified_at": "2026-10-28 (browser batch, ~11:32-11:35 UTC)"
         }
-      ]
+      ],
+      "activation_reference": "WDS pilot approval, 28 Oct 2026 (chat). Read-only pilot only; scope: WooCommerce docs (/docs/*) and the BigCommerce product read page."
     },
     {
       "source_id": "adobe_commerce_exact_pages",

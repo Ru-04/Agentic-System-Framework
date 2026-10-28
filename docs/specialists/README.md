@@ -24,4 +24,4 @@ Shared: `knowledge/sources.json` (one source manifest for all seven). `_gen_spec
 
 ## Source statuses
 
-Vocabulary: APPROVED AND ACTIVE, APPROVED BUT INACTIVE, DISCOVERY ONLY, UNVERIFIED, DEFERRED, REJECTED, NO APPROVED SOURCE. No source is APPROVED AND ACTIVE.
+Vocabulary: APPROVED AND ACTIVE, APPROVED BUT INACTIVE, DISCOVERY ONLY, UNVERIFIED, DEFERRED, REJECTED, NO APPROVED SOURCE. Two sources are APPROVED AND ACTIVE for the 28 Oct 2026 read-only pilot (WooCommerce docs; BigCommerce product page). All others are inactive.

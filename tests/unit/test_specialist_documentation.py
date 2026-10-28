@@ -117,23 +117,31 @@ def test_every_source_has_a_status_from_the_approved_vocabulary() -> None:
         assert entry["status"] in VOCABULARY, source_id
 
 
-def test_no_source_is_active_while_the_engine_has_no_active_boundary() -> None:
-    assert engine.ACTIVE_BOUNDARIES == frozenset()
-    for source_id, entry in _sources().items():
-        assert entry["status"] != "APPROVED AND ACTIVE", source_id
+def test_active_sources_match_the_engine_active_boundaries_exactly() -> None:
+    active_in_manifest = set()
+    for entry in _sources().values():
+        if entry["status"] == "APPROVED AND ACTIVE":
+            platform, edition = entry["engine_boundary"]  # type: ignore[misc]
+            active_in_manifest.add((platform, engine.Edition(edition)))
+    assert active_in_manifest == set(engine.ACTIVE_BOUNDARIES)
 
 
-def test_engine_boundaries_are_recorded_as_approved_but_inactive() -> None:
+def test_engine_boundaries_match_the_recorded_status() -> None:
     for source_id, entry in _sources().items():
         boundary = entry["engine_boundary"]
         if boundary is None:
-            assert entry["status"] != "APPROVED BUT INACTIVE", source_id
+            assert entry["status"] not in {
+                "APPROVED AND ACTIVE",
+                "APPROVED BUT INACTIVE",
+            }, source_id
             continue
         platform, edition = boundary  # type: ignore[misc]
         key = (platform, engine.Edition(edition))
         assert key in engine.BOUNDARIES, source_id
-        assert key not in engine.ACTIVE_BOUNDARIES, source_id
-        assert entry["status"] == "APPROVED BUT INACTIVE", source_id
+        expected = (
+            "APPROVED AND ACTIVE" if key in engine.ACTIVE_BOUNDARIES else "APPROVED BUT INACTIVE"
+        )
+        assert entry["status"] == expected, source_id
 
 
 def test_every_capability_source_id_exists_in_the_manifest() -> None:

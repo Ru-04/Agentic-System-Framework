@@ -20,13 +20,13 @@ PROC = (
     "2. Match the requirement to capabilities in this catalog (every required term present).\n"
     "3. If no capability matches, or essential context is missing: CLARIFY, with questions.\n"
     "4. If the objective matches but the version is not stated: INVESTIGATE_WITH_UNKNOWNS.\n"
-    "5. Otherwise investigate against approved, active sources only. No source is active.\n"
+    "5. Otherwise investigate against approved, active sources only. Pilot-active: WooCommerce docs and the BigCommerce product page.\n"
     "6. Report findings only when cited to an approved page with a stated version. "
     "Report everything else as labelled unknowns."
 )
 SOURCE_POLICY = (
     "- Only sources in `docs/specialists/knowledge/sources.json` with status APPROVED AND ACTIVE "
-    "may support a claim. None is active.\n"
+    "may support a claim. Pilot-active: WooCommerce docs and the BigCommerce product page; all others are inactive.\n"
     "- A claim cites: exact URL, title, publisher, platform and edition, version, retrieval date, "
     "passage reference, and verification status.\n"
     "- A URL that is known but not retrieved is not evidence. Draft descriptions stay separate "

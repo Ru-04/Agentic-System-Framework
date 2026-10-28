@@ -165,16 +165,19 @@ def test_no_pages_gives_unknown_support() -> None:
     assert finding.outcome is Outcome.UNKNOWN_SUPPORT
 
 
-def test_real_page_is_not_accepted_while_no_boundary_is_active() -> None:
-    assert ACTIVE_BOUNDARIES == frozenset()
+def test_only_the_pilot_boundaries_are_active_and_others_stay_inactive() -> None:
+    assert ACTIVE_BOUNDARIES == frozenset(
+        {("woocommerce", Edition.NOT_APPLICABLE), ("bigcommerce", Edition.NOT_APPLICABLE)}
+    )
     page = _page(
-        "https://developer.woocommerce.com/docs/products/variations",
-        "variation price",
-        platform="woocommerce",
+        "https://developer.adobe.com/commerce/webapi/rest/",
+        "REST product endpoints",
+        platform="adobe_commerce",
+        edition=Edition.ADOBE_COMMERCE,
         synthetic=False,
     )
     finding = investigate(
-        WOO_VARIATIONS, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
+        ADOBE_REST, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
     assert finding.citations == ()
     assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
