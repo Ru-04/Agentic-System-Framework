@@ -1,0 +1,93 @@
+{
+  "specialist_id": "magento_adobe_commerce",
+  "registry_capability_id": "CAP-MAGENTO-ADOBE-COMMERCE",
+  "registry_entry_name": "Magento / Adobe Commerce Specialist",
+  "registry_status": "proposed",
+  "registry_source": "WebDesk_Agentic_Requirement_Platform_Specs/AGENT_REGISTRY.yaml",
+  "capabilities": [
+    {
+      "name": "REST product read",
+      "platform": "adobe_commerce",
+      "edition": "adobe_commerce",
+      "claim_kind": "feature",
+      "required_terms": [
+        "rest",
+        "product"
+      ],
+      "source_ids": [
+        "adobe_commerce_exact_pages"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "GraphQL query",
+      "platform": "adobe_commerce",
+      "edition": "adobe_commerce",
+      "claim_kind": "feature",
+      "required_terms": [
+        "graphql"
+      ],
+      "source_ids": [
+        "adobe_commerce_exact_pages"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "release history",
+      "platform": "magento_open_source",
+      "edition": "magento_open_source",
+      "claim_kind": "release_version",
+      "required_terms": [
+        "release"
+      ],
+      "source_ids": [
+        "magento_open_source_release_notes"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "catalog import",
+      "platform": "magento_open_source",
+      "edition": "magento_open_source",
+      "claim_kind": "feature",
+      "required_terms": [
+        "catalog"
+      ],
+      "source_ids": [
+        "magento_open_source_release_notes"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    }
+  ],
+  "clarification_rules": [
+    "No recognisable capability or objective in the requirement: CLARIFY, no investigation run.",
+    "Requested version not stated: INVESTIGATE_WITH_UNKNOWNS; version applicability stays unknown.",
+    "Operator confirmation missing: REFUSE before any evidence is read.",
+    "Edition (Magento Open Source or Adobe Commerce) and deployment are not stated: ask before any edition claim."
+  ],
+  "unsupported_behavior": [
+    "Feature claim from Magento Open Source release notes: UNSUPPORTED_SOURCE (MAGENTO-01).",
+    "Any page outside the approved boundary, or a redirect leaving it: REFUSED, no evidence used.",
+    "Any inactive or unapproved source: UNSUPPORTED_SOURCE, no request made."
+  ],
+  "feasibility_rules": {
+    "status": "PROPOSED, NOT APPROVED. The current specialist contract declares feasibility not determined.",
+    "classes": [
+      "supported_with_cited_evidence",
+      "unknown",
+      "unsupported_source",
+      "clarification_needed",
+      "refused"
+    ],
+    "rule": "A class follows only from each capability's investigation outcome. No class is assigned from confidence."
+  },
+  "estimation_factors": "REQUIRES PROJECT-SPECIFIC INPUT",
+  "evaluation_scenarios_ref": "docs/governance/SPRINT5_EVALUATION_SCENARIOS_DRAFT_2026-10-28.md",
+  "qa_acceptance_checklist": [
+    "Registry ID matches AGENT_REGISTRY.yaml and specialists/catalog.py.",
+    "Every capability's source_id exists in docs/specialists/knowledge/sources.json.",
+    "No capability is marked verified without a retrieved and checked page.",
+    "Edition and version constraints are stated wherever a claim depends on them.",
+    "Unsupported and refused outcomes are labelled unknowns, never findings."
+  ]
+}

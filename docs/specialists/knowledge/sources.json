@@ -1,0 +1,147 @@
+{
+  "manifest_version": "2026-10-28",
+  "status_vocabulary": [
+    "APPROVED AND ACTIVE",
+    "APPROVED BUT INACTIVE",
+    "DISCOVERY ONLY",
+    "UNVERIFIED",
+    "DEFERRED",
+    "REJECTED",
+    "NO APPROVED SOURCE"
+  ],
+  "note": "Statuses come from the decision records named in each entry. No source has been retrieved for this manifest. Nothing here is verified platform evidence.",
+  "sources": [
+    {
+      "source_id": "shopify_docs",
+      "publisher": "Shopify (ownership check not recorded in the repository)",
+      "domains": ["shopify.dev", "help.shopify.com"],
+      "paths": "Plan scopes as defined by SHOPIFY_PLAN_SCOPES in src/webdesk/evidence/allowlist.py",
+      "approval_reference": "S2-D07 to S2-D09, cited in src/webdesk/investigation/engine.py. The decision record was not located in the repository.",
+      "ownership_status": "NOT RECORDED",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["shopify", "not_applicable"],
+      "editions": ["not_applicable"]
+    },
+    {
+      "source_id": "woocommerce_docs",
+      "publisher": "Automattic (partially verified, via WordPress.org listing)",
+      "domains": ["developer.woocommerce.com"],
+      "paths": "/docs/*, /guides/*",
+      "approval_reference": "B2 (approved with conditions, 26 Oct 2026); SOURCE-01 (27 Oct 2026)",
+      "ownership_status": "PARTIAL",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["woocommerce", "not_applicable"],
+      "editions": ["not_applicable"]
+    },
+    {
+      "source_id": "bigcommerce_docs_product_page",
+      "publisher": "BigCommerce (domain and product match; owner not confirmed)",
+      "domains": ["docs.bigcommerce.com"],
+      "paths": "/developer/docs/* and the exact page /developer/api-reference/rest/admin/catalog/products/get-product only",
+      "approval_reference": "B1 (26 Oct 2026); SOURCE-01 (27 Oct 2026)",
+      "ownership_status": "PARTIAL",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["bigcommerce", "not_applicable"],
+      "editions": ["not_applicable"]
+    },
+    {
+      "source_id": "adobe_commerce_exact_pages",
+      "publisher": "Adobe (partially verified, Adobe operator)",
+      "domains": ["developer.adobe.com"],
+      "paths": "Exact pages only: /commerce/webapi/rest/, /commerce/webapi/graphql/, /commerce/extensibility/events/",
+      "approval_reference": "ADOBE-01 (27 Oct 2026)",
+      "ownership_status": "PARTIAL",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["adobe_commerce", "adobe_commerce"],
+      "editions": ["adobe_commerce"]
+    },
+    {
+      "source_id": "adobe_shared_php",
+      "publisher": "Adobe (partially verified, Adobe operator)",
+      "domains": ["developer.adobe.com"],
+      "paths": "Exact page /commerce/php/ only; citations labelled shared",
+      "approval_reference": "ADOBE-01 (27 Oct 2026)",
+      "ownership_status": "PARTIAL",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["adobe_commerce", "shared"],
+      "editions": ["shared"]
+    },
+    {
+      "source_id": "magento_open_source_release_notes",
+      "publisher": "Adobe (experienceleague.adobe.com; owner confirmation not recorded)",
+      "domains": ["experienceleague.adobe.com"],
+      "paths": "Exact page /en/docs/commerce-operations/release/notes/magento-open-source/overview only",
+      "approval_reference": "MAGENTO-01 (27 Oct 2026, with restrictions: release and version claims only)",
+      "ownership_status": "PARTIAL",
+      "status": "APPROVED BUT INACTIVE",
+      "engine_boundary": ["magento_open_source", "magento_open_source"],
+      "editions": ["magento_open_source"]
+    },
+    {
+      "source_id": "shift4shop_3dcart_discovery",
+      "publisher": "Not verified",
+      "domains": ["developer.3dcart.com"],
+      "paths": "Discovery only. No retrieval path approved.",
+      "approval_reference": "SRC-02 (discovery only); B4 deferred",
+      "ownership_status": "NOT VERIFIED",
+      "status": "DISCOVERY ONLY",
+      "engine_boundary": null,
+      "editions": ["not_applicable"]
+    },
+    {
+      "source_id": "adobe_commerce_marketplace_proposal",
+      "publisher": "Adobe",
+      "domains": ["developer.adobe.com"],
+      "paths": "/commerce/marketplace (listed in the proposal, not in ADOBE-01)",
+      "approval_reference": "None. Proposal only (SOURCE_ALLOWLIST_DECISION_2026-10-26.md, A3)",
+      "ownership_status": "PARTIAL",
+      "status": "DEFERRED",
+      "engine_boundary": null,
+      "editions": ["adobe_commerce"]
+    },
+    {
+      "source_id": "adobe_commerce_frontend_core",
+      "publisher": "Adobe",
+      "domains": ["developer.adobe.com"],
+      "paths": "/commerce/frontend-core",
+      "approval_reference": "ADOBE-01 excludes frontend-core until edition is established",
+      "ownership_status": "PARTIAL",
+      "status": "REJECTED",
+      "engine_boundary": null,
+      "editions": []
+    },
+    {
+      "source_id": "magento_devdocs",
+      "publisher": "Adobe (devdocs host redirects to Adobe)",
+      "domains": ["devdocs.magento.com"],
+      "paths": "Not approved. Contributor guide refused.",
+      "approval_reference": "C4 fetch finding; B5 deferred",
+      "ownership_status": "NOT APPLICABLE",
+      "status": "REJECTED",
+      "engine_boundary": null,
+      "editions": []
+    },
+    {
+      "source_id": "wordpress_core_docs",
+      "publisher": "WordPress (not approved)",
+      "domains": [],
+      "paths": "None. WooCommerce docs are approved; WordPress core documentation is not.",
+      "approval_reference": "None",
+      "ownership_status": "NOT APPLICABLE",
+      "status": "NO APPROVED SOURCE",
+      "engine_boundary": null,
+      "editions": []
+    },
+    {
+      "source_id": "NO_APPROVED_SOURCE",
+      "publisher": "Not applicable",
+      "domains": [],
+      "paths": "Technology not selected (Standalone) or product not selected (Middleware)",
+      "approval_reference": "None. WDS decision required on a named technology or product.",
+      "ownership_status": "NOT APPLICABLE",
+      "status": "NO APPROVED SOURCE",
+      "engine_boundary": null,
+      "editions": []
+    }
+  ]
+}
