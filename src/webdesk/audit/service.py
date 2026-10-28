@@ -99,6 +99,7 @@ def record_worker_event(
     error_class: str | None = None,
     record_refs: Iterable[str] = (),
     details: Mapping[str, Any] | None = None,
+    correlation_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Insert one system audit event through the worker guard.
 
@@ -110,20 +111,36 @@ def record_worker_event(
     if not actor_id or not event_type:
         raise ValueError("actor_id and event_type are required")
 
+    if correlation_id is not None and not isinstance(correlation_id, uuid.UUID):
+        # A malformed correlation is refused, never coerced or stored as text (G-7).
+        raise ValueError("correlation_id must be a UUID")
     payload = json.dumps(redact(dict(details or {})), default=str)
     refs = json.dumps(list(record_refs), default=str)
-    row = conn.execute(
-        text(
-            """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
-                   :error, CAST(:refs AS jsonb), CAST(:details AS jsonb))"""
-        ),
-        {
-            "actor": actor_id,
-            "event": event_type,
-            "outcome": outcome,
-            "error": error_class,
-            "refs": refs,
-            "details": payload,
-        },
-    ).scalar_one()
+    params: dict[str, Any] = {
+        "actor": actor_id,
+        "event": event_type,
+        "outcome": outcome,
+        "error": error_class,
+        "refs": refs,
+        "details": payload,
+    }
+    if correlation_id is None:
+        # Events without a job (for example, a system maintenance event) carry no correlation.
+        row = conn.execute(
+            text(
+                """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
+                       :error, CAST(:refs AS jsonb), CAST(:details AS jsonb))"""
+            ),
+            params,
+        ).scalar_one()
+    else:
+        params["correlation"] = str(correlation_id)
+        row = conn.execute(
+            text(
+                """SELECT webdesk_guard.fn_worker_record_audit_correlated('system', :actor,
+                       :event, :outcome, :error, CAST(:refs AS jsonb), CAST(:details AS jsonb),
+                       CAST(:correlation AS uuid))"""
+            ),
+            params,
+        ).scalar_one()
     return uuid.UUID(str(row))

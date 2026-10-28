@@ -36,6 +36,7 @@ from webdesk.audit.service import record_worker_event
 from webdesk.runs import jobs
 from webdesk.runs.errors import RunError
 from webdesk.runs.heartbeat import Heartbeat
+from webdesk.runs.jobs import correlation_uuid
 from webdesk.storage.content_store import ContentStore
 
 LEASE_ENV = "WEBDESK_TEST_LEASE_SECONDS"
@@ -219,6 +220,7 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
                     "attempts": item.attempts,
                     "correlation_id": f"{item.run_id}/{item.job_id}/{item.attempts}",
                 },
+                correlation_id=correlation_uuid(item.run_id, item.job_id, item.attempts),
             )
             if item.run_state in ("intake_pending", "parsing"):
                 record_worker_event(
@@ -228,5 +230,7 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
                     outcome="error",
                     error_class="system_failure",
                     record_refs=[str(item.run_id)],
+                    details={"correlation_id": f"{item.run_id}/{item.job_id}/{item.attempts}"},
+                    correlation_id=correlation_uuid(item.run_id, item.job_id, item.attempts),
                 )
     return reaped

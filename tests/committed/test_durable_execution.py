@@ -35,6 +35,7 @@ from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
 from webdesk.runs import committed, jobs
 from webdesk.runs import service as runs
+from webdesk.runs.errors import RunError
 from webdesk.runs.heartbeat import Heartbeat, effective_interval
 from webdesk.storage.content_store import ContentStore
 
@@ -1148,3 +1149,177 @@ def test_archive_succeeds_after_a_run_failed_by_attempt_exhaustion(
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         proof = prove(conn, run_fixture.admin, "project.archive", run_fixture.project)
         projects.archive_project(conn, proof, run_fixture.project)
+
+
+# --- G-7: audit correlation UUID, guards and propagation -----------------------------------------
+
+
+def _audit_correlations(engine: Engine, event: str, run: uuid.UUID) -> list[object]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT correlation_id FROM audit_events
+                   WHERE event_type = :e AND record_refs::text LIKE :ref ORDER BY occurred_at"""
+            ),
+            {"e": event, "ref": f"%{run}%"},
+        ).all()
+    return [row[0] for row in rows]
+
+
+def test_a_parked_run_audit_row_stores_the_claim_correlation_uuid(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    store = ContentStore(run_fixture.store_root)
+    claim = _claim(committed_engine, "w-g7-park", 60)
+    assert (
+        committed.execute_committed(committed_engine, store, claim, "w-g7-park", 60) == "completed"
+    )
+    assert _audit_correlations(committed_engine, "run.parked", run_fixture.run) == [
+        claim.correlation_uuid
+    ]
+
+
+def test_a_retryable_failure_is_audited_as_a_requeue_with_the_same_correlation(
+    committed_engine: Engine, run_fixture: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def transient(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("simulated transient failure")
+
+    monkeypatch.setattr("webdesk.runs.jobs.parse_one", transient)
+    store = ContentStore(run_fixture.store_root)
+    claim = _claim(committed_engine, "w-g7-retry", 60)
+    assert (
+        committed.execute_committed(committed_engine, store, claim, "w-g7-retry", 60) == "requeued"
+    )
+    assert _audit_correlations(committed_engine, "job.requeued", run_fixture.run) == [
+        claim.correlation_uuid
+    ]
+
+
+def test_a_permanent_refusal_is_audited_as_a_failed_run_with_its_correlation(
+    committed_engine: Engine, run_fixture: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(*_args: Any, **_kwargs: Any) -> None:
+        raise RunError(403, "refused_by_policy")
+
+    monkeypatch.setattr("webdesk.runs.jobs.parse_one", refused)
+    store = ContentStore(run_fixture.store_root)
+    claim = _claim(committed_engine, "w-g7-deny", 60)
+    assert committed.execute_committed(committed_engine, store, claim, "w-g7-deny", 60) == "failed"
+    assert _audit_correlations(committed_engine, "run.failed", run_fixture.run) == [
+        claim.correlation_uuid
+    ]
+
+
+def test_the_reaper_audit_rows_carry_the_correlation_of_the_exhausted_attempt(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    last: jobs.JobClaim | None = None
+    for _ in range(jobs.MAX_ATTEMPTS):
+        last = _claim(committed_engine, "w-g7-reap", 1)
+        time.sleep(1.3)
+    assert last is not None and last.attempts == jobs.MAX_ATTEMPTS
+    assert len(committed.reap_expired(committed_engine, "reaper-g7")) == 1
+    assert _audit_correlations(committed_engine, "job.reaped", run_fixture.run) == [
+        last.correlation_uuid
+    ]
+    assert _audit_correlations(committed_engine, "run.failed", run_fixture.run) == [
+        last.correlation_uuid
+    ]
+
+
+def test_the_database_refuses_a_worker_audit_row_without_a_correlation(
+    committed_engine: Engine,
+) -> None:
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+        with pytest.raises(Exception, match="requires a correlation identifier"):
+            conn.execute(
+                text(
+                    """SELECT webdesk_guard.fn_worker_record_audit_correlated(
+                           'system', 'w-null', 'x.y', 'success', NULL,
+                           '[]'::jsonb, '{}'::jsonb, NULL)"""
+                )
+            )
+
+
+def test_the_database_refuses_human_actors_and_account_named_workers(
+    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    account = str(committed_admins[0])
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+        with pytest.raises(Exception, match="system events"):
+            conn.execute(
+                text(
+                    """SELECT webdesk_guard.fn_worker_record_audit_correlated(
+                           'human', 'w-h', 'x.y', 'success', NULL, '[]'::jsonb, '{}'::jsonb,
+                           gen_random_uuid())"""
+                )
+            )
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+        with pytest.raises(Exception, match="may not name an account"):
+            conn.execute(
+                text(
+                    """SELECT webdesk_guard.fn_worker_record_audit_correlated(
+                           'system', :acct, 'x.y', 'success', NULL, '[]'::jsonb, '{}'::jsonb,
+                           gen_random_uuid())"""
+                ),
+                {"acct": account},
+            )
+
+
+def test_only_the_worker_role_may_execute_the_correlated_audit_function(
+    committed_engine: Engine,
+) -> None:
+    with committed_engine.connect() as probe:
+        owner = probe.execute(
+            text(
+                """SELECT pg_get_userbyid(p.proowner) FROM pg_proc p
+                   WHERE p.proname = 'fn_worker_record_audit_correlated'"""
+            )
+        ).scalar_one()
+    assert owner == "webdesk_guard_owner"
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        with pytest.raises(Exception, match="permission denied"):
+            conn.execute(
+                text(
+                    """SELECT webdesk_guard.fn_worker_record_audit_correlated(
+                           'system', 'w-app', 'x.y', 'success', NULL, '[]'::jsonb, '{}'::jsonb,
+                           gen_random_uuid())"""
+                )
+            )
+
+
+def test_a_malformed_correlation_is_refused_before_any_database_write(
+    committed_engine: Engine,
+) -> None:
+    from webdesk.audit.service import record_worker_event
+
+    with committed_engine.begin() as conn:
+        with pytest.raises(ValueError, match="correlation_id must be a UUID"):
+            record_worker_event(
+                conn,
+                actor_id="w-bad",
+                event_type="x.y",
+                outcome="success",
+                correlation_id="not-a-uuid",  # type: ignore[arg-type]
+            )
+
+
+def test_a_stale_worker_writes_no_audit_row_under_the_lost_claim(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    store = ContentStore(run_fixture.store_root)
+    stale = _claim(committed_engine, "w-g7-stale", 1)
+    time.sleep(1.3)
+    successor = _claim(committed_engine, "w-g7-new", 60)
+    assert successor.attempts == 2
+    assert (
+        committed.execute_committed(committed_engine, store, stale, "w-g7-stale", 1) == "lease_lost"
+    )
+    assert stale.correlation_uuid != successor.correlation_uuid
+    assert _audit_correlations(committed_engine, "run.parked", run_fixture.run) == []
+    assert _audit_correlations(committed_engine, "job.requeued", run_fixture.run) == []

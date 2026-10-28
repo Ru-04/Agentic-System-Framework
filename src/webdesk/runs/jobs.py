@@ -50,6 +50,22 @@ class JobClaim:
         """One key per claim attempt, carried in logs and audit details (G-7)."""
         return f"{self.run_id}/{self.job_id}/{self.attempts}"
 
+    @property
+    def correlation_uuid(self) -> uuid.UUID:
+        """The same key as a UUID, stored in ``audit_events.correlation_id`` (G-7)."""
+        return correlation_uuid(self.run_id, self.job_id, self.attempts)
+
+
+_CORRELATION_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "urn:webdesk:phase3:durable-job")
+
+
+def correlation_uuid(run_id: uuid.UUID, job_id: uuid.UUID, attempts: int) -> uuid.UUID:
+    """Deterministic UUID for one claim attempt.
+
+    The logs carry the string key; the audit column carries this UUID.
+    """
+    return uuid.uuid5(_CORRELATION_NAMESPACE, f"{run_id}/{job_id}/{attempts}")
+
 
 def _guard(conn: Connection, call: str, params: dict[str, Any]) -> Any:
     """Run one worker guard call. A named refusal from the guard becomes a 409 run refusal."""
@@ -280,6 +296,7 @@ def finish_intake(
             "stale": bool(stale),
             "correlation_id": job.correlation_id,
         },
+        correlation_id=job.correlation_uuid,
     )
 
 
@@ -320,6 +337,7 @@ def record_failure(
             error_class=reason,
             record_refs=[str(job.run_id)],
             details={"correlation_id": job.correlation_id},
+            correlation_id=job.correlation_uuid,
         )
         return "failed"
     requeued = _guard(
@@ -338,6 +356,17 @@ def record_failure(
         conn,
         "SELECT webdesk_guard.fn_worker_set_run_status(:r, 'queued')",
         {"r": job.run_id},
+    )
+    # Recovery is audited too: the job is back in the queue, with its correlation key (G-7).
+    record_worker_event(
+        conn,
+        actor_id=owner,
+        event_type="job.requeued",
+        outcome="error",
+        error_class=reason,
+        record_refs=[str(job.job_id), str(job.run_id)],
+        details={"correlation_id": job.correlation_id, "attempts": job.attempts},
+        correlation_id=job.correlation_uuid,
     )
     return "requeued"
 
