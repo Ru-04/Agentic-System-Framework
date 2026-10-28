@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from tests.support.authority import call_adapter, run_in_harness
 from webdesk.investigation.engine import Edition, Page
 from webdesk.investigation.specialists import (
     CATALOG,
@@ -18,7 +19,7 @@ from webdesk.investigation.specialists import (
     decide,
     matched_capabilities,
 )
-from webdesk.specialists.adapter_v02 import AdapterRequest, AdapterResponse, call_adapter
+from webdesk.specialists.adapter_v02 import AdapterRequest, AdapterResponse
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 
@@ -119,7 +120,8 @@ def test_missing_operator_confirmation_refuses_before_any_page_is_read(
 
     monkeypatch.setattr("webdesk.investigation.specialists.investigate", must_not_run)
     provider = InvestigationProvider(WOO, (WOO_VARIATION_PAGE,), "1.0", operator_confirmed=False)
-    output = provider.run(
+    output = run_in_harness(
+        provider,
         SpecialistInput.model_validate(
             {
                 "contract_version": "1.0.0",
@@ -129,7 +131,7 @@ def test_missing_operator_confirmation_refuses_before_any_page_is_read(
                 "requirement_ids": ["REQ-SYN-1"],
                 "task": "product variation price",
             }
-        )
+        ),
     )
     assert output["status"] == "failed"
     assert output["findings"] == []

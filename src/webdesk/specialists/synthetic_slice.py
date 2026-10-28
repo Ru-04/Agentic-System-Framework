@@ -22,6 +22,7 @@ from webdesk.specialists.adapter_v02 import (
     audit_record,
     call_adapter,
 )
+from webdesk.specialists.authorization import AuthorityContext, require_harness_scope
 from webdesk.specialists.catalog import REGISTRY_CAPABILITY_IDS, SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 
@@ -54,6 +55,7 @@ class SyntheticSliceProvider:
         return self._specialist_id
 
     def run(self, request: SpecialistInput) -> Mapping[str, object]:
+        require_harness_scope()
         label = _LABELS.get(self._specialist_id, self._specialist_id.value)
         return {
             "contract_version": "1.0.0",
@@ -101,10 +103,13 @@ def build_request(fixture: Mapping[str, object], *, operator_confirmed: bool) ->
 
 
 def run_slice(
-    fixture: Mapping[str, object], *, operator_confirmed: bool
+    fixture: Mapping[str, object],
+    *,
+    operator_confirmed: bool,
+    authority: AuthorityContext,
 ) -> tuple[AdapterResponse, dict[str, str]]:
     """Run the synthetic slice. Returns the normalized response and the audit record."""
     request = build_request(fixture, operator_confirmed=operator_confirmed)
     provider = SyntheticSliceProvider(request.specialist_id)
-    response = call_adapter(provider, request)
+    response = call_adapter(provider, request, authority=authority)
     return response, audit_record(request, response)

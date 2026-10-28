@@ -9,13 +9,13 @@ from typing import Any
 
 import pytest
 
+from tests.support.authority import run_specialist
 from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST
 from webdesk.evidence.http_vendor import fetch_vendor_document
 from webdesk.evidence.retrieval import InMemoryRetriever, RetrievalError, RetrievalQuery
 from webdesk.evidence.sources import Freshness, SourceKind, SourceRecord, assess_freshness
 from webdesk.evidence.untrusted import flag_instruction_like, split_by_trust
-from webdesk.specialists.harness import run_specialist
 from webdesk.specialists.platforms.shopify import MAX_FINDINGS, ShopifySpecialist
 
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)

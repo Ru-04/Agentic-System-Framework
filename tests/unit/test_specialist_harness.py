@@ -4,10 +4,10 @@ from typing import Any
 
 import pytest
 
+from tests.support.authority import run_specialist
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 from webdesk.specialists.errors import SpecialistError, SpecialistErrorCode
-from webdesk.specialists.harness import run_specialist
 from webdesk.specialists.mock import MockSpecialist
 
 

@@ -17,11 +17,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from webdesk.specialists.authority import FORBIDDEN_ACTIONS, Action
+from webdesk.specialists.authorization import AuthorityContext
 from webdesk.specialists.catalog import REGISTRY_CAPABILITY_IDS, SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, EvidenceRef, NonBlank
 from webdesk.specialists.errors import SpecialistError
@@ -41,6 +43,7 @@ ERROR_CAPABILITY_MISMATCH: Final[str] = "capability_mismatch"
 ERROR_REQUEST_INVALID: Final[str] = "request_invalid"
 # Every capability was refused by an authorization or source-boundary rule (SOURCE-REFUSAL-01).
 ERROR_AUTHORIZATION_REFUSED: Final[str] = "authorization_refused"
+ERROR_AUTHORIZATION_DENIED: Final[str] = "authorization_denied"
 
 
 class AdapterRequest(BaseModel):
@@ -130,7 +133,12 @@ def _refused(request: AdapterRequest, capability_id: str, error_code: str) -> Ad
     )
 
 
-def call_adapter(provider: SpecialistProvider, request: AdapterRequest) -> AdapterResponse:
+def call_adapter(
+    provider: SpecialistProvider,
+    request: AdapterRequest,
+    *,
+    authority: AuthorityContext,
+) -> AdapterResponse:
     """Run one specialist through the adapter. Refusals and provider errors become responses."""
     if not request.operator_confirmed:
         return _refused(request, request.capability_id, ERROR_OPERATOR_CONFIRMATION_REQUIRED)
@@ -152,8 +160,14 @@ def call_adapter(provider: SpecialistProvider, request: AdapterRequest) -> Adapt
         "evidence_refs": [ref.model_dump() for ref in request.evidence_refs],
         "task": request.task,
     }
+    if authority.actor_id != request.actor_id:
+        return _refused(request, capability_id, ERROR_AUTHORIZATION_DENIED)
     try:
-        output = run_specialist(provider, raw_request)
+        output = run_specialist(
+            provider,
+            raw_request,
+            authority=replace(authority, capability_id=capability_id),
+        )
     except SpecialistError as exc:
         return _refused(request, capability_id, exc.code.value)
     except ValidationError:

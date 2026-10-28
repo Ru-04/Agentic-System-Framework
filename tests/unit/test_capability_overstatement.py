@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from tests.support.authority import run_in_harness
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Edition, Outcome, Page, investigate
 from webdesk.investigation.retrieval import FetchStatus, retrieve_approved_pages
@@ -58,7 +59,8 @@ def _provider_output(
     pages: tuple[Page, ...], specialist: SpecialistId, task: str, version: str
 ) -> Mapping[str, object]:
     provider = InvestigationProvider(specialist, pages, version)
-    return provider.run(
+    return run_in_harness(
+        provider,
         SpecialistInput.model_validate(
             {
                 "contract_version": "1.0.0",
@@ -68,7 +70,7 @@ def _provider_output(
                 "requirement_ids": ["REQ-1"],
                 "task": task,
             }
-        )
+        ),
     )
 
 

@@ -16,6 +16,7 @@ class SpecialistErrorCode(StrEnum):
     SPECIALIST_MISMATCH = "specialist_mismatch"
     WORKSPACE_MISMATCH = "workspace_mismatch"
     CAPABILITY_DENIED = "capability_denied"
+    AUTHORIZATION_DENIED = "authorization_denied"
     PROVIDER_FAILURE = "provider_failure"
 
 

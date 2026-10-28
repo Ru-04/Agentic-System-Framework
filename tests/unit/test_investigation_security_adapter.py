@@ -5,9 +5,10 @@ Synthetic fixtures only. No retrieval, no live source, no verified evidence is p
 
 from __future__ import annotations
 
+from tests.support.authority import call_adapter
 from webdesk.investigation.engine import Edition, Page
 from webdesk.investigation.specialists import CATALOG, InvestigationProvider, canonical_capability
-from webdesk.specialists.adapter_v02 import AdapterRequest, AdapterResponse, call_adapter
+from webdesk.specialists.adapter_v02 import AdapterRequest, AdapterResponse
 from webdesk.specialists.catalog import SpecialistId
 
 WS = "ws-synthetic"

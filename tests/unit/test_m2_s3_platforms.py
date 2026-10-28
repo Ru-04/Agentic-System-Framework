@@ -12,13 +12,13 @@ from typing import Any
 
 import pytest
 
+from tests.support.authority import run_specialist
 from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST
 from webdesk.evidence.retrieval import InMemoryRetriever, RetrievalError, RetrievalQuery
 from webdesk.evidence.sources import SourceKind
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.errors import SpecialistError, SpecialistErrorCode
-from webdesk.specialists.harness import run_specialist
 from webdesk.specialists.platforms import (
     bigcommerce,
     magento_adobe_commerce,

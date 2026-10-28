@@ -7,12 +7,12 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from tests.support.authority import call_adapter, run_slice
 from webdesk.specialists.adapter_v02 import (
     ADAPTER_CONTRACT_VERSION,
     CONFIDENCE_STATUS,
     REGISTRY_VERSION,
     AdapterRequest,
-    call_adapter,
     check_allowed_actions,
     resolve_capability,
 )
@@ -21,7 +21,6 @@ from webdesk.specialists.synthetic_slice import (
     SyntheticSliceProvider,
     build_request,
     load_fixture,
-    run_slice,
 )
 
 SEVEN = list(SpecialistId)

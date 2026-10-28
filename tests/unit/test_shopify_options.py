@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
+from tests.support.authority import run_specialist
 from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.retrieval import InMemoryRetriever
 from webdesk.evidence.sources import SourceKind
 from webdesk.specialists.contract import SpecialistInput
-from webdesk.specialists.harness import run_specialist
 from webdesk.specialists.platforms.shopify import ShopifySpecialist
 from webdesk.specialists.platforms.shopify_options import (
     FEASIBILITY_STATUS,

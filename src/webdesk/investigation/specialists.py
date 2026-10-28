@@ -25,6 +25,7 @@ from webdesk.investigation.engine import (
     term_in_text,
 )
 from webdesk.specialists.authority import Action
+from webdesk.specialists.authorization import require_harness_scope
 from webdesk.specialists.catalog import REGISTRY_CAPABILITY_IDS, SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 
@@ -206,6 +207,7 @@ class InvestigationProvider:
         return PROVIDER_ACTIONS
 
     def run(self, request: SpecialistInput) -> Mapping[str, object]:
+        require_harness_scope()
         # Authorization and the objective are checked before any page is read.
         decision, reason = decide(
             self.specialist,

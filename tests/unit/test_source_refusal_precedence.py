@@ -6,6 +6,7 @@ inactive source is never reported as an unauthorized access.
 
 from __future__ import annotations
 
+from tests.support.authority import call_adapter, run_in_harness
 from webdesk.investigation.engine import (
     Capability,
     ClaimKind,
@@ -19,7 +20,6 @@ from webdesk.investigation.specialists import InvestigationProvider, canonical_c
 from webdesk.specialists.adapter_v02 import (
     ERROR_AUTHORIZATION_REFUSED,
     AdapterRequest,
-    call_adapter,
 )
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
@@ -199,7 +199,8 @@ def test_provider_output_for_refusal_is_contract_valid_and_echoes_identity() -> 
     provider = InvestigationProvider(
         SpecialistId.WORDPRESS_WOOCOMMERCE, (_page(OFF_BOUNDARY_URL, "variation price"),), "1.0"
     )
-    output = provider.run(
+    output = run_in_harness(
+        provider,
         SpecialistInput.model_validate(
             {
                 "contract_version": "1.0.0",
@@ -209,7 +210,7 @@ def test_provider_output_for_refusal_is_contract_valid_and_echoes_identity() -> 
                 "requirement_ids": ["REQ-SYN-1"],
                 "task": "product variation price",
             }
-        )
+        ),
     )
     assert output["request_id"] == "REQ-PREC"
     assert output["workspace_id"] == WS

@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from webdesk.specialists.authority import Action
+from webdesk.specialists.authorization import require_harness_scope
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 
@@ -28,6 +29,7 @@ class MockSpecialist:
     calls: int = 0
 
     def run(self, request: SpecialistInput) -> Mapping[str, object]:
+        require_harness_scope()
         self.calls += 1
         if self.failure is not None:
             raise self.failure

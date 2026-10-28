@@ -16,6 +16,13 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from webdesk.specialists.authority import check_actions
+from webdesk.specialists.authorization import (
+    AuthorityContext,
+    AuthorizationDenied,
+    audit_entry,
+    harness_scope,
+    verify_operator_decision,
+)
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import (
     CONTRACT_VERSION,
@@ -37,8 +44,12 @@ class SpecialistProvider(Protocol):
 
 
 def run_specialist(
-    provider: SpecialistProvider, raw_request: Mapping[str, object]
+    provider: SpecialistProvider,
+    raw_request: Mapping[str, object],
+    *,
+    authority: AuthorityContext,
 ) -> SpecialistOutput:
+    """Run one provider. The operator decision is verified before the provider executes (QA-07)."""
     if not isinstance(raw_request, Mapping):
         raise SpecialistError(SpecialistErrorCode.INPUT_INVALID, "request must be a mapping")
     version = raw_request.get("contract_version")
@@ -61,6 +72,22 @@ def run_specialist(
             f"{provider.specialist_id.value}",
         )
     check_actions(provider.specialist_id, provider.declared_actions)
+    try:
+        verify_operator_decision(
+            authority,
+            workspace_id=request.workspace_id,
+            specialist_id=request.specialist_id.value,
+            request_id=request.request_id,
+            requested_actions=frozenset(provider.declared_actions),
+        )
+    except AuthorizationDenied as exc:
+        _record(authority, request, "denied", exc.code.value)
+        # The reason code goes to the audit record only. The error text stays fixed.
+        raise SpecialistError(
+            SpecialistErrorCode.AUTHORIZATION_DENIED,
+            "operator authorization was not verified",
+        ) from None
+    _record(authority, request, "allowed", "")
 
     # Snapshot the identity the output must echo, before the provider can touch anything.
     expected_request_id = request.request_id
@@ -70,7 +97,8 @@ def run_specialist(
         check_workspace(expected_workspace_id, ref.workspace_id, "evidence reference")
 
     try:
-        raw_output = provider.run(request.model_copy(deep=True))
+        with harness_scope():
+            raw_output = provider.run(request.model_copy(deep=True))
     except Exception:
         # Provider-chosen codes are not trusted, and the provider's text is not echoed back.
         # The original exception stays on __context__ for the caller's own debugging.
@@ -100,3 +128,17 @@ def run_specialist(
         for ref in finding.evidence_refs:
             check_workspace(expected_workspace_id, ref.workspace_id, "finding evidence")
     return output
+
+
+def _record(authority: AuthorityContext, request: SpecialistInput, outcome: str, code: str) -> None:
+    if authority.audit is not None:
+        authority.audit.append(
+            audit_entry(
+                decision_id=authority.decision_id,
+                workspace_id=request.workspace_id,
+                specialist_id=request.specialist_id.value,
+                request_id=request.request_id,
+                outcome=outcome,
+                code=code,
+            )
+        )

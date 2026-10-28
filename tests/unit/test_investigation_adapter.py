@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import pytest
 
+from tests.support.authority import call_adapter
 from webdesk.investigation.engine import Edition, Page
 from webdesk.investigation.specialists import CATALOG, InvestigationProvider, canonical_capability
 from webdesk.specialists.adapter_v02 import (
     AdapterRequest,
     AdapterResponse,
     audit_record,
-    call_adapter,
 )
 from webdesk.specialists.catalog import REGISTRY_CAPABILITY_IDS, SpecialistId
 

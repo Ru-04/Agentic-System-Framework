@@ -37,6 +37,7 @@ from webdesk.evidence.retrieval import (
 from webdesk.evidence.sources import Freshness, SourceKind, assess_freshness
 from webdesk.evidence.untrusted import flag_instruction_like, make_admission, split_by_trust
 from webdesk.specialists.authority import Action
+from webdesk.specialists.authorization import require_harness_scope
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, SpecialistInput
 from webdesk.specialists.platforms.shopify_options import (
@@ -144,6 +145,7 @@ class PlatformSpecialist:
         return self.profile.specialist_id
 
     def run(self, request: SpecialistInput) -> dict[str, Any]:
+        require_harness_scope()
         output, _ = self.investigate(request)
         return output
 

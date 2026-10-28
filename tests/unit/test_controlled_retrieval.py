@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from tests.support.authority import run_in_harness
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Capability, ClaimKind, Edition, Outcome, investigate
 from webdesk.investigation.retrieval import FetchStatus, retrieve_approved_pages
@@ -240,7 +241,8 @@ def test_provider_reports_verified_support_as_a_cited_non_synthetic_finding(
     _activate(monkeypatch)
     pages = _retrieve([APPROVED], Recorder()).pages
     provider = InvestigationProvider(SpecialistId.WORDPRESS_WOOCOMMERCE, pages, "1.0")
-    output = provider.run(
+    output = run_in_harness(
+        provider,
         SpecialistInput.model_validate(
             {
                 "contract_version": "1.0.0",
@@ -250,7 +252,7 @@ def test_provider_reports_verified_support_as_a_cited_non_synthetic_finding(
                 "requirement_ids": ["REQ-SYN-1"],
                 "task": "product variation price",
             }
-        )
+        ),
     )
     findings = output["findings"]
     assert isinstance(findings, list)

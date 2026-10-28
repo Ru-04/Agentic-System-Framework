@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
+from tests.support.authority import run_specialist
 from tests.support.evidence_fixtures import fixture_source
 from webdesk.evidence.retrieval import InMemoryRetriever, RetrievalError, RetrievalQuery
 from webdesk.evidence.sources import SourceKind, SourceRecord
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.errors import SpecialistError
-from webdesk.specialists.harness import run_specialist
 from webdesk.specialists.platforms.shopify import LIMITS, ShopifySpecialist
 
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
