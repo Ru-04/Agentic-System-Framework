@@ -209,7 +209,7 @@ def test_an_unreadable_page_gives_partial_and_keeps_the_good_pages(
         def __init__(self, text: str | None) -> None:
             self._text = text
 
-        def get_contents(self) -> None:
+        def get(self, _key: str, _default: Any = None) -> None:
             return None
 
         def extract_text(self) -> str:
@@ -263,8 +263,12 @@ def test_text_lines_get_line_range_locators() -> None:
 def test_eml_yields_subject_and_body_and_lists_attachments_without_ingesting_them() -> None:
     result = parse_eml(_eml(with_attachment=True))
     parts = [s.locator for s in result.segments]
-    assert {"eml_part": "subject"} in parts
-    assert {"eml_part": "body"} in parts
+    subject, body = parts
+    assert subject["eml_part"] == "subject"
+    assert body["eml_part"] == "body"
+    # Approved offsets (P4-GOV-2026-10-28): 0 to the length of the normalized part text.
+    assert subject["char_start"] == 0 and subject["char_end"] == len(result.segments[0].text)
+    assert body["char_start"] == 0 and body["char_end"] == len(result.segments[1].text)
     assert len(result.unprocessed_attachments) == 1
     attachment = result.unprocessed_attachments[0]
     assert attachment["filename"] == "spec.pdf"

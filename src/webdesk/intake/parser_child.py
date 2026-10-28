@@ -1,6 +1,6 @@
 """Parser child process entry point (Phase 4, H-32).
 
-Usage: ``python -I -m webdesk.intake.parser_child <mime>`` with the file on stdin. The result is one
+Usage: ``python -s -m webdesk.intake.parser_child <mime>`` with the file on stdin. The result is one
 JSON object on stdout. Only the parsers are imported here: nothing from the database, storage or
 authority layers. The parent (``isolation.run_isolated``) enforces the timeout and the output cap.
 

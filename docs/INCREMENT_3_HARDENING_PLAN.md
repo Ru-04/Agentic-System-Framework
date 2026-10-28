@@ -1,6 +1,6 @@
 # Increment 3 Hardening Plan (for approval; no code written)
 
-**Status:** Proposed. Awaiting approval. No code, migration, test or specification change has been made.
+**Status:** Approved as the non-production engineering baseline for Phase 4 (P-0), as relayed on 2026-10-28 and recorded in `docs/GOVERNANCE_DECISION_REGISTER.md` entry P4-GOV-2026-10-28. Approver identity and WDS approval date are not yet confirmed. Not production approval. No production change is made by this plan.
 
 **Baseline:** branch `feature/increment-1-foundation`, commit `acd5c51`.
 

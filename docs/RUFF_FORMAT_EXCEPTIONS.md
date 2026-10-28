@@ -1,6 +1,6 @@
-# Ruff formatting exceptions (recorded 2026-10-26)
+# Ruff formatting exceptions (recorded 2026-10-26; corrected 2026-10-28)
 
-`ruff check` is clean for `src`, `tests` and `migrations`. `ruff format --check` reports five files that were already
+`ruff check` is clean for `src`, `tests` and `migrations`. `ruff format --check` reports six files that were already
 unformatted when they were committed. They are **not** reformatted, for these reasons:
 
 - Four files are **committed migrations**, and historical migrations are frozen. Rewriting them for formatting alone would
