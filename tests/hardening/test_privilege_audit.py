@@ -140,6 +140,7 @@ WORKER_EXECUTE = frozenset(
         "fn_worker_begin_parse",
         "fn_worker_claim_job",
         "fn_worker_finish_job",
+        "fn_worker_hold_lease",
         "fn_worker_insert_checkpoint",
         "fn_worker_insert_segment",
         "fn_worker_lock_run",
@@ -150,6 +151,7 @@ WORKER_EXECUTE = frozenset(
         "fn_worker_renew_lease",
         "fn_worker_requeue_job",
         "fn_worker_set_run_status",
+        "fn_worker_stuck_jobs",
         "fn_worker_transition_run",
     }
 )

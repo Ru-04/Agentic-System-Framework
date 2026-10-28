@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import text
@@ -34,6 +35,7 @@ from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
 from webdesk.runs import committed, jobs
 from webdesk.runs import service as runs
+from webdesk.runs.heartbeat import Heartbeat, effective_interval
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
@@ -365,7 +367,14 @@ def _await_started(proc: subprocess.Popen[str], timeout: float = 90.0) -> None:
 
 
 def _spawn(
-    worker_url: str, root: Path, owner: str, *, lease: int, step_delay: float
+    worker_url: str,
+    root: Path,
+    owner: str,
+    *,
+    lease: int,
+    step_delay: float,
+    step_limit: float | None = None,
+    extra: tuple[str, ...] = (),
 ) -> subprocess.Popen[str]:
     env = dict(os.environ)
     env.update(
@@ -377,12 +386,16 @@ def _spawn(
             "WEBDESK_TEST_STEP_DELAY_SECONDS": str(step_delay),
         }
     )
+    if step_limit is not None:
+        env["WEBDESK_TEST_STEP_LIMIT_SECONDS"] = str(step_limit)
     return subprocess.Popen(  # noqa: S603 - the test's own interpreter and module
-        [sys.executable, "-m", "webdesk.worker", "--once", "--owner", owner],
+        [sys.executable, "-m", "webdesk.worker", "--once", "--owner", owner, *extra],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        # A new group lets a break event reach only this worker, never the test's own console.
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
     )
 
 
@@ -698,3 +711,440 @@ def test_a_cancelled_run_cannot_be_resumed(committed_engine: Engine, run_fixture
             runs.resume_run(conn, proof, run_fixture.run, expected_run_revision=revision + 1)
     assert _run_row(committed_engine, run_fixture.run)["state"] == "cancelled"
     assert refused.value is not None
+
+
+# --- H-22: heartbeat renewal, fencing and stalls (real time, committed rows) ----------------------
+
+
+def _claim(engine: Engine, owner: str, lease: int) -> jobs.JobClaim:
+    claim = committed.claim_and_commit(engine, owner, lease=lease)
+    assert claim is not None, f"{owner} could not claim the job"
+    return claim
+
+
+def _seconds_to_expiry(engine: Engine, run: uuid.UUID) -> float:
+    with engine.connect() as conn:
+        value = conn.execute(
+            text(
+                """SELECT extract(epoch FROM lease_expires_at - clock_timestamp())
+                   FROM workflow_jobs WHERE run_id = :r"""
+            ),
+            {"r": run},
+        ).scalar_one()
+    return float(value)
+
+
+def _cancel_run(engine: Engine, run_fixture: Fixture) -> None:
+    with engine.connect() as probe:
+        revision = int(
+            probe.execute(
+                text("SELECT revision FROM workflow_runs WHERE run_id = :r"), {"r": run_fixture.run}
+            ).scalar_one()
+        )
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        proof = prove(conn, run_fixture.admin, "run.cancel", run_fixture.run)
+        runs.cancel_run(conn, proof, run_fixture.run, expected_run_revision=revision)
+
+
+def test_the_heartbeat_keeps_the_lease_alive_through_a_step_that_commits_nothing(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    claim = _claim(committed_engine, "hb-live", 2)
+    events: list[dict[str, object]] = []
+    with Heartbeat(
+        committed_engine, claim, "hb-live", 2, interval=0.1, step_limit=30, emit=events.append
+    ) as hb:
+        hb.begin_step()
+        time.sleep(3.0)  # longer than the lease, with no committed step in between
+        assert not hb.lost
+        assert _seconds_to_expiry(committed_engine, run_fixture.run) > 0
+        assert committed.claim_and_commit(committed_engine, "hb-rival", lease=2) is None
+    assert hb.renewals >= 10
+    assert not hb.running
+    assert any(e["event"] == "heartbeat.renewed" for e in events)
+
+
+def test_the_lease_expires_and_is_reclaimable_once_the_heartbeat_stops(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    claim = _claim(committed_engine, "hb-stop", 2)
+    with Heartbeat(committed_engine, claim, "hb-stop", 2, interval=0.1, step_limit=30) as hb:
+        time.sleep(0.5)
+    assert hb.renewals >= 1
+    time.sleep(2.3)
+    rival = committed.claim_and_commit(committed_engine, "hb-rival", lease=30)
+    assert rival is not None and rival.attempts == 2
+
+
+def test_a_renewal_is_refused_after_cancellation_and_the_heartbeat_stops(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    claim = _claim(committed_engine, "hb-cancel", 30)
+    _cancel_run(committed_engine, run_fixture)
+    with Heartbeat(committed_engine, claim, "hb-cancel", 30, interval=0.1, step_limit=30) as hb:
+        _wait_until(lambda: hb.lost, timeout=10)
+    assert hb.renewals == 0
+    assert not hb.running
+
+
+def test_a_heartbeat_of_a_reclaimed_lease_is_refused_and_writes_nothing(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    stale = _claim(committed_engine, "hb-old", 1)
+    time.sleep(1.3)
+    successor = _claim(committed_engine, "hb-new", 60)
+    assert successor.attempts == 2
+    with Heartbeat(committed_engine, stale, "hb-old", 1, interval=0.1, step_limit=30) as hb:
+        _wait_until(lambda: hb.lost, timeout=10)
+    assert hb.renewals == 0
+    final = _job(committed_engine, run_fixture.run)
+    assert (final["status"], final["owner"]) == ("leased", "hb-new")
+
+
+def test_a_hung_step_stops_renewal_reports_a_stall_and_frees_the_job(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    claim = _claim(committed_engine, "hb-hung", 2)
+    stalls: list[int] = []
+    events: list[dict[str, object]] = []
+    hb = Heartbeat(
+        committed_engine,
+        claim,
+        "hb-hung",
+        2,
+        interval=0.1,
+        step_limit=0.8,
+        emit=events.append,
+        on_stall=lambda: stalls.append(1),
+    )
+    with hb:
+        hb.begin_step()
+        _wait_until(lambda: hb.lost, timeout=10)
+        renewed_before_stall = hb.renewals
+    assert stalls == [1]
+    assert any(e["event"] == "heartbeat.stalled" for e in events)
+    assert renewed_before_stall <= 8
+    time.sleep(2.3)
+    assert committed.claim_and_commit(committed_engine, "hb-next", lease=30) is not None
+
+
+def test_a_database_error_during_renewal_is_reported_by_class_and_retried(
+    committed_engine: Engine, run_fixture: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    claim = _claim(committed_engine, "hb-retry", 2)
+    real_renew = jobs.renew
+    calls: list[int] = []
+
+    def flaky(*args: Any, **kwargs: Any) -> bool:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("simulated connection drop")
+        return real_renew(*args, **kwargs)
+
+    monkeypatch.setattr("webdesk.runs.heartbeat.jobs.renew", flaky)
+    events: list[dict[str, object]] = []
+    with Heartbeat(
+        committed_engine, claim, "hb-retry", 2, interval=0.1, step_limit=30, emit=events.append
+    ) as hb:
+        _wait_until(lambda: hb.renewals >= 2, timeout=10)
+    failures = [e for e in events if e["event"] == "heartbeat.failed"]
+    assert len(failures) == 1
+    assert failures[0]["error_class"] == "RuntimeError"
+    assert "error" not in failures[0] and "message" not in failures[0]
+    assert not hb.lost
+
+
+def test_renewal_and_step_fencing_race_without_deadlock_or_lost_updates(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    """G-6: four renewers and two step holders on separate connections, for the same claim."""
+    claim = _claim(committed_engine, "hb-race", 60)
+    errors: list[BaseException] = []
+    results: list[bool] = []
+    lock = threading.Lock()
+
+    def renewer() -> None:
+        try:
+            for _ in range(20):
+                with committed_engine.begin() as conn:
+                    conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+                    ok = jobs.renew(conn, claim.job_id, "hb-race", 60)
+                with lock:
+                    results.append(ok)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def holder() -> None:
+        try:
+            for _ in range(10):
+                with committed_engine.begin() as conn:
+                    conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+                    jobs.hold(conn, claim, "hb-race")
+                    time.sleep(0.01)
+                with lock:
+                    results.append(True)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=renewer) for _ in range(4)]
+    threads += [threading.Thread(target=holder) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert not any(thread.is_alive() for thread in threads), "renewal and holds did not finish"
+    assert errors == []
+    assert results and all(results)
+    assert _job(committed_engine, run_fixture.run)["status"] == "leased"
+
+
+def test_a_step_that_starts_after_its_lease_expired_writes_nothing(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    claim = _claim(committed_engine, "hb-late", 1)
+    time.sleep(1.3)
+    with pytest.raises(jobs.LeaseLost):
+        with committed_engine.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+            jobs.hold(conn, claim, "hb-late")
+    assert _run_row(committed_engine, run_fixture.run)["state"] == "intake_pending"
+
+
+def test_heartbeat_interval_never_exceeds_a_quarter_of_the_lease() -> None:
+    assert effective_interval(120, 30.0) == 30.0
+    assert effective_interval(2, 30.0) == 0.5
+    assert effective_interval(4, 0.1) == 0.1
+
+
+def test_the_worker_process_aborts_a_hung_step_and_its_lease_is_recovered(
+    committed_engine: Engine, committed_url: str, worker_url: str, run_fixture: Fixture
+) -> None:
+    proc = _spawn(
+        worker_url, run_fixture.store_root, "w-hung", lease=2, step_delay=60, step_limit=1
+    )
+    try:
+        out, _err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert proc.returncode == 70, out
+    assert '"heartbeat.stalled"' in out and '"worker.aborted"' in out
+    _wait_until(lambda: _job(committed_engine, run_fixture.run)["expired"], timeout=30)
+    store = ContentStore(run_fixture.store_root)
+    assert committed.run_once(committed_engine, store, "w-rescue", lease=60) == "completed"
+    assert _job(committed_engine, run_fixture.run)["attempts"] == 2
+
+
+# --- G-7 / G-8: correlation keys and stuck-job diagnostics ---------------------------------------
+
+
+def test_the_audit_of_a_parked_run_carries_the_claim_correlation_key(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    store = ContentStore(run_fixture.store_root)
+    claim = _claim(committed_engine, "w-corr", 60)
+    assert committed.execute_committed(committed_engine, store, claim, "w-corr", 60) == "completed"
+    with committed_engine.connect() as conn:
+        value = conn.execute(
+            text(
+                """SELECT redacted_details->>'correlation_id' FROM audit_events
+                   WHERE event_type = 'run.parked' AND record_refs::text LIKE :ref"""
+            ),
+            {"ref": f"%{run_fixture.run}%"},
+        ).scalar_one()
+    assert value == claim.correlation_id == f"{run_fixture.run}/{claim.job_id}/1"
+
+
+def test_the_stuck_report_names_an_expired_lease_that_nobody_reclaimed(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    _claim(committed_engine, "w-stuck", 1)
+    time.sleep(1.3)
+    rows = committed.stuck_jobs(committed_engine, 0)
+    leased = [row for row in rows if row["job_status"] == "leased"]
+    assert len(leased) == 1
+    assert leased[0]["reason"] == "expired_lease_not_reclaimed"
+    assert leased[0]["attempts"] == 1
+    assert str(leased[0]["correlation_id"]).endswith("/1")
+    assert committed.stuck_jobs(committed_engine, 3600) == []
+
+
+def test_the_stuck_report_command_exits_1_when_stuck_and_0_when_clear(
+    committed_engine: Engine, committed_url: str, worker_url: str, run_fixture: Fixture
+) -> None:
+    env = dict(os.environ)
+    env["WEBDESK_WORKER_DATABASE_URL"] = worker_url
+    clear = subprocess.run(  # noqa: S603 - the test's own interpreter and module
+        [sys.executable, "-m", "webdesk.worker", "--report-stuck", "--stale-seconds", "3600"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert clear.returncode == 0, clear.stderr
+    assert '"stuck.report"' in clear.stdout and '"count": 0' in clear.stdout
+    _claim(committed_engine, "w-stuck-cli", 1)
+    time.sleep(1.3)
+    stuck = subprocess.run(  # noqa: S603 - the test's own interpreter and module
+        [sys.executable, "-m", "webdesk.worker", "--report-stuck", "--stale-seconds", "0"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert stuck.returncode == 1, stuck.stderr
+    assert '"job.stuck"' in stuck.stdout and "expired_lease_not_reclaimed" in stuck.stdout
+
+
+# --- H-26: worker loop, maintenance steps and error isolation -------------------------------------
+
+
+def test_a_failing_maintenance_step_is_reported_and_the_job_loop_continues(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    from webdesk.worker.loop import WorkerLoop
+
+    events: list[dict[str, object]] = []
+
+    def broken() -> None:
+        raise RuntimeError("transport unavailable")
+
+    loop = WorkerLoop(
+        committed_engine,
+        ContentStore(run_fixture.store_root),
+        "w-maint",
+        lease=60,
+        emit=events.append,
+        maintenance=[("outbox", broken, 0.0)],
+    )
+    result = loop.run(once=True)
+    assert result.processed == 1
+    failed = [e for e in events if e["event"] == "maintenance.failed"]
+    assert failed == [
+        {
+            "event": "maintenance.failed",
+            "owner": "w-maint",
+            "at": failed[0]["at"],
+            "step": "outbox",
+            "error_class": "RuntimeError",
+        }
+    ]
+    assert any(e["event"] == "job.outcome" and e["outcome"] == "completed" for e in events)
+    assert _job(committed_engine, run_fixture.run)["status"] == "completed"
+
+
+def test_optional_maintenance_steps_are_disabled_with_a_named_reason_when_unconfigured() -> None:
+    from webdesk.worker.maintenance import maintenance_from_env
+
+    events: list[dict[str, object]] = []
+    steps, closers = maintenance_from_env({}, "w-cfg", events.append)
+    assert steps == [] and closers == []
+    disabled = {str(e["step"]): str(e["reason"]) for e in events}
+    assert set(disabled) == {"sweep", "outbox"}
+    assert "WEBDESK_CEREMONY_DATABASE_URL" in disabled["sweep"]
+    assert "WEBDESK_OUTBOX_DATABASE_URL" in disabled["outbox"]
+    assert "WEBDESK_RESET_DELIVERY" in disabled["outbox"]
+
+
+def test_phase3_demonstration_heartbeat_exhaustion_stuck_report_and_shutdown_modes(
+    committed_engine: Engine, committed_url: str, worker_url: str, run_fixture: Fixture
+) -> None:
+    """Narrated demonstration (sprint section D). Run with ``-s``. Synthetic data only."""
+
+    def step(text_: str) -> None:
+        print(f"[phase3-demo] {text_}", flush=True)
+
+    # 1. Heartbeat: a step that commits nothing for longer than its lease keeps the lease alive.
+    claim = _claim(committed_engine, "demo-hb", 2)
+    step(f"1. heartbeat: claim {claim.correlation_id} (attempt {claim.attempts}), lease 2 s")
+    with Heartbeat(committed_engine, claim, "demo-hb", 2, interval=0.2, step_limit=30) as hb:
+        hb.begin_step()
+        time.sleep(3.0)
+        remaining = _seconds_to_expiry(committed_engine, run_fixture.run)
+        step(
+            f"2. heartbeat: 3 s step with no commit; renewals {hb.renewals}; "
+            f"lease still live with {remaining:.1f} s left; rival claim refused"
+        )
+        assert committed.claim_and_commit(committed_engine, "demo-rival", lease=2) is None
+        assert hb.renewals >= 5 and remaining > 0
+
+    # 3. Stuck-job detection: the heartbeat stopped, nobody reclaims the expired lease.
+    time.sleep(2.3)
+    stuck = [
+        row for row in committed.stuck_jobs(committed_engine, 0) if row["job_status"] == "leased"
+    ]
+    step(
+        f"3. stuck report after abrupt heartbeat stop: {stuck[0]['reason']} "
+        f"({stuck[0]['correlation_id']})"
+    )
+    assert stuck and stuck[0]["reason"] == "expired_lease_not_reclaimed"
+
+    # 4. Retry exhaustion: the next two claims are killed mid-step (attempts 2 and 3).
+    for attempt in range(2, jobs.MAX_ATTEMPTS + 1):
+        owner = f"demo-crash-{attempt}"
+        victim = _spawn(worker_url, run_fixture.store_root, owner, lease=2, step_delay=60)
+        try:
+            _wait_until(lambda owner=owner: _leased_by(committed_engine, run_fixture.run, owner))
+            victim.kill()
+            victim.wait(timeout=10)
+        finally:
+            if victim.poll() is None:
+                victim.kill()
+        step(f"4.{attempt - 1}. worker {owner} killed mid-step with attempt {attempt} durable")
+        _wait_until(lambda: _job(committed_engine, run_fixture.run)["expired"])
+    reaped = committed.reap_expired(committed_engine, "demo-reaper")
+    run = _run_row(committed_engine, run_fixture.run)
+    step(
+        f"5. reaper: {len(reaped)} job reaped after {jobs.MAX_ATTEMPTS} attempts; "
+        f"run {run['state']} "
+        f"({run['failure_class']}); slot released"
+    )
+    assert len(reaped) == 1 and run["failure_class"] == "system_failure"
+
+    # 6. Graceful versus abrupt shutdown, on a second run in the same project.
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        revision = conn.execute(
+            text("SELECT revision FROM projects WHERE project_id = :p"), {"p": run_fixture.project}
+        ).scalar_one()
+        proof = prove(conn, run_fixture.analyst, "run.start", run_fixture.project)
+        second = runs.start_run(
+            conn, proof, run_fixture.project, expected_project_revision=int(revision)
+        )
+    graceful = _spawn(worker_url, run_fixture.store_root, "demo-graceful", lease=5, step_delay=3)
+    try:
+        _await_started(graceful)
+        _wait_until(lambda: _leased_by(committed_engine, second, "demo-graceful"))
+        if os.name == "nt":
+            graceful.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            graceful.send_signal(signal.SIGTERM)
+        out, _err = graceful.communicate(timeout=120)
+    finally:
+        if graceful.poll() is None:
+            graceful.kill()
+    assert graceful.returncode == 0, out
+    final = _job(committed_engine, second)
+    step(
+        f"6. graceful stop during a step: exit {graceful.returncode}; job {final['status']} "
+        f"(attempt {final['attempts']}); no lease left behind"
+    )
+    assert final["status"] == "completed" and final["attempts"] == 1
+
+
+def test_archive_succeeds_after_a_run_failed_by_attempt_exhaustion(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    """G-4: the project can be archived once its run has failed; the failed run holds no slot."""
+    for _ in range(jobs.MAX_ATTEMPTS):
+        _claim(committed_engine, "w-archive", 1)
+        time.sleep(1.3)
+    assert len(committed.reap_expired(committed_engine, "reaper-archive")) == 1
+    assert _run_row(committed_engine, run_fixture.run)["status"] == "failed"
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        proof = prove(conn, run_fixture.admin, "project.archive", run_fixture.project)
+        projects.archive_project(conn, proof, run_fixture.project)

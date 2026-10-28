@@ -14,8 +14,7 @@ worker function (migration 0031), and the worker reads only the tables it needs.
 stays here, against ``ALLOWED_TRANSITIONS``. The guard applies a transition only when the expected
 state still holds.
 
-Callers commit each step. Tests run the same functions on a rolled-back connection.
-"""
+Callers commit each step. Tests run the same functions on a rolled-back connection."""
 
 from __future__ import annotations
 
@@ -45,6 +44,11 @@ class JobClaim:
     run_id: uuid.UUID
     project_id: uuid.UUID
     attempts: int
+
+    @property
+    def correlation_id(self) -> str:
+        """One key per claim attempt, carried in logs and audit details (G-7)."""
+        return f"{self.run_id}/{self.job_id}/{self.attempts}"
 
 
 def _guard(conn: Connection, call: str, params: dict[str, Any]) -> Any:
@@ -81,9 +85,25 @@ def claim(conn: Connection, owner: str, lease_seconds: int = LEASE_SECONDS) -> J
     )
 
 
+def hold(conn: Connection, job: JobClaim, owner: str) -> None:
+    """Confirm the caller still owns an unexpired lease, and hold a KEY SHARE lock (H-22).
+
+    The lock lasts until the caller's transaction ends. It blocks reclaim, which takes FOR UPDATE,
+    and it does not block the heartbeat's renewal. A caller that cannot prove ownership raises
+    ``LeaseLost``."""
+    held = _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_hold_lease(:j, :owner)",
+        {"j": job.job_id, "owner": owner},
+    ).scalar_one()
+    if not held:
+        raise LeaseLost()
+
+
 def renew(
     conn: Connection, job_id: uuid.UUID, owner: str, lease_seconds: int = LEASE_SECONDS
 ) -> bool:
+    """Extend the lease. Only the heartbeat calls this, so a step never holds the update lock."""
     return bool(
         _guard(
             conn,
@@ -152,8 +172,7 @@ def begin_intake(
     conn: Connection, job: JobClaim, owner: str, lease_seconds: int = LEASE_SECONDS
 ) -> None:
     """Step 1 of intake: confirm the lease, then move the run from intake_pending to parsing."""
-    if not renew(conn, job.job_id, owner, lease_seconds):
-        raise LeaseLost()
+    hold(conn, job, owner)
     run = _lock_run(conn, job.run_id)
     if run.state == "intake_pending":
         _transition(conn, run.run_id, "intake_pending", "parsing", "running")
@@ -184,10 +203,8 @@ def parse_one(
 ) -> None:
     """Step 2 of intake, once per version: renew the lease, then parse.
 
-    A refused parse is recorded by the parser, not raised.
-    """
-    if not renew(conn, job.job_id, owner, lease_seconds):
-        raise LeaseLost()
+    A refused parse is recorded by the parser, not raised."""
+    hold(conn, job, owner)
     try:
         parse_version(conn, store, version_id, actor_id=f"run:{job.run_id}")
     except ParseRefused:
@@ -198,8 +215,7 @@ def finish_intake(
     conn: Connection, job: JobClaim, owner: str, lease_seconds: int = LEASE_SECONDS
 ) -> None:
     """Step 3 of intake: park the run, checkpoint, complete the job, and audit the outcome."""
-    if not renew(conn, job.job_id, owner, lease_seconds):
-        raise LeaseLost()
+    hold(conn, job, owner)
     failed = conn.execute(
         text(
             """SELECT v.source_version_id FROM run_input_snapshots s
@@ -262,6 +278,7 @@ def finish_intake(
         details={
             "failed_versions": [str(v[0]) for v in failed],
             "stale": bool(stale),
+            "correlation_id": job.correlation_id,
         },
     )
 
@@ -275,8 +292,7 @@ def execute_intake(
 ) -> None:
     """All three intake steps on one connection, for rolled-back tests.
 
-    Committed execution runs the steps in separate transactions (``runs/committed.py``).
-    """
+    Committed execution runs the steps in separate transactions (``runs/committed.py``)."""
     begin_intake(conn, job, owner, lease_seconds)
     for version_id in pending_versions(conn, job):
         parse_one(conn, store, job, owner, version_id, lease_seconds)
@@ -303,6 +319,7 @@ def record_failure(
             outcome="error",
             error_class=reason,
             record_refs=[str(job.run_id)],
+            details={"correlation_id": job.correlation_id},
         )
         return "failed"
     requeued = _guard(

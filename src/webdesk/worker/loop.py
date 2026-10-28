@@ -43,6 +43,7 @@ class WorkerLoop:
         poll_seconds: float = 1.0,
         emit: Callable[[dict[str, Any]], None] | None = None,
         maintenance: Sequence[tuple[str, Callable[[], object], float]] = (),
+        on_stall: Callable[[], None] | None = None,
     ) -> None:
         self._engine = engine
         # (name, step, every_seconds): optional steps, such as the outbox and the sweep.
@@ -53,6 +54,7 @@ class WorkerLoop:
         self._lease = lease
         self._poll = poll_seconds
         self._emit = emit or print_event
+        self._on_stall = on_stall
         self._stop = False
 
     @property
@@ -80,9 +82,21 @@ class WorkerLoop:
                     break
                 time.sleep(self._poll)
                 continue
-            self._log("job.claimed", job_id=job.job_id, run_id=job.run_id, attempt=job.attempts)
+            self._log(
+                "job.claimed",
+                job_id=job.job_id,
+                run_id=job.run_id,
+                attempt=job.attempts,
+                correlation_id=job.correlation_id,
+            )
             outcome = committed.execute_committed(
-                self._engine, self._store, job, self._owner, self._lease
+                self._engine,
+                self._store,
+                job,
+                self._owner,
+                self._lease,
+                emit=self._emit,
+                on_stall=self._on_stall,
             )
             result.processed += 1
             self._log(
@@ -90,6 +104,7 @@ class WorkerLoop:
                 job_id=job.job_id,
                 run_id=job.run_id,
                 attempt=job.attempts,
+                correlation_id=job.correlation_id,
                 outcome=outcome,
             )
             if once or (max_jobs is not None and result.processed >= max_jobs):
