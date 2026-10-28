@@ -31,8 +31,11 @@ SOURCE_LIMIT_RANGE = (1, 100)
 SOURCE_LIMIT_DEFAULT = 50
 SEGMENT_LIMIT_RANGE = (1, 200)
 SEGMENT_LIMIT_DEFAULT = 100
-_CURSOR = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
-_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+# \A and \Z, not ^ and $: "$" also matches before a trailing newline (refused before any request).
+_CURSOR = re.compile(r"\A[A-Za-z0-9._:-]{1,128}\Z")
+_UUID = re.compile(
+    r"\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\Z"
+)
 
 
 class AiReadError(Exception):

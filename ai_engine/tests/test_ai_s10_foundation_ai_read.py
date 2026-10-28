@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from ai_engine.adapters.foundation_ai_read import (
+    MAX_CONTENT_BYTES,
     AiReadClient,
     AiReadNotFound,
     AiReadRefused,
@@ -340,7 +341,19 @@ def test_additive_optional_fields_are_accepted_as_contract_section_13_allows() -
 
 
 @pytest.mark.parametrize(
-    "field", ["storage_key", "content_hash", "ingested_by_user_id", "session_id"]
+    "field",
+    [
+        "storage_key",
+        "content_hash",
+        "text_content_hash",
+        "ingested_by_user_id",
+        "session",
+        "session_id",
+        "credential",
+        "proof",
+        "contact",
+        "email",
+    ],
 )
 def test_a_forbidden_field_is_refused_at_any_level(field: str) -> None:
     item = version()
@@ -393,3 +406,99 @@ def test_the_client_exposes_no_write_operation() -> None:
     client, _ = client_for({})
     for name in ("post", "put", "patch", "delete", "create", "save", "persist", "approve", "grant"):
         assert not hasattr(client, name), name
+
+
+# --- QA re-review regressions (cc33e52): trailing-newline identifiers and untested controls ---
+
+
+@pytest.mark.parametrize("bad", [RUN + "\n", RUN + " ", RUN + "x"])
+def test_a_run_identifier_with_a_trailing_character_is_refused_before_any_request(bad: str) -> None:
+    transport = FakeTransport({})
+    with pytest.raises(AiReadRefused, match="not a UUID"):
+        AiReadClient(transport=transport, run_id=bad, principal_token=SYNTHETIC_CREDENTIAL)
+    assert transport.calls == []
+
+
+def test_a_source_version_identifier_with_a_trailing_newline_is_refused_before_any_request() -> (
+    None
+):
+    client, transport = client_for({})
+    with pytest.raises(AiReadRefused, match="not a UUID"):
+        client.content(VERSION + "\n")
+    assert transport.calls == []
+
+
+def test_a_cursor_with_a_trailing_newline_is_refused_before_any_request() -> None:
+    client, transport = client_for({})
+    with pytest.raises(AiReadRefused, match="cursor is malformed"):
+        client.source_versions(after="abc\n")
+    assert transport.calls == []
+
+
+@pytest.mark.parametrize("limit", [1, 100])
+def test_source_limits_at_the_contract_bounds_are_accepted(limit: int) -> None:
+    page = {"contract": "ai-read/v1", "items": [], "next_cursor": None}
+    client, transport = client_for({f"{BASE}/source-versions": ok(page)})
+    client.source_versions(limit=limit)
+    assert transport.calls[0][0].endswith(f"?limit={limit}")
+
+
+def test_a_segment_page_whose_cursor_is_not_the_last_segment_is_refused() -> None:
+    segment = {
+        "segment_id": "s-1",
+        "locator_type": "p",
+        "locator": "1",
+        "text_content": "x",
+        "text_truncated": False,
+    }
+    page = {
+        "contract": "ai-read/v1",
+        "source_version_id": VERSION,
+        "items": [segment],
+        "next_cursor": "not-the-last-id",
+    }
+    client, _ = client_for({f"{BASE}/source-versions/{VERSION}/segments": ok(page)})
+    with pytest.raises(AiReadRefused, match="next cursor does not match"):
+        client.segments(VERSION)
+
+
+def test_a_json_body_that_is_not_an_object_is_refused() -> None:
+    client, _ = client_for({BASE: AiReadResponse(200, CONTRACT_HEADERS, b"[]")})
+    with pytest.raises(AiReadRefused, match="not an object"):
+        client.run()
+
+
+def test_a_run_status_outside_the_contract_allow_list_is_refused() -> None:
+    client, _ = client_for({BASE: ok(run_payload(status="pending"))})
+    with pytest.raises(AiReadRefused, match="schema"):
+        client.run()
+
+
+def test_content_without_a_content_type_is_refused() -> None:
+    headers = {"X-AI-Contract-Version": "ai-read/v1", "X-AI-Contract": "ai-read/v1"}
+    url = f"{BASE}/source-versions/{VERSION}/content"
+    client, _ = client_for({url: AiReadResponse(200, headers, b"bytes")})
+    with pytest.raises(AiReadRefused, match="Content-Type"):
+        client.content(VERSION)
+
+
+def test_content_without_the_contract_version_header_is_refused() -> None:
+    headers = {"X-AI-Contract": "ai-read/v1", "Content-Type": "text/plain"}
+    url = f"{BASE}/source-versions/{VERSION}/content"
+    client, _ = client_for({url: AiReadResponse(200, headers, b"bytes")})
+    with pytest.raises(AiReadRefused, match="does not declare the contract version"):
+        client.content(VERSION)
+
+
+def test_content_exactly_at_the_size_limit_is_accepted() -> None:
+    headers = {
+        "X-AI-Contract-Version": "ai-read/v1",
+        "X-AI-Contract": "ai-read/v1",
+        "Content-Type": "application/octet-stream",
+    }
+    url = f"{BASE}/source-versions/{VERSION}/content"
+    body = bytes(MAX_CONTENT_BYTES)
+    client, _ = client_for({url: AiReadResponse(200, headers, body)})
+    returned, mime = client.content(VERSION)
+    assert len(returned) == MAX_CONTENT_BYTES
+    assert mime == "application/octet-stream"
