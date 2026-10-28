@@ -148,3 +148,9 @@ Source: WDS Authorized Approver, chat, 28 October 2026.
 - **Candidate for the first PR:** branch `claude/pr-candidate-m1-s4-no-r4` at `79c90bc`, the target `feature/increment-1-foundation` (`740b169`) plus 82 commits. CI run #49 on `79c90bc`: SUCCESS. Single migration head `0019`.
 - **Not merged:** no protected-branch merge has been executed. The PR is awaiting explicit approval.
 - **Open:** PG's personal review; Milestone 1 controls; R4 release-blocking findings for any later merge of the R4 chain.
+
+## QA-07 ruling on the first merge (28 October 2026, chat)
+Source: WDS Authorized Approver, chat, 28 October 2026.
+- **QA-07-MERGE-01 RULED:** the QA-07 run-time authority enforcement gate ("make run-time enforcement a hard gate before any integration", `AS_REVIEW_PACKET_2026-10-23.md` Q7) **BLOCKS** the merge of the first development PR into the integration branch.
+- **Consequence:** the first PR for candidate `79c90bc` is HELD. It cannot merge until run-time authority enforcement is in place and verified, or until WDS rules otherwise in writing.
+- Not a ruling on production integration, which remains blocked by QA-07 under the standing restriction.
