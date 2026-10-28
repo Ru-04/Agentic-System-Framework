@@ -47,8 +47,7 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
             "woocommerce",
             NA,
             ClaimKind.FEATURE,
-            # "pric" is a stem: it matches price, pricing and priced in the requirement text.
-            ("variation", "pric"),
+            ("variation", "price"),
         ),
         Capability(
             "REST API product read", "woocommerce", NA, ClaimKind.FEATURE, ("rest", "product")
@@ -126,9 +125,23 @@ class Decision(StrEnum):
     REFUSE = "REFUSE"
 
 
+# Explicit inflections of a required term. Whole-word matching only, so "prickly" never matches
+# "price", and an unrelated word cannot match a term by accident.
+_WORD_FORMS: Final[dict[str, tuple[str, ...]]] = {
+    "price": ("price", "prices", "priced", "pricing"),
+    "retry": ("retry", "retries", "retried", "retrying"),
+    "delivery": ("delivery", "deliveries"),
+    "cart": ("cart", "carts"),
+    "api": ("api", "apis"),
+}
+
+
 def _term_present(term: str, text: str) -> bool:
-    """Word-start match, so 'price' matches 'pricing' and 'variation' matches 'variations'."""
-    return re.search(r"\b" + re.escape(term.lower()), text) is not None
+    """Whole-word match on the term or one of its listed inflections; a phrase matches whole."""
+    word = term.lower()
+    forms = _WORD_FORMS.get(word, (word, f"{word}s"))
+    alternatives = "|".join(re.escape(form) for form in forms)
+    return re.search(rf"\b(?:{alternatives})\b", text.lower()) is not None
 
 
 def matched_capabilities(specialist: SpecialistId, task: str) -> tuple[Capability, ...]:
@@ -203,6 +216,7 @@ class InvestigationProvider:
 
         findings: list[dict[str, object]] = []
         unknowns: list[str] = []
+        outcomes: list[Outcome] = []
         if decision is Decision.INVESTIGATE_WITH_UNKNOWNS:
             unknowns.append(f"[INVESTIGATE_WITH_UNKNOWNS] {reason}")
         for capability in CATALOG[self.specialist]:
@@ -213,6 +227,7 @@ class InvestigationProvider:
                 requested_version=self.requested_version,
                 operator_confirmed=True,
             )
+            outcomes.append(result.outcome)
             if result.outcome is Outcome.SYNTHETIC_SUPPORT:
                 for citation in result.citations:
                     findings.append(
@@ -229,11 +244,17 @@ class InvestigationProvider:
                             ],
                         }
                     )
+            elif result.outcome is Outcome.REFUSED:
+                # Sanitized: the refused source, URL and page text are never echoed back.
+                unknowns.append(f"[REFUSE] {capability.name}: refused: {result.reason}")
             else:
                 reason = result.reason or "; ".join(result.unknowns)
                 unknowns.append(f"{capability.name}: {result.outcome.value}: {reason}")
         unknowns.append(f"[{decision.value}] {FEASIBILITY_UNKNOWN}")
-        return self._response(request, findings, unknowns)
+        # Failed only when every capability was refused; otherwise incomplete, with refusals listed.
+        all_refused = all(outcome is Outcome.REFUSED for outcome in outcomes)
+        status = "failed" if all_refused else "incomplete"
+        return self._response(request, findings, unknowns, status=status)
 
     def _response(
         self,

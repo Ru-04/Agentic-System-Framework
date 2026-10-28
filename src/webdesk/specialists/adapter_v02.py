@@ -39,6 +39,8 @@ ERROR_ACTION_FORBIDDEN: Final[str] = "action_forbidden"
 ERROR_ACTION_UNKNOWN: Final[str] = "action_unknown"
 ERROR_CAPABILITY_MISMATCH: Final[str] = "capability_mismatch"
 ERROR_REQUEST_INVALID: Final[str] = "request_invalid"
+# Every capability was refused by an authorization or source-boundary rule (SOURCE-REFUSAL-01).
+ERROR_AUTHORIZATION_REFUSED: Final[str] = "authorization_refused"
 
 
 class AdapterRequest(BaseModel):
@@ -176,6 +178,12 @@ def call_adapter(provider: SpecialistProvider, request: AdapterRequest) -> Adapt
         status=output.status.value,
         findings=findings,
         unknowns=output.unknowns,
+        error_code=(
+            ERROR_AUTHORIZATION_REFUSED
+            if output.status.value == "failed"
+            and any(u.startswith("[REFUSE]") for u in output.unknowns)
+            else None
+        ),
     )
 
 

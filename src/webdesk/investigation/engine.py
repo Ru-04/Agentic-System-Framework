@@ -45,7 +45,10 @@ class Outcome(StrEnum):
     SYNTHETIC_SUPPORT = "synthetic_support"
     VERIFIED_SUPPORT = "verified_support"
     UNKNOWN_SUPPORT = "unknown_support"
+    # Evidence is unavailable: no approved source, an inactive source, or no approved document.
     UNSUPPORTED_SOURCE = "unsupported_source"
+    # An applicable authorization or boundary rule prohibits the access. Takes precedence.
+    REFUSED = "refused"
 
 
 class ClaimKind(StrEnum):
@@ -126,6 +129,29 @@ class Finding:
     unknowns: list[str] = field(default_factory=list)
 
 
+def _authorization_violation(
+    capability: Capability, pages: Sequence[Page], workspace_id: str
+) -> str | None:
+    """First access that breaks a workspace or source-boundary rule, as a sanitized reason.
+
+    Returns no URL and no page text. A platform with no approved boundary is not a violation;
+    that is evidence unavailability and is reported as UNSUPPORTED_SOURCE instead.
+    """
+    for page in pages:
+        if page.workspace_id != workspace_id:
+            return "page from another workspace was refused"
+        if page.platform != capability.platform:
+            continue
+        page_boundary = BOUNDARIES.get((capability.platform, page.edition))
+        if page_boundary is None:
+            continue
+        if not page_boundary.permits(page.url):
+            return "page URL is outside the approved boundary"
+        if page.final_url != page.url and not page_boundary.permits(page.final_url):
+            return "redirect leads outside the approved boundary"
+    return None
+
+
 def _contains_all(text: str, terms: Sequence[str]) -> bool:
     lowered = text.lower()
     return all(term.lower() in lowered for term in terms)
@@ -142,6 +168,20 @@ def investigate(
     """Decide what the pages support for one capability. Refusals are recorded, not raised."""
     if not operator_confirmed:
         raise PermissionError("operator confirmation is required before an investigation runs")
+
+    # Authorization first: an access that breaks a workspace or boundary rule is refused before any
+    # evidence-availability result is reached, so it can never be reported as unsupported.
+    violation = _authorization_violation(capability, pages, workspace_id)
+    if violation is not None:
+        return Finding(
+            capability=capability.name,
+            platform=capability.platform,
+            edition=capability.edition,
+            requested_version=requested_version,
+            outcome=Outcome.REFUSED,
+            refusals=(violation,),
+            reason="access outside the authorized boundary was refused; no evidence is used",
+        )
 
     key = (capability.platform, capability.edition)
     boundary = BOUNDARIES.get(key)
