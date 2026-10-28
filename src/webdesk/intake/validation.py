@@ -23,8 +23,8 @@ from email import policy as email_policy
 from email.parser import BytesParser
 
 from docx import Document
-from pypdf import PdfReader
 
+from webdesk.intake.parsers import ParserFailure, open_pdf_structure
 from webdesk.storage.content_store import MAX_BYTES
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -100,14 +100,13 @@ def _check_pdf(data: bytes) -> None:
     if not data.startswith(b"%PDF-"):
         raise _refuse(415, "signature_mismatch")
     try:
-        reader = PdfReader(io.BytesIO(data))
-        if reader.is_encrypted:
-            raise _refuse(422, "encrypted_not_permitted")
-        _ = len(reader.pages)
-    except UploadRefusal:
-        raise
-    except Exception as exc:
-        raise _refuse(422, "corrupt_structure") from exc
+        encrypted = open_pdf_structure(data)
+    except ParserFailure as exc:
+        # The same metered open as the parser (QA-05): an expansion refused here is refused for the
+        # same reason.
+        raise _refuse(422, exc.reason) from exc
+    if encrypted:
+        raise _refuse(422, "encrypted_not_permitted")
 
 
 def _check_docx(data: bytes) -> None:

@@ -27,6 +27,7 @@ from webdesk.intake.parsers import (
     SegmentDraft,
     _bounded_stream,
     _check_archive,
+    _DecodeMeter,
     parse_docx,
     parse_eml,
     parse_pdf,
@@ -240,8 +241,12 @@ class _FakeStream:
 def test_d4_a_flate_stream_expanding_past_the_budget_is_never_held_whole() -> None:
     compressed = zlib.compress(b" " * (60 * MiB))
     budget = limits.MAX_PDF_PAGE_STREAM_BYTES
-    decoded = _bounded_stream(_FakeStream(compressed, filters="/FlateDecode"), budget)
-    assert len(decoded) == budget + 1
+    # The meter refuses the expansion while it is produced, so the expanded bytes are never all held
+    # in memory.
+    meter = _DecodeMeter(len(compressed))
+    with pytest.raises(ParserFailure) as exc:
+        _bounded_stream(_FakeStream(compressed, filters="/FlateDecode"), budget, meter)
+    assert exc.value.reason == limits.ARCHIVE_RATIO_LIMIT
 
 
 def test_d4_a_page_whose_decoded_content_exceeds_the_per_page_limit_is_refused() -> None:
@@ -277,22 +282,24 @@ def test_d4_form_xobject_text_is_flagged_and_zero_text_is_unsupported() -> None:
     assert result.flagged_regions == ["pdf_page:1"]
 
 
-def test_d4_an_lzw_stream_refuses_the_file_by_name_because_it_cannot_be_bounded() -> None:
+def test_d4_an_lzw_page_stream_flags_its_page_and_is_never_decoded() -> None:
     objects = _pdf_objects(b"/Font << /F1 5 0 R >>", b"BT ET", content_filter=b"/Filter /LZWDecode")
-    with pytest.raises(ParserFailure) as exc:
-        parse_pdf(_assemble(objects))
-    assert exc.value.reason == PDF_FILTER_UNSUPPORTED
+    result = parse_pdf(_assemble(objects))
+    assert result.status == "unsupported"
+    assert result.flagged_regions == ["pdf_page:1"]
 
 
 def test_d4_the_unsupported_filter_is_the_named_refusal_for_a_page_stream() -> None:
     with pytest.raises(ParserFailure) as exc:
-        _bounded_stream(_FakeStream(b"x", filters="/LZWDecode"), 10)
+        _bounded_stream(_FakeStream(b"x", filters="/LZWDecode"), 10, _DecodeMeter(1))
     assert exc.value.reason == PDF_FILTER_UNSUPPORTED
 
 
 def test_d4_a_predictor_stream_is_not_decoded_unbounded() -> None:
     with pytest.raises(ParserFailure) as exc:
-        _bounded_stream(_FakeStream(b"x", filters="/FlateDecode", decode_parms=True), 10)
+        _bounded_stream(
+            _FakeStream(b"x", filters="/FlateDecode", decode_parms=True), 10, _DecodeMeter(1)
+        )
     assert exc.value.reason == PDF_FILTER_UNSUPPORTED
 
 

@@ -32,6 +32,8 @@ import re
 import unicodedata
 import zipfile
 import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from email import policy as email_policy
 from email.message import EmailMessage
@@ -40,6 +42,14 @@ from typing import Any, cast
 
 from docx import Document
 from pypdf import PdfReader
+from pypdf.filters import (
+    CCITTFaxDecode,
+    DCTDecode,
+    FlateDecode,
+    JPXDecode,
+    LZWDecode,
+    RunLengthDecode,
+)
 from pypdf.generic import ArrayObject
 
 from webdesk.intake import limits
@@ -49,7 +59,6 @@ PARSER_LIBRARY_VERSION = "pypdf-5.1.0+python-docx-1.1.2"
 
 # A PDF stream filter this parser cannot bound before its expansion is held in memory (D4).
 PDF_FILTER_UNSUPPORTED = "pdf_filter_unsupported"
-_TEXT_BLOCK = re.compile(rb"(?:^|\s)BT(?:\s|$)")
 
 
 class ParserFailure(Exception):
@@ -95,12 +104,215 @@ def _has_image(page: Any) -> bool:
     )
 
 
-def _bounded_stream(stream: Any, budget: int) -> bytes:
-    """Decoded bytes of one stream, never more than ``budget + 1`` (D4, H-31).
+_TEXT_BLOCK = re.compile(rb"(?<![A-Za-z0-9])BT(?![A-Za-z0-9])")
+_MAX_GRAPH_DEPTH = 8
+_MAX_GRAPH_OBJECTS = 512
 
-    Only two forms can be bounded before their expansion is held in memory: an unfiltered stream,
-    and a FlateDecode stream without predictor parameters, which is decompressed with an output
-    bound. Any other filter raises ``PDF_FILTER_UNSUPPORTED``.
+# Filters that are never decoded by this parser. Refusal happens at the decoder, so every spelling
+# of the name
+# (including #-escapes) is covered, not only the ones a byte search would find.
+_REFUSED_FILTERS = ("LZWDecode", "RunLengthDecode", "DCTDecode", "JPXDecode", "CCITTFaxDecode")
+
+
+class _DecodeMeter:
+    """One cumulative budget for every flate decode in a PDF parse (QA-05).
+
+    The reader calls ``FlateDecode.decode`` through ``decode_stream_data`` for every stream it
+    decodes: while it opens
+    the file (cross-reference and object streams), while it resolves objects, and while it extracts
+    text. Metering that
+    one call charges the actual decoded bytes, whatever the stream delimiters look like. Each
+    distinct compressed buffer
+    is charged once, so repeated reads of one stream do not consume the budget twice. Expansion is
+    refused as soon as
+    the running total would exceed the archive limits, before the expanded bytes are returned to the
+    reader.
+    """
+
+    def __init__(self, input_size: int) -> None:
+        self.input_size = input_size
+        self.total = 0
+        self.refusal: str | None = (
+            None  # a whole-file refusal (size or ratio), kept so it is never reclassified
+        )
+        self.filter_refusals = 0  # a stream the reader asked to decode with a refused filter
+        self._charged: dict[int, bytes] = {}  # keeps charged buffers alive so their ids stay unique
+
+    def charge_flate(self, data: bytes) -> None:
+        if self.refusal is not None:
+            raise ParserFailure(self.refusal)
+        if id(data) in self._charged:
+            return
+        size_room = limits.MAX_ARCHIVE_UNCOMPRESSED_BYTES - self.total
+        ratio_room = limits.MAX_ARCHIVE_RATIO * self.input_size - self.total
+        room = min(size_room, ratio_room)
+        try:
+            produced = zlib.decompressobj().decompress(data, room + 1)
+        except zlib.error as exc:
+            raise ParserFailure("corrupt_structure") from exc
+        if len(produced) > room:
+            self.refusal = (
+                limits.ARCHIVE_SIZE_LIMIT if size_room <= ratio_room else limits.ARCHIVE_RATIO_LIMIT
+            )
+            raise ParserFailure(self.refusal)
+        self.total += len(produced)
+        self._charged[id(data)] = data
+
+
+@contextmanager
+def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
+    """Route every flate decode through ``meter`` and refuse the filters this parser never decodes.
+
+    Patches the pypdf classes the reader dispatches to. The original attributes are restored on
+    exit. The parser runs
+    in its own child process (ARCHITECTURE section 13, H-32), so the patch does not leak into other
+    work.
+    """
+
+    def refuse_filter(*_args: Any, **_kwargs: Any) -> bytes:
+        # Per-stream refusal: the caller decides whether the page or the file fails.
+        meter.filter_refusals += 1
+        raise ParserFailure(PDF_FILTER_UNSUPPORTED)
+
+    original_flate = vars(FlateDecode)["decode"]
+    original_lzw = vars(LZWDecode)["_decodeb"]
+    original_rl = vars(RunLengthDecode)["decode"]
+    original_dct = vars(DCTDecode)["decode"]
+    original_jpx = vars(JPXDecode)["decode"]
+    original_ccitt = vars(CCITTFaxDecode)["decode"]
+
+    original_flate_fn: Any = original_flate.__func__  # the plain function behind the staticmethod
+
+    def metered_flate(data: bytes, decode_parms: Any = None, **kwargs: Any) -> bytes:
+        meter.charge_flate(data)
+        decoded: bytes = original_flate_fn(data, decode_parms, **kwargs)
+        return decoded
+
+    type.__setattr__(FlateDecode, "decode", staticmethod(metered_flate))
+    type.__setattr__(LZWDecode, "_decodeb", staticmethod(refuse_filter))
+    type.__setattr__(RunLengthDecode, "decode", staticmethod(refuse_filter))
+    type.__setattr__(DCTDecode, "decode", staticmethod(refuse_filter))
+    type.__setattr__(JPXDecode, "decode", staticmethod(refuse_filter))
+    type.__setattr__(CCITTFaxDecode, "decode", staticmethod(refuse_filter))
+    try:
+        yield
+    finally:
+        type.__setattr__(FlateDecode, "decode", original_flate)
+        type.__setattr__(LZWDecode, "_decodeb", original_lzw)
+        type.__setattr__(RunLengthDecode, "decode", original_rl)
+        type.__setattr__(DCTDecode, "decode", original_dct)
+        type.__setattr__(JPXDecode, "decode", original_jpx)
+        type.__setattr__(CCITTFaxDecode, "decode", original_ccitt)
+
+
+class _Unbounded(Exception):
+    """The reachable graph of a page exceeds this parser's walk. The page is flagged, not blank."""
+
+
+class _GraphWalk:
+    def __init__(self) -> None:
+        self.seen: set[int] = set()
+        self.count = 0
+
+    def visit(self, obj: Any) -> bool:
+        if id(obj) in self.seen:
+            return False
+        self.seen.add(id(obj))
+        self.count += 1
+        if self.count > _MAX_GRAPH_OBJECTS:
+            raise _Unbounded
+        return True
+
+
+def _stream_has_text(stream: Any) -> bool:
+    try:
+        data = stream.get_data()
+    except ParserFailure:
+        raise
+    except Exception as exc:
+        raise _Unbounded from exc
+    return _TEXT_BLOCK.search(data) is not None
+
+
+def _resources_have_text(resources: Any, walk: _GraphWalk, depth: int) -> bool:
+    if depth > _MAX_GRAPH_DEPTH:
+        raise _Unbounded
+    resources = None if resources is None else resources.get_object()
+    if resources is None:
+        return False
+    found = False
+    for category in ("/XObject", "/Pattern", "/Font"):
+        group = resources.get(category)
+        if group is None:
+            continue
+        for ref in group.get_object().values():
+            obj = ref.get_object()
+            if not walk.visit(obj):
+                continue
+            if category == "/XObject" and obj.get("/Subtype") == "/Form":
+                found = _stream_has_text(obj) or found
+                found = _resources_have_text(obj.get("/Resources"), walk, depth + 1) or found
+            elif category == "/Pattern" and obj.get("/PatternType") == 1:
+                found = _stream_has_text(obj) or found
+                found = _resources_have_text(obj.get("/Resources"), walk, depth + 1) or found
+            elif category == "/Font" and obj.get("/Subtype") == "/Type3":
+                procs = obj.get("/CharProcs")
+                if procs is not None:
+                    for proc in procs.get_object().values():
+                        proc_obj = proc.get_object()
+                        if walk.visit(proc_obj):
+                            found = _stream_has_text(proc_obj) or found
+                found = _resources_have_text(obj.get("/Resources"), walk, depth + 1) or found
+    return found
+
+
+def _annotations_have_text(page: Any, walk: _GraphWalk) -> bool:
+    annots = page.get("/Annots")
+    if annots is None:
+        return False
+    found = False
+    for ref in annots.get_object():
+        annot = ref.get_object()
+        appearance = annot.get("/AP")
+        if appearance is None:
+            continue
+        normal = appearance.get_object().get("/N")
+        if normal is None:
+            continue
+        normal = normal.get_object()
+        streams = list(normal.values()) if not hasattr(normal, "get_data") else [normal]
+        for item in streams:
+            stream = item.get_object()
+            if not walk.visit(stream):
+                continue
+            found = _stream_has_text(stream) or found
+            found = _resources_have_text(stream.get("/Resources"), walk, 1) or found
+    return found
+
+
+def _page_has_hidden_text(page: Any) -> bool:
+    """True when a form, pattern, Type 3 glyph or annotation reachable from the page has text.
+
+    pypdf does not extract text from these, so their text would otherwise be lost without a flag.
+    Any walk that
+    cannot finish within the bounds reports True: the page is then flagged, not read as blank
+    (QA-06).
+    """
+    walk = _GraphWalk()
+    try:
+        return _resources_have_text(page.get("/Resources"), walk, 0) or _annotations_have_text(
+            page, walk
+        )
+    except _Unbounded:
+        return True
+
+
+def _bounded_stream(stream: Any, budget: int, meter: _DecodeMeter) -> bytes:
+    """Decoded bytes of one page content stream, never more than ``budget + 1`` (D4, H-31).
+
+    Used for the per-page content bound. Only an unfiltered stream and a FlateDecode stream without
+    predictor
+    parameters are bounded here. Any other filter raises ``PDF_FILTER_UNSUPPORTED``.
     """
     obj = stream.get_object()
     raw = bytes(obj._data)
@@ -117,6 +329,7 @@ def _bounded_stream(stream: Any, budget: int) -> bytes:
     if names == []:
         return raw[: budget + 1]
     if names == ["/FlateDecode"]:
+        meter.charge_flate(raw)
         try:
             return zlib.decompressobj().decompress(raw, budget + 1)
         except zlib.error as exc:
@@ -124,88 +337,56 @@ def _bounded_stream(stream: Any, budget: int) -> bytes:
     raise ParserFailure(PDF_FILTER_UNSUPPORTED)
 
 
-def _direct_forms(page: Any) -> list[Any]:
-    """Form XObjects named directly in the page's resources. Nested forms are not followed."""
-    resources = page.get("/Resources")
-    if resources is None:
-        return []
-    xobjects = resources.get_object().get("/XObject")
-    if xobjects is None:
-        return []
-    return [
-        obj
-        for obj in (ref.get_object() for ref in xobjects.get_object().values())
-        if obj.get("/Subtype") == "/Form"
-    ]
-
-
-def _bound_page(page: Any) -> bool:
-    """Bound the decoded size of a page's content and direct form streams together (D4, H-31).
-
-    Raises ``ParserFailure(PDF_STREAM_LIMIT)`` when the decoded total exceeds the limit. Returns
-    True when a direct form holds a text block, which pypdf does not extract.
-    """
+def _bound_page_content(page: Any, meter: _DecodeMeter) -> None:
+    """The decoded size of a page's content streams, together, is bounded by the per-page limit (D4,
+    H-31)."""
     budget = limits.MAX_PDF_PAGE_STREAM_BYTES
-    used = 0
     contents = page.get("/Contents")
-    if contents is not None:
-        resolved = contents.get_object()
-        streams = list(resolved) if isinstance(resolved, ArrayObject) else [resolved]
-        for stream in streams:
-            used += len(_bounded_stream(stream, budget - used))
-            if used > budget:
-                raise ParserFailure(limits.PDF_STREAM_LIMIT)
-    hidden_text = False
-    for form in _direct_forms(page):
-        data = _bounded_stream(form, budget - used)
-        used += len(data)
+    if contents is None:
+        return
+    resolved = contents.get_object()
+    streams = list(resolved) if isinstance(resolved, ArrayObject) else [resolved]
+    used = 0
+    for stream in streams:
+        used += len(_bounded_stream(stream, budget - used, meter))
         if used > budget:
             raise ParserFailure(limits.PDF_STREAM_LIMIT)
-        if _TEXT_BLOCK.search(data):
-            hidden_text = True
-    return hidden_text
 
 
-_STREAM_KEYWORD = re.compile(rb"stream\r?\n")
-_UNBOUNDED_FILTERS = (b"/LZWDecode", b"/RunLengthDecode")
+def open_pdf_structure(data: bytes) -> bool:
+    """Open a PDF the way the parser does, under the same meter, and report whether it is encrypted.
 
-
-def _check_pdf_expansion(data: bytes) -> None:
-    """Bound every zlib-coded stream in the file before any reader decodes it (QA-05, H-31).
-
-    pypdf decodes cross-reference and object streams while the reader is opened, before any page
-    limit applies, so a small file can expand to a large size at that point (measured on the
-    baseline: a 61 KB file decoded to 60 MiB). This pass decompresses each stream whose bytes begin
-    with a zlib header, with an output bound, and refuses the file when the total decoded size or
-    its ratio to the file size exceeds the archive limits. Filters it cannot bound (LZW and
-    RunLength, which expand without a header) are refused by name. This is a bound on decoded size,
-    not a guarantee of memory containment on Windows (H-DEC-4).
+    Upload admission calls this. It is the first place a PDF is opened, so it must not decode
+    outside the bound (QA-05).
+    Raises ``ParserFailure`` with the same classes the parser uses.
     """
-    if any(name in data for name in _UNBOUNDED_FILTERS):
-        raise ParserFailure(PDF_FILTER_UNSUPPORTED)
-    total = 0
-    for match in _STREAM_KEYWORD.finditer(data):
-        if data[max(0, match.start() - 3) : match.start()] == b"end":
-            continue  # the keyword inside "endstream"
-        end = data.find(b"endstream", match.end())
-        payload = data[match.end() : end if end >= 0 else len(data)]
-        size_room = limits.MAX_ARCHIVE_UNCOMPRESSED_BYTES - total
-        ratio_room = limits.MAX_ARCHIVE_RATIO * len(data) - total
-        room = min(size_room, ratio_room)
+    meter = _DecodeMeter(len(data))
+    with _metered_pdf_decoding(meter):
         try:
-            out = zlib.decompressobj().decompress(payload, room + 1)
-        except zlib.error:
-            continue  # not zlib-coded, so it cannot expand here
-        if len(out) > room:
-            # Refused while decompressing, so no more than the room is ever held in memory.
-            raise ParserFailure(
-                limits.ARCHIVE_SIZE_LIMIT if size_room <= ratio_room else limits.ARCHIVE_RATIO_LIMIT
-            )
-        total += len(out)
+            reader = PdfReader(io.BytesIO(data))
+            encrypted = bool(reader.is_encrypted)
+            if not encrypted:
+                _ = len(reader.pages)
+        except ParserFailure:
+            raise
+        except Exception as exc:
+            if meter.refusal is not None:
+                raise ParserFailure(meter.refusal) from exc
+            if meter.filter_refusals:
+                raise ParserFailure(PDF_FILTER_UNSUPPORTED) from exc
+            raise ParserFailure("corrupt_structure") from exc
+    if meter.refusal is not None:
+        raise ParserFailure(meter.refusal)
+    return encrypted
 
 
 def parse_pdf(data: bytes) -> ParseResult:
-    _check_pdf_expansion(data)
+    meter = _DecodeMeter(len(data))
+    with _metered_pdf_decoding(meter):
+        return _parse_pdf_metered(data, meter)
+
+
+def _parse_pdf_metered(data: bytes, meter: _DecodeMeter) -> ParseResult:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
@@ -214,6 +395,12 @@ def parse_pdf(data: bytes) -> ParseResult:
     except ParserFailure:
         raise
     except Exception as exc:
+        # The reader can swallow a refusal while it rebuilds the cross-reference table. The meter
+        # keeps it.
+        if meter.refusal is not None:
+            raise ParserFailure(meter.refusal) from exc
+        if meter.filter_refusals:
+            raise ParserFailure(PDF_FILTER_UNSUPPORTED) from exc
         raise ParserFailure("corrupt_structure") from exc
     if len(pages) > limits.MAX_PDF_PAGES:
         raise ParserFailure(limits.PDF_PAGE_LIMIT)
@@ -222,11 +409,11 @@ def parse_pdf(data: bytes) -> ParseResult:
     flagged: list[str] = []
     for number, page in enumerate(pages, start=1):
         try:
-            hidden_text = _bound_page(page)
+            _bound_page_content(page, meter)
             text = (page.extract_text() or "").strip()
+            hidden = _page_has_hidden_text(page)
         except ParserFailure as exc:
             if exc.reason == PDF_FILTER_UNSUPPORTED:
-                # The page cannot be bounded: report its region and keep the rest of the file.
                 flagged.append(f"pdf_page:{number}")
                 continue
             raise
@@ -235,11 +422,15 @@ def parse_pdf(data: bytes) -> ParseResult:
             continue
         if text:
             segments.append(SegmentDraft("pdf_page", {"page_number": number}, text))
-        if hidden_text or (not text and _has_image(page)):
-            # H-33: an image-only page holds content that is not text, and text inside a form
-            # XObject is not extracted. There is no OCR, so both are reported as unextractable,
-            # not read as blank.
+        if hidden or (not text and _has_image(page)):
+            # H-33 and QA-06: text that pypdf cannot extract is flagged, never silently omitted. An
+            # image-only page
+            # holds content that is not text. There is no OCR, so it is reported, not read as blank.
             flagged.append(f"pdf_page:{number}")
+    if meter.refusal is not None:
+        raise ParserFailure(meter.refusal)
+    if meter.refusal is not None:
+        raise ParserFailure(meter.refusal)
     return ParseResult(_status(segments, flagged), segments, flagged)
 
 
