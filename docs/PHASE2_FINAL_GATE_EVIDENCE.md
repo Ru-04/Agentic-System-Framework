@@ -117,3 +117,60 @@ Static checks on `ad28ac0`:
 - `mypy --strict src/webdesk`: `mypy 1.11.2`, 57 source files, "Success: no issues found", exit 0.
 
 Migration: `0046_fixed_contact_change_window` applied to the dedicated base database (`alembic upgrade head`, exit 0). Downgrade and re-upgrade are exercised by the migration catalog test, which passed in every full run.
+
+
+## 9. Strict mypy (QA D7)
+
+- Command: `uv run mypy --strict src/webdesk`, run from the development worktree (`.venv` of that worktree).
+- Tool: mypy 1.11.2 (compiled).
+- Commit tested: `513a218` (source unchanged since `142fecd`).
+- Result: exit 0, "Success: no issues found in 57 source files".
+- Scope: `src/webdesk` only (the package configuration in `pyproject.toml`). Tests are not type-checked by this gate.
+- Reproduction for an independent reviewer: run the same command from a checkout at `513a218`, in a virtual environment built from `uv.lock` (`uv sync --extra dev`).
+- The same command in the separate QA worktree was blocked by Application Control on `mypy.exe` (os error 4551). It was not bypassed. The development worktree ran it normally.
+
+## 10. Final gate status (QA remediation, commit 513a218)
+
+| Run | Namespace | Start (UTC) | Finish (UTC) | Result | Exit | Leftover namespace DBs | Attached sessions after | Counted |
+|---|---|---|---|---|---|---|---|---|
+| p2gate-1 | `p2gate-1` | 15:41:51 | 15:47:48 | 1 failed, 584 passed, 108 errors (352.6 s) | 1 | 0 | 0 | No (failed) |
+| p2gate-2 | not started | | | | | | | |
+| p2gate-3 | not started | | | | | | | |
+
+Gate loop stopped after p2gate-1 (script rule: stop at the first failing run). No other run was started on 55442 for this commit.
+
+Earlier runs on the dedicated cluster (for the record; not the gate):
+
+| Run | Commit | Start (UTC) | Result | Exit |
+|---|---|---|---|---|
+| p2fix-focus1 | 142fecd | ~13:45 | 81 passed | 0 |
+| p2fix-full1 | 142fecd | 13:53:29 | 1 failed, 581 passed, 108 errors | 1 |
+| p2fix-full2 | 142fecd | 13:58:54 | 690 passed | 0 |
+| p2fix-full3 | 142fecd | 14:05:10 | 690 passed | 0 |
+| p2fix-focus2 | 513a218 | ~15:28 | 121 passed | 0 |
+
+Full evidence (logs, not in the repository): `scratchpad/p2fix/runs/` and `scratchpad/p2fix/gate/`.
+
+## 11. Authority-startup failure (investigation status)
+
+- Symptom: the authority child process exits before printing its start-up line. The harness reported `the authority process did not start: ''`.
+- Evidence:
+  - p2gate-1: the child exit code is `3221225794` (`0xC0000142`, `STATUS_DLL_INIT_FAILED`) for all 108 starts. The child's stderr is empty because it failed while loading DLLs.
+  - full1 (same commit as full2 and full3): 108 errors, the same message. Exit code not recorded by the harness at that time.
+  - Server log for full1's window: no authentication failure and no FATAL line. The child never reached the database.
+  - Windows Code Integrity logged a block of a `uv.exe` load of another worktree's `pytest.exe` at 21:17:09 local (15:47:09 UTC), inside p2gate-1's window. It names a different worktree and cannot be tied to this child without more evidence.
+  - Earlier Code Integrity blocks of another project's `msgpack` `.pyd` (at 18:23 local) are outside every run window.
+- Harness defects found and fixed (commit `513a218`): the port-probe race (the probe released a port before the child bound it), and the child's stderr was inherited and never captured. The child now binds port 0 and reports its port, and a failed start reports its exit code and a redacted stderr tail.
+- Reproduction attempts: 60 consecutive starts of the authority from the same command line on the QA cluster (port 55451), with stderr captured, all succeeded.
+- Classification: **not proven.** The exit code and the absence of any database contact point to a process-level failure before application code runs, consistent with a Windows DLL-load or policy interference. The evidence does not yet establish the component blocked. This must not be recorded as resolved or as environmental without that proof.
+
+## 12. Unclassified failure in p2gate-1
+
+- `tests/hardening/test_ceremony_and_public_execute.py::test_a_login_role_cannot_disable_an_account_by_naming_a_real_administrator` failed with `sqlalchemy.exc.NoResultFound`. It is not one of the 108 authority-start errors. Not diagnosed yet. It must be diagnosed before any gate can count.
+
+## 13. Namespace cleanup review (older databases)
+
+- `wdst_p2_focus_a_cb873a68e9a`, `wdst_p2_focus_a_c6dc55b09e8`, `wdst_p2_focus_b_cfc7408d5df`, `wdst_p2_focus_b_c0a50a3bddd` remain on 55442.
+- Read-only facts: owner `webdesk_integration_owner`; no `shobj_description` label (the namespace runner always writes one, so these predate it); zero attached sessions; OIDs 18264 to 20120.
+- Ownership: matched by name to the earlier attempts documented in section 8 of this file (`p2-focus-a`, `p2-focus-b`), which the development session recorded as not counted. Not proven from the database alone.
+- Status: **untouched.** Deletion requires the owner's authorisation. No other session's resources were modified.

@@ -83,3 +83,31 @@ Implementation (migration 0046, QA D2):
 
 No approver, date or approval is invented for any row. Each gap is a governance dependency for WDS, not an implementation
 defect.
+
+## 5. Disposition of QA F-06 and F-09 (final remediation sprint)
+
+Recorded from the repository only. No approver, date or signature is invented.
+
+**F-06 (`tokens.issue` has no product caller).** Status: later-phase dependency, not a Phase 2 defect.
+
+- Basis: `docs/INCREMENT_3_HARDENING_PLAN.md`, Phase 6 "Recovery CLI and entry points (X8)", which groups H-50 (recovery
+  CLI) and H-52 (outbox errors) under Phase 6.
+- Correction to section 4: an earlier wording called H-50 and H-52 "notification and outbox". In the hardening plan H-50
+  is the recovery CLI and H-52 is the outbox error handling. Live token delivery therefore belongs to the Phase 6
+  outbox and entry-point work.
+- Accepted non-production interface: `tokens.issue` exists in the service layer and is proof-gated in the database
+  (`fn_issue_token`). Only test code calls it. Production has no caller until Phase 6.
+- Production limitation: no activation or reset token is delivered by the product until that phase. Activation and
+  reset reach users only through the test capture transport and the owner-reset path that exists today.
+
+**F-09 (acknowledgement of the H-12 Phase 1 test correction).** Status: **external approval blocker, still open.**
+
+- The requirement is located: EVAL-F11f in `WebDesk_Agentic_Requirement_Platform_Specs/EVALUATION_PLAN.md` requires a 403
+  for an Administrator grant without an approved, unexpired ceremony-backed appointment.
+- The WDS acknowledgement is not located in the repository. No such record was found in the specs folder or the
+  governance registers.
+- Identifier ambiguity, reported and not resolved here: `H-12` names two different items. In
+  `WebDesk_Agentic_Requirement_Platform_Specs/REMEDIATION_LOG.md` it is the platform-migration catalog item (status
+  PARTIAL). In `docs/INCREMENT_3_HARDENING_PLAN.md` it is the status-code correction for F11f. The WDS record must name
+  which item it acknowledges.
+- Required from WDS: the acknowledgement, with its approver identity, date and reference. Without it, F-09 cannot be closed.

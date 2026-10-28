@@ -45,3 +45,16 @@ the authority of the implementing team. Closure belongs to the independent QA re
 | Durable denial audit after rollback | `tests/committed/test_phase2_identity.py` (through `run_in_transaction` and `auth.activate`). |
 | Restricted grant access after revocation | `tests/integration/test_phase2_guards.py` (`has_restricted_grant` is false after revocation). |
 | Correct recovery response codes | `tests/integration/test_recovery_status_codes.py`. |
+
+
+## Final remediation sprint (QA D1 to D7 and governance)
+
+| Item | Disposition | Commit | Evidence |
+|---|---|---|---|
+| D1 Owner-reset neutral response | The reset handler catches any `Exception` (not `BaseException`), rolls back, logs class and SQLSTATE only, and replies neutrally | `a7d9460` | `tests/committed/test_owner_reset_fault_injection.py` (6 tests: handler, transport, rollback, missing transport, session closure); `docs/PHASE2_OWNER_RESET_RELIABILITY.md` |
+| D2 Contact-change approval duration | Migration 0046: window fixed at 24 hours for the application login; a test-only role `webdesk_test_clock` (no production members) allows a test window | `e03949c` | `tests/hardening/test_contact_change_window.py` (restricted login: shorter window refused, policy window accepted) |
+| D3 Concurrency determinism | Sleep replaced by a `pg_stat_activity` lock-wait observation; both orderings asserted with `waited` | `ad28ac0` | `tests/committed/test_phase2_concurrency.py` |
+| D4 Connection attribution | `application_name` labels (`webdesk-test/<run>/<factory>`) on test engine factories; `PGAPPNAME` default for child processes | `142fecd` | `tests/committed/test_connection_attribution.py`; `tests/support/app_name.py` |
+| D7 Strict mypy | Passes in the development worktree with the normal `uv run` method (see evidence document) | n/a | `docs/PHASE2_FINAL_GATE_EVIDENCE.md` section 9 |
+| F-06 | Later-phase dependency (Phase 6); accepted non-production interface documented | n/a | `docs/PHASE2_GOVERNANCE_CLARIFICATION.md` section 5 |
+| F-09 | **External blocker:** WDS acknowledgement not located | n/a | `docs/PHASE2_GOVERNANCE_CLARIFICATION.md` section 5 |
