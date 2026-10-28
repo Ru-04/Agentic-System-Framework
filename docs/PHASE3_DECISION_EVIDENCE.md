@@ -169,3 +169,81 @@ one defect was injected at a time (the worktree was not changed).
 | M4: exhaustion never terminal (retry exhaustion not failed) | retry-then-terminal test fails | 1 failed: `test_retryable_failures_requeue_with_backoff_then_end_in_a_terminal_failure` |
 
 Results are in the scratch file `mutation_results.txt` (outside the repository).
+
+## 5. QA finding F-1: test worker login (remediation)
+
+**Reproduction.** On a freshly provisioned cluster (`webdesk-phase3-fresh`, `127.0.0.1:5451`, migrated to `0052`), the
+privilege audit run alone failed: `test_login_roles_hold_only_their_intended_membership` expected
+`webdesk_intake_worker_login`, which did not exist. The login is created only as a side effect of the durable and worker-login
+tests.
+
+**Ownership and lifecycle (intended).** The restricted intake-worker login is a deployment secret (migrations do not hold
+secrets). Tests need a real login to exercise the worker. It is test-only and must hold only `webdesk_worker`. Before this
+change, two test modules each created the fixed name and rotated its password on a cluster-wide role, the same defect class as
+the authority login.
+
+**Fix.** `tests/support/worker_login.py` is the single helper. Each test process creates its own
+`webdesk_intake_test_<random>` login (LOGIN, membership `webdesk_worker` only, verified after the grant), and drops it at
+exit through the cluster's maintenance database. The durable, worker-login and privilege-audit tests all call the helper. The
+privilege audit provisions its own login, so it does not depend on another test having run. Commit `071e228`.
+
+**Verification (fresh cluster `5451`, tree `071e228`, code under test unchanged from `f1f2a74`).**
+
+| Order | Command | Result |
+|---|---|---|
+| Audit alone, before durable | `pytest tests/hardening/test_privilege_audit.py` | 17 passed |
+| Durable file | `pytest tests/committed/test_durable_execution.py` | 45 passed |
+| Audit after durable | `pytest tests/hardening/test_privilege_audit.py` | 17 passed |
+| Full suite (committed, hardening, integration, unit order) | `pytest -q` | 723 passed, exit 0 |
+
+After the durable run, no `webdesk_intake_test_%` login remains (checked: 0).
+
+**A defect found during the fix, corrected.** The first version dropped the login through the per-test clone database, which
+is removed before exit, and the cleanup failed (`OperationalError`, login left behind). Cleanup now uses the maintenance
+database. The stale login from that early run was removed from the fresh cluster (a test-prefix role on our own cluster).
+
+## 6. QA finding F-2: contact-liveness `now()` disposition
+
+**Predicates.** `identity/contacts.py` line 151 (`expires_at > now()` for a pending create approval, used to classify a
+replacement request) and line 190 (`expires_at > now() AS live`, used in pending-approval reads).
+
+**What `now()` is.** PostgreSQL's transaction-start time. It is the authoritative database clock, not an application or injected
+clock. The grant decisions in the approval path and the Phase 3 durable path (`clock_timestamp()`) are both database time.
+
+**Requirement check (H-21).** H-21 requires lease times and ceremony deadlines to use the database clock source, and it names
+`runs/jobs.py`, `ceremony/install.py`, `ceremony/recovery.py` and `identity/sweep.py`. It does not name `identity/contacts.py`.
+H-76 says only "One time source (see H-21)". So the approved scope does not clearly include the contact predicates. The
+governance rule given for this sprint is that security-sensitive expiry decisions use the authoritative PostgreSQL clock. These
+predicates do, at transaction start.
+
+**Impact.** The difference from `clock_timestamp()` is the duration of one transaction. The predicates classify liveness (they
+do not on their own grant access). The residual is consistency within the database, not a clock trusted from the application.
+
+**Disposition.** MINOR. No change to database-clock semantics in this remediation: there is no demonstrated conflict with
+the approved requirements, and the approved text does not name this module. Recommended follow-up: WDS to decide whether H-76
+covers `identity/contacts.py`. If yes, move the predicates to `clock_timestamp()` in a new migration that does not edit
+`0050` to `0052`. This is not a Phase 3 blocker.
+
+## 7. Fresh-cluster bootstrap requirements and `SET ROLE` probe limits
+
+**Bootstrap (test clusters only; not production).** Use `infra/test-clusters/compose.yml` with a dedicated project and volume,
+and a superuser env file kept outside the repository. Then:
+
+1. Create `webdesk_integration_owner` (LOGIN, CREATEDB, CREATEROLE), `webdesk_test_owner` (LOGIN, NOSUPERUSER) and
+   `webdesk_app_login` (LOGIN, NOSUPERUSER). Create `*_integration` owned by the integration owner, and `*_hardening` owned by
+   the test owner.
+2. Migrate the integration database to head as the integration owner. Migrate the hardening database to head as the
+   bootstrap superuser: the migration needs guard-owner rights that the test owner does not have.
+3. Grant the test memberships with `WITH INHERIT TRUE, SET TRUE`: integration owner on `webdesk_app`, `webdesk_ceremony`
+   and `webdesk_authority_login`; test owner on `webdesk_ceremony`; app login on `webdesk_app`. Migrations create memberships
+   without SET, which makes `SET ROLE` fail. Duplicate memberships from different grantors may coexist.
+4. Revoke the superuser's `webdesk_guard_owner` membership, which the migration grants to whichever role runs it.
+5. Set `public` schema ownership to the test owner, then move the superuser-owned relations and functions in the hardening
+   database to the integration owner, which is the state the `owner_engine` fixture expects.
+
+**Limits of probes through `SET ROLE` (F-7).** The worker-role probes in this review were run as the integration owner with
+`SET ROLE webdesk_worker`, not through the worker login. The worker login's password exists only inside the test process, so
+no restricted worker-login connection was available to the probe. The app login is a real restricted login and was used for
+the EXECUTE and direct-write refusals. A `SET ROLE` probe also inherits the owner's other memberships, so it can overstate
+what the restricted login can do. A future run should provide a separately provisioned worker login with a known secret for
+the probes.

@@ -79,3 +79,16 @@ race, bootstrap artefacts of the new cluster, and an integration base database t
 
 PHASE 3 ENGINEERING COMPLETE — READY FOR INDEPENDENT QA. Engineering evidence covers H-20 to H-27 as scoped. Independent review and
 acceptance remain open.
+
+## QA remediation (F-1, F-2)
+
+- F-1 (MINOR, fixed): the privilege audit depended on test order (a worker test login created by another module). Fixed in
+  `071e228` by a per-process test worker login from one helper (`tests/support/worker_login.py`). Verified alone, after the
+  durable file, and in the full suite on a fresh cluster (723 passed). Re-test: run the audit first on a fresh cluster.
+- F-2 (MINOR, disposition only): contact-liveness `now()` in `identity/contacts.py`. Database time, outside H-21's explicit
+  file list. No semantic change. WDS decision needed on whether H-76 covers it. Details: `docs/PHASE3_DECISION_EVIDENCE.md`
+  section 6.
+- F-7 (INFORMATIONAL): worker-role probes used `SET ROLE` from the integration owner, not a worker login. See the decision
+  evidence, section 7.
+- Verdict for this remediation: PHASE 3 QA REMEDIATION COMPLETE — READY FOR INDEPENDENT RE-TEST. Not an acceptance.
+
