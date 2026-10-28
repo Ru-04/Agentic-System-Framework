@@ -121,3 +121,9 @@ These are recorded for WDS integration decisions. None is treated as accepted en
 - Status: **not fixed**. Live integration acceptance stays blocked until enforcement is independently demonstrated.
   Smallest compatible upstream correction: the AI-S09 SOW path must withhold authoritative values when the estimate
   has no fingerprint, and raise an integrity finding. Requires WDS approval because it changes AI-S08/AI-S09 behaviour.
+
+## 10. Open limitation: run `state` values (contract section 6.1)
+
+- The adapter accepts any string in the run `state` field. Contract section 6.1 says `state` is one of the values allowed by
+  the `workflow_runs.state` check constraint, but does not list them in the v1 document, so the adapter cannot enforce the set.
+- Status: **open, not fixed**. Closing it requires the enumerated values from the Foundation schema (migration 0007 and later).

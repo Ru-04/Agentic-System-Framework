@@ -276,8 +276,11 @@ class AiReadClient:
         self._require_contract_header(response)
         try:
             payload = json.loads(response.body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise AiReadRefused("response body is not valid JSON") from error
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            payload = None
+        if payload is None:
+            # Raised outside the except block: the decode error carries the full body.
+            raise AiReadRefused("response body is not valid JSON")
         if not isinstance(payload, dict):
             raise AiReadRefused("response body is not an object")
         _refuse_forbidden(payload)
