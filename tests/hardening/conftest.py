@@ -25,6 +25,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 
+from tests.support.app_name import label
 from tests.support.authority import SECRET as AUTHORITY_SECRET
 from tests.support.authority import authority_database_url, provision_login_password
 from webdesk.authority.client import AuthorityClient
@@ -71,7 +72,7 @@ def _require_urls() -> tuple[str, str]:
 @pytest.fixture(scope="session")
 def app_engine() -> Iterator[Engine]:
     app_url, _ = _require_urls()
-    engine = create_engine(app_url)
+    engine = create_engine(app_url, connect_args={"application_name": label("hardening-app")})
     yield engine
     engine.dispose()
 
@@ -99,6 +100,7 @@ def authority_client() -> Iterator[AuthorityClient]:
     env = {
         **os.environ,
         "WEBDESK_ENV": "test",
+        "PGAPPNAME": label("authority"),
         "WEBDESK_AUTHORITY_DATABASE_URL": authority_database_url(app_url, password),
         "WEBDESK_AUTHORITY_SECRET": AUTHORITY_SECRET,
         "WEBDESK_AUTHORITY_BIND": f"127.0.0.1:{port}",
@@ -134,7 +136,7 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     """Installs once, activates both install contacts through tokens, and grants the second
     Administrator with its install appointment. Protected steps run as the login role."""
     _, owner_url = _require_urls()
-    owner = create_engine(owner_url)
+    owner = create_engine(owner_url, connect_args={"application_name": label("hardening-owner")})
     try:
         with owner.begin() as conn:
             conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
@@ -200,7 +202,9 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     if already is None:
         # The appointment is the install-time bootstrap (ceremony role), not an application write.
         _, owner_url = _require_urls()
-        appointing = create_engine(owner_url)
+        appointing = create_engine(
+            owner_url, connect_args={"application_name": label("hardening-owner-appoint")}
+        )
         try:
             with appointing.begin() as conn:
                 conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
@@ -243,7 +247,7 @@ def _activate_bootstrap(engine: Engine, user: uuid.UUID) -> None:
     assume the application role here, so the two steps run on their own connections.
     """
     _app_url, owner_url = _require_urls()
-    owner = create_engine(owner_url)
+    owner = create_engine(owner_url, connect_args={"application_name": label("hardening-owner")})
     token = secrets.token_urlsafe(32)
     try:
         with owner.begin() as conn:

@@ -33,6 +33,7 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import NullPool
 
 from tests.support.activation import activate_user
+from tests.support.app_name import clear_run_label, label, set_run_label
 from tests.support.db_cleanup import drop_when_detached
 from tests.support.proofs import prove
 from tests.support.run_namespace import (
@@ -62,6 +63,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if base is None:
         return
     run_id = run_identifier(os.environ.get(RUN_ENV), REPO.name)
+    set_run_label(run_id)
     try:
         _RUN = create_template(base, run_id, REPO)
     except NamespaceError as exc:
@@ -84,6 +86,7 @@ def pytest_unconfigure(config: pytest.Config) -> None:
         drop_owned(_RUN, base)
     finally:
         restore_environment(_RUN)
+        clear_run_label()
         _RUN = None
 
 
@@ -95,7 +98,11 @@ class _Clock:
 def _admin_engine(base: str) -> Engine:
     from sqlalchemy.engine.url import make_url as _make
 
-    return create_engine(_make(base).set(database="postgres"), isolation_level="AUTOCOMMIT")
+    return create_engine(
+        _make(base).set(database="postgres"),
+        isolation_level="AUTOCOMMIT",
+        connect_args={"application_name": label("admin")},
+    )
 
 
 def _migrate(url: str) -> None:
@@ -156,7 +163,9 @@ def committed_url(_template_name: str) -> Iterator[str]:
 @pytest.fixture
 def committed_engine(committed_url: str) -> Iterator[Engine]:
     engine = create_engine(
-        committed_url.replace("postgresql://", "postgresql+psycopg://"), poolclass=NullPool
+        committed_url.replace("postgresql://", "postgresql+psycopg://"),
+        poolclass=NullPool,
+        connect_args={"application_name": label("committed")},
     )
     yield engine
     engine.dispose()

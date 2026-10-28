@@ -23,6 +23,7 @@ from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.pool import NullPool
 
+from tests.support.app_name import label
 from webdesk.auth.service import AuthError
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.read_access import ReadAccessError, read_source_version_v1
@@ -65,7 +66,11 @@ def _app() -> Engine:
     run's hardening database until the process exits. That leaked ``webdesk_app_login`` session
     is the teardown defect of QA F-02. Without a pool, each use closes its connection on return.
     """
-    return create_engine(os.environ["WEBDESK_HARDENING_APP_URL"], poolclass=NullPool)
+    return create_engine(
+        os.environ["WEBDESK_HARDENING_APP_URL"],
+        poolclass=NullPool,
+        connect_args={"application_name": label("hardening-app-cached")},
+    )
 
 
 def _session_committed(user: uuid.UUID) -> str:
