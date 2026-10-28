@@ -34,8 +34,9 @@ The worker holds no INSERT, UPDATE or DELETE on any table. Every write goes thro
 | `fn_worker_record_audit` | write one system audit event | none |
 | `fn_worker_reap_expired` (`0050`) | fail expired jobs with exhausted attempts, and their runs | locks job then run; expired leases only; attempts exhausted only |
 | `fn_worker_stuck_jobs` (`0051`) | read-only report of expired leases not reclaimed and queued jobs not claimed (G-8) | none; changes nothing |
+| `fn_worker_record_audit_correlated` (`0052`) | write one system audit event with the job's correlation UUID (G-7) | refused for NULL correlation; `system` events only; an actor identifier that names an account is refused; owned by `webdesk_guard_owner` |
 
-`tests/hardening/test_privilege_audit.py` pins this exact set for `webdesk_worker`. A new function must be added to the
+`tests/hardening/test_privilege_audit.py` pins this exact set for `webdesk_worker` (19 functions after `0052`). A new function must be added to the
 pin deliberately (the reaper was added in Phase 3).
 
 ## Owner and definer

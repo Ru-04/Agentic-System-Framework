@@ -99,7 +99,7 @@ during a step ending with exit 0.
 
 ## Commits
 
-Recorded in the QA handoff after the commits are made.
+See the commit table in docs/PHASE3_INDEPENDENT_QA_HANDOFF.md.
 
 ## Known limitations (carried into the QA handoff)
 
@@ -109,3 +109,12 @@ Recorded in the QA handoff after the commits are made.
 - Production outbox transport, ceremony login provisioning and process manager remain deployment or later-phase
   dependencies (D-2, D-4, D-5).
 - Phase 2 remediation migrations `0044` and `0045` are not in this branch. See the reconciliation procedure.
+
+## Final sprint totals (tree b509900)
+
+Full regression on the dedicated cluster: 723 passed, 0 failed, exit 0 (2026-10-28 12:13:42Z to 12:22:30Z). A first run of the
+same tree gave 12 failures, all from the integration base database still being at 0051; after migrating it to 0052 the affected
+41 tests passed and the full run passed. Per-group results and commands are in the QA handoff.
+
+Decisions and their evidence (D-3, G-7, H-26 classification, crash-test repeatability and the detection check) are in
+docs/PHASE3_DECISION_EVIDENCE.md.

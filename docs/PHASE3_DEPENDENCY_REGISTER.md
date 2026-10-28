@@ -18,8 +18,8 @@ this document.
 
 | ID | Item | Owner | Blocks |
 |---|---|---|---|
-| D-2 | Outbox worker and expiry sweep are not run by `python -m webdesk.worker`. The outbox needs a transport. The sweep needs the ceremony role. | Phase 3 follow-up or the notification and outbox phase (H-50, H-52) | Phase 3 acceptance (H-26 is partial) |
-| D-3 | H-21 asks for ceremony deadlines to use the database clock. The approved test-clock rule (P-INC3-TEST-CLOCK-05) allows an injected window. These must be reconciled by a WDS decision: keep the injected clock for tests and use the database clock for the deadline, or another rule. | WDS decision | Phase 3 acceptance (H-21 is partial) |
+| D-2 | Outbox delivery transport and sweep ceremony login: the worker runs both when configured. Production transport (SMTP or other) and its credentials are later-phase and deployment dependencies; the test-profile capture sink is used in tests. See `docs/PHASE3_DECISION_EVIDENCE.md` section 3. | Notification and outbox phase (H-50, H-52); deployment | Production only |
+| D-3 | Signed-authorization expiry on the database clock (H-21). **Closed in Phase 3:** the install and recovery expiry decision is taken in the database transaction against `clock_timestamp()`; the injected clock is removed from those paths. See `docs/PHASE3_DECISION_EVIDENCE.md` section 1. | Phase 3 engineering | Closed |
 | D-4 | Production worker login provisioning (a secret per environment) | Deployment | Production only |
 | D-5 | Process manager for the worker (H-26 requires one in production) | Deployment checklist | Production only |
 

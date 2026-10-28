@@ -32,3 +32,13 @@ branches are merged as they stand, the chain has two heads. Alembic will refuse 
 - Phase 3 reserves `0050` onward. Phase 2 uses `0044` and `0045`. Neither reuses the other's ID.
 - A merge of unaccepted Phase 2 code is not done automatically. Reconciliation is a separate, reviewed commit.
 - If Phase 2 acceptance changes `0044` or `0045` before commit, repeat step 2 with the new head.
+
+## Phase 3 chain after the final sprint
+
+- Phase 3 revisions: `0050_durable_execution` (committed; `down_revision` `0043_phase2_review_fixes`),
+  `0051_worker_fence_diagnostics` (`down_revision` `0050`), `0052_audit_correlation` (`down_revision` `0051`).
+- Only `0050`'s `down_revision` changes in the reconciliation. `0051` and `0052` chain on `0050` and need no edit. The
+  procedure above (steps 1 to 6) applies unchanged, with the downgrade target in step 5 also reading `0045` for the
+  Phase 2 head.
+- The reconciliation is a reviewed, separate commit. It is not performed in this branch. Phase 2's `0044` and `0045` are not in
+  this branch.
