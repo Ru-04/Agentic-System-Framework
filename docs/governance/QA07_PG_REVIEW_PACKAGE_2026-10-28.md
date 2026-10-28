@@ -10,7 +10,8 @@
 |---|---|
 | QA-07 branch | `claude/qa07-validation` |
 | Last CI-tested engineering commit | `8304d2ca536cd57bf4e9616205f293ebae66066e` (CI run #57, success) |
-| Current head (docs-only commit after CI #57) | `d60e794b6e80634d713a34472552b2acf66ae96a` (CI run #58, in progress) |
+| CI on later commits | `d60e794` (run #58, success); `f4e0f96` (run #59, success); `bb06554` (run #60, success, management-reported PASS) |
+| Current head for merge review | `bb06554dd3365df8d9f8b6b3fc13a463a34b1715` (asyncio scope fix; see the merge authorization request) |
 | Target | `feature/increment-1-foundation` at `740b1695555303b29323a58df3e2345663d9821d` (ancestor of the candidate) |
 
 The review must be bound to the final CI-passing commit. If `d60e794` passes CI, the reviewed commit is `d60e794`, which differs from `8304d2c` only in the traceability report.
@@ -41,7 +42,7 @@ The review must be bound to the final CI-passing commit. If `d60e794` passes CI,
 - **Asynchronous paths.** A task created inside a verified scope copies the context. The scope is now a deactivatable object, so the copy is refused once the scope closes. Tests: `tests/unit/test_qa07_rbac_wiring.py` asyncio section. This fix was made after `8304d2c`, so it is covered only by the CI run on the final SHA.
 - **In-process limit.** `harness_scope` is public. Code that imports it can enter the scope. The control refuses direct and accidental calls only.
 - **Production wiring.** The RBAC check is not exercised against the SQL store in an integration test.
-- **Six deleted lines** in `src/webdesk/intake/reassess.py` and two test files, from the earlier format-only commit `79c90bc`. AST equivalence was not re-verified in this session.
+- **Six deleted lines** in `src/webdesk/intake/reassess.py` and two test files, from the earlier format-only commit `79c90bc`. The three files `src/webdesk/intake/reassess.py`, `tests/hardening/conftest.py` and `tests/integration/test_gate1_schema.py` were checked in the author's session: each is syntax-tree identical to the target, so the change is formatting only. PG should re-verify this independently.
 
 ## PG section (to be completed by PG personally)
 
