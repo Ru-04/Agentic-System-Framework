@@ -412,3 +412,34 @@ def test_qa06_a_pattern_stream_holding_text_is_flagged() -> None:
 def test_qa06_a_nested_form_inside_an_object_stream_is_still_walked() -> None:
     result = parse_pdf(_object_stream_bomb(0))
     assert result.flagged_regions == []
+
+
+def test_qa05_concurrent_admission_and_parsing_never_leak_the_patch() -> None:
+    """The decoder patch is process-wide. Opens are serialized, so each meter charges its own parse,
+    and the original decoder is restored once all calls return."""
+    import threading
+
+    from pypdf.filters import FlateDecode
+
+    from webdesk.intake.parsers import open_pdf_structure
+
+    original = vars(FlateDecode)["decode"]
+    small = build_pdf(["concurrent page"])
+    errors: list[BaseException] = []
+
+    def work(index: int) -> None:
+        try:
+            if index % 2:
+                parse_pdf(small)
+            else:
+                assert open_pdf_structure(small) is False
+        except BaseException as exc:  # collected and re-raised on the main thread
+            errors.append(exc)
+
+    threads = [threading.Thread(target=work, args=(index,)) for index in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert not errors, errors
+    assert vars(FlateDecode)["decode"] is original

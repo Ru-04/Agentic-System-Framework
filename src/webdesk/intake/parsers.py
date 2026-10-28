@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import io
 import re
+import threading
 import unicodedata
 import zipfile
 import zlib
@@ -159,6 +160,9 @@ class _DecodeMeter:
         self._charged[id(data)] = data
 
 
+_PDF_DECODE_LOCK = threading.RLock()
+
+
 @contextmanager
 def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
     """Route every flate decode through ``meter`` and refuse the filters this parser never decodes.
@@ -174,6 +178,7 @@ def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
         meter.filter_refusals += 1
         raise ParserFailure(PDF_FILTER_UNSUPPORTED)
 
+    _PDF_DECODE_LOCK.acquire()  # released in the finally below; the patch is process-wide
     original_flate = vars(FlateDecode)["decode"]
     original_lzw = vars(LZWDecode)["_decodeb"]
     original_rl = vars(RunLengthDecode)["decode"]
@@ -203,6 +208,7 @@ def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
         type.__setattr__(DCTDecode, "decode", original_dct)
         type.__setattr__(JPXDecode, "decode", original_jpx)
         type.__setattr__(CCITTFaxDecode, "decode", original_ccitt)
+        _PDF_DECODE_LOCK.release()
 
 
 class _Unbounded(Exception):
