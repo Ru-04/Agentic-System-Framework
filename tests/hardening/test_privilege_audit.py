@@ -8,9 +8,13 @@ results are recorded in docs/INCREMENT_3_EVIDENCE.md.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
+
+from tests.support.worker_login import ensure_worker_test_login
 
 pytestmark = pytest.mark.hardening
 
@@ -355,6 +359,10 @@ def test_every_guard_function_is_owned_by_the_guard_owner(conn: Connection) -> N
 
 
 def test_login_roles_hold_only_their_intended_membership(conn: Connection) -> None:
+    # F-1: this audit provisions its own worker test login through the shared helper. It does not
+    # depend on another module having created one, so the result is the same in any order.
+    worker = ensure_worker_test_login(os.environ["WEBDESK_INTEGRATION_OWNER_URL"])
+    names = ["webdesk_app_login", "webdesk_authority_login", worker.name]
     memberships = {
         str(row[0]): {
             str(r)
@@ -369,15 +377,13 @@ def test_login_roles_hold_only_their_intended_membership(conn: Connection) -> No
             .all()
         }
         for row in conn.execute(
-            text(
-                "SELECT rolname FROM pg_roles WHERE rolname IN ("
-                "'webdesk_app_login', 'webdesk_authority_login', 'webdesk_intake_worker_login')"
-            )
+            text("SELECT rolname FROM pg_roles WHERE rolname = ANY(:names)"),
+            {"names": names},
         ).all()
     }
     assert memberships.get("webdesk_app_login") == {"webdesk_app"}
     assert memberships.get("webdesk_authority_login") == {"webdesk_authority"}
-    assert memberships.get("webdesk_intake_worker_login") == {"webdesk_worker"}
+    assert memberships.get(worker.name) == {"webdesk_worker"}
 
 
 def test_the_guard_owner_is_not_a_login_role_and_no_login_holds_it(conn: Connection) -> None:

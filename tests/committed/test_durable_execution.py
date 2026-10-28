@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import queue
-import secrets
 import signal
 import subprocess
 import sys
@@ -30,6 +29,7 @@ from sqlalchemy.engine.url import make_url
 from tests.support.people import committed_active_user
 from tests.support.privileged import as_worker
 from tests.support.proofs import prove
+from tests.support.worker_login import ensure_worker_test_login
 from webdesk.intake.ingest import ingest_source
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
@@ -41,8 +41,6 @@ from webdesk.runs.heartbeat import Heartbeat, effective_interval
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
-
-WORKER_LOGIN = "webdesk_intake_worker_login"
 
 
 @dataclass(frozen=True)
@@ -320,19 +318,13 @@ def test_the_reaper_leaves_a_job_with_attempts_left_for_reclaim(
 
 
 def _provision_worker_login(committed_engine: Engine, committed_url: str) -> str:
-    """Create or re-password the worker login, with membership in webdesk_worker only."""
-    password = secrets.token_urlsafe(24)
-    with committed_engine.begin() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM pg_roles WHERE rolname = :n"), {"n": WORKER_LOGIN}
-        ).first()
-        if exists is None:
-            conn.execute(text(f"CREATE ROLE {WORKER_LOGIN} LOGIN"))
-        conn.execute(text(f"ALTER ROLE {WORKER_LOGIN} LOGIN PASSWORD '{password}'"))
-        conn.execute(text(f"GRANT webdesk_worker TO {WORKER_LOGIN}"))
+    """This process's intake-worker test login (see tests/support/worker_login.py), as a URL."""
+    login = ensure_worker_test_login(
+        committed_url.replace("postgresql://", "postgresql+psycopg://")
+    )
     return (
         make_url(committed_url)
-        .set(drivername="postgresql+psycopg", username=WORKER_LOGIN, password=password)
+        .set(drivername="postgresql+psycopg", username=login.name, password=login.password)
         .render_as_string(hide_password=False)
     )
 
