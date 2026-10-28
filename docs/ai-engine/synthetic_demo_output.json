@@ -403,8 +403,8 @@
         "agent_id": "specialist:shopify_specialist",
         "agent_kind": "specialist",
         "status": "completed_with_gaps",
-        "started_at": "2026-10-26T18:00:06.834293Z",
-        "finished_at": "2026-10-26T18:00:07.644886Z",
+        "started_at": "2026-10-28T12:30:53.166135Z",
+        "finished_at": "2026-10-28T12:30:54.072527Z",
         "errors": [],
         "output": {
           "task_id": "TASK-shopify_specialist-20000000",

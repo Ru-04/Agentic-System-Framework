@@ -177,6 +177,17 @@ class SourceSegment(_Contract):
     text_truncated: bool
 
 
+APPROVAL_SIDE_STATUSES = frozenset(
+    {
+        RequirementStatus.VERIFIED,
+        RequirementStatus.ACCEPTED_FOR_SCOPE,
+        RequirementStatus.DEFERRED,
+        RequirementStatus.REJECTED,
+        RequirementStatus.SUPERSEDED,
+    }
+)
+
+
 class AtomicRequirement(_Contract):
     requirement_id: str = Field(pattern=PROPOSAL_REQUIREMENT_ID)
     project_id: UUID
@@ -202,6 +213,8 @@ class AtomicRequirement(_Contract):
     def _client_requirements_are_traceable(self) -> AtomicRequirement:
         if self.origin is RequirementOrigin.CLIENT_EXPLICIT and not self.source_refs:
             raise ValueError("client_explicit requirements must reference at least one source")
+        if self.status in APPROVAL_SIDE_STATUSES:
+            raise ValueError("approval-side statuses are set by human workflows, not the AI engine")
         return self
 
 

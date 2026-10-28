@@ -7,7 +7,7 @@ from uuid import UUID
 
 from webdesk_ai import synthetic
 from webdesk_ai.catalog import default_registry
-from webdesk_ai.contracts import AgentStatus, RoutingOutcome, SourceSegment
+from webdesk_ai.contracts import AgentStatus, AtomicRequirement, RoutingOutcome, SourceSegment
 from webdesk_ai.models import ScriptedModel
 from webdesk_ai.requirements.agent import (
     RequirementAnalysisAgent,
@@ -206,3 +206,46 @@ def test_deterministic_lexicons() -> None:
     assert detect_platforms("Our Shopify store and a 3dcart shop") == ("3dcart", "shopify")
     assert detect_platforms("Shift4Shop catalogue") == ("3dcart",)
     assert detect_platforms("shopifyish") == ()
+
+
+def test_model_cannot_set_approval_side_statuses() -> None:
+    for status in ("accepted_for_scope", "verified", "rejected", "superseded"):
+        payload = json.loads(GOOD_ANALYSIS)
+        payload["requirements"][0]["status"] = status
+        result, _ = _analyze([json.dumps(payload)] * 2)
+        assert result.status is AgentStatus.INVALID_OUTPUT, status
+        assert result.requirements == ()
+        assert any("may not set" in error for error in result.errors)
+
+
+def test_dependency_cycles_are_rejected_and_acyclic_chains_are_not() -> None:
+    cyclic = json.loads(GOOD_ANALYSIS)
+    cyclic["requirements"][0]["dependency_draft_ids"] = ["R2"]
+    cyclic["requirements"][1]["dependency_draft_ids"] = ["R3"]
+    cyclic["requirements"][2]["dependency_draft_ids"] = ["R1"]
+    result, _ = _analyze([json.dumps(cyclic)] * 2)
+    assert result.status is AgentStatus.INVALID_OUTPUT
+    assert any("dependency cycle" in error for error in result.errors)
+    chain = json.loads(GOOD_ANALYSIS)
+    chain["requirements"][0]["dependency_draft_ids"] = ["R2"]
+    chain["requirements"][1]["dependency_draft_ids"] = ["R3"]
+    result, _ = _analyze([json.dumps(chain)])
+    assert result.status is AgentStatus.COMPLETED
+
+
+def test_approval_side_status_is_refused_by_the_contract_model_too() -> None:
+    import pytest as _pytest
+    from pydantic import ValidationError as _ValidationError
+
+    with _pytest.raises(_ValidationError):
+        AtomicRequirement.model_validate(
+            {
+                "requirement_id": "REQ-001",
+                "project_id": str(synthetic.PROJECT_ID),
+                "origin": "system_inference",
+                "original_wording": "x",
+                "normalized_statement": "x",
+                "requirement_type": "functional",
+                "status": "accepted_for_scope",
+            }
+        )

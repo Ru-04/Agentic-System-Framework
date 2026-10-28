@@ -46,6 +46,15 @@ from webdesk_ai.specialists.base import (
 )
 
 MAX_ATTEMPTS = 2
+# Statuses the model may propose. Approval-side statuses belong to human workflows only.
+PROPOSABLE_STATUSES = frozenset(
+    {
+        RequirementStatus.CAPTURED,
+        RequirementStatus.NORMALIZED,
+        RequirementStatus.NEEDS_CLARIFICATION,
+        RequirementStatus.UNDER_ANALYSIS,
+    }
+)
 OVERLAP_THRESHOLD = 0.8
 REGISTRY_VERSION = "0.3.10-foundation-gate1-review"
 
@@ -355,6 +364,10 @@ def _semantic_errors(draft: DraftAnalysis, index: dict[UUID, SourceSegment]) -> 
     known = set(draft_ids)
     for item in draft.requirements:
         label = item.draft_id
+        if item.status not in PROPOSABLE_STATUSES:
+            errors.append(
+                f"{label} proposes status {item.status.value}, which the AI engine may not set"
+            )
         if any(s not in index for s in item.source_segment_ids):
             errors.append(f"{label} cites segments that were not supplied")
             continue
@@ -372,7 +385,37 @@ def _semantic_errors(draft: DraftAnalysis, index: dict[UUID, SourceSegment]) -> 
         for conflict in item.conflict_draft_ids:
             if conflict not in known or conflict == label:
                 errors.append(f"{label} conflicts with unknown or self requirement {conflict}")
+    cycle = _dependency_cycle(draft)
+    if cycle:
+        errors.append("dependency cycle: " + " -> ".join(cycle))
     return errors
+
+
+def _dependency_cycle(draft: DraftAnalysis) -> list[str]:
+    edges = {item.draft_id: item.dependency_draft_ids for item in draft.requirements}
+    state: dict[str, int] = {}  # 1 = on the current path, 2 = finished
+    path: list[str] = []
+
+    def visit(node: str) -> list[str]:
+        state[node] = 1
+        path.append(node)
+        for nxt in edges.get(node, ()):
+            if state.get(nxt) == 1:
+                return path[path.index(nxt) :] + [nxt]
+            if state.get(nxt) is None and nxt in edges:
+                found = visit(nxt)
+                if found:
+                    return found
+        state[node] = 2
+        path.pop()
+        return []
+
+    for node in edges:
+        if state.get(node) is None:
+            found = visit(node)
+            if found:
+                return found
+    return []
 
 
 def _reference(seg: SourceSegment, wording: str) -> SourceReference:

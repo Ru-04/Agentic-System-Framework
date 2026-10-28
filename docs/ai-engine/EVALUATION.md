@@ -29,4 +29,4 @@ has a hand-written expectation. The aggregate metrics and their targets are:
   decompose a real brief. A live model would need its own dataset, graded by humans.
 - Every evidence item is synthetic. A passing `verified_claims_in_outputs = 0` does not mean any
   Shopify claim is true. It means no claim was labelled verified.
-- The dataset is small (17 cases). Confidence intervals are not computed.
+- The dataset is small (20 cases). Confidence intervals are not computed.

@@ -261,7 +261,12 @@ def run_specialist(
     process = context.Process(
         target=_child_entry, args=(child_end, agent, task, evidence, nonce), daemon=True
     )
-    process.start()
+    try:
+        process.start()
+    except Exception:  # for example, an agent that cannot be pickled for the child process
+        parent_end.close()
+        child_end.close()
+        return _envelope(agent, started, clock, AgentStatus.FAILED, ("specialist could not start",))
     child_end.close()
     message: tuple[str, str, object] | None = None
     timed_out = False

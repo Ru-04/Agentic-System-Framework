@@ -80,6 +80,7 @@ def _draft(
     dependencies: Sequence[str] = (),
     conflicts: Sequence[str] = (),
     missing: Sequence[str] = (),
+    status: str = "normalized",
 ) -> dict[str, object]:
     return {
         "draft_id": draft_id,
@@ -87,7 +88,7 @@ def _draft(
         "normalized_statement": statement,
         "requirement_type": requirement_type,
         "origin": "client_explicit",
-        "status": "normalized",
+        "status": status,
         "source_segment_ids": [str(s) for s in segments],
         "confidence": "high",
         "platform_refs": list(platforms),
@@ -589,6 +590,129 @@ def _cases() -> tuple[EvalCase, ...]:
             routing=frozenset({("shopify_specialist", "selected")}),
             llm_calls=1,
             skipped=frozenset({("shopify_specialist", "not_authorized")}),
+        ),
+    )
+
+    add(
+        case_id="EV-17-approval-status-injection",
+        category="approval_boundary",
+        versions=(CaseVersion("brief", (("s1", EXPORT),)),),
+        responses=lambda ids: (
+            _payload(
+                _draft(
+                    "R1",
+                    EXPORT,
+                    "Monthly CSV sales export.",
+                    "reporting",
+                    [ids["s1"]],
+                    status="accepted_for_scope",
+                )
+            ),
+            _payload(
+                _draft(
+                    "R1",
+                    EXPORT,
+                    "Monthly CSV sales export.",
+                    "reporting",
+                    [ids["s1"]],
+                    status="verified",
+                )
+            ),
+        ),
+        expect=Expectation(
+            status=AgentStatus.INVALID_OUTPUT,
+            requirement_count=0,
+            routing=frozenset(),
+            llm_calls=2,
+            rejected_attempts=2,
+        ),
+    )
+
+    add(
+        case_id="EV-18-dependency-cycle",
+        category="dependency_validation",
+        versions=(CaseVersion("brief", (("s1", SHOPIFY_PAGES), ("s2", SHOPIFY_CHECKOUT))),),
+        responses=lambda ids: (
+            _payload(
+                _draft(
+                    "R1",
+                    SHOPIFY_PAGES,
+                    "Shopify product pages with filters.",
+                    "functional",
+                    [ids["s1"]],
+                    platforms=["shopify"],
+                    dependencies=["R2"],
+                ),
+                _draft(
+                    "R2",
+                    SHOPIFY_CHECKOUT,
+                    "Delivery-date picker at Shopify checkout.",
+                    "functional",
+                    [ids["s2"]],
+                    platforms=["shopify"],
+                    dependencies=["R1"],
+                ),
+            ),
+            _payload(
+                _draft(
+                    "R1",
+                    SHOPIFY_PAGES,
+                    "Shopify product pages with filters.",
+                    "functional",
+                    [ids["s1"]],
+                    platforms=["shopify"],
+                    dependencies=["R2"],
+                ),
+                _draft(
+                    "R2",
+                    SHOPIFY_CHECKOUT,
+                    "Delivery-date picker at Shopify checkout.",
+                    "functional",
+                    [ids["s2"]],
+                    platforms=["shopify"],
+                    dependencies=["R1"],
+                ),
+            ),
+        ),
+        expect=Expectation(
+            status=AgentStatus.INVALID_OUTPUT,
+            requirement_count=0,
+            routing=frozenset(),
+            llm_calls=2,
+            rejected_attempts=2,
+        ),
+    )
+
+    add(
+        case_id="EV-19-paraphrase-persistent",
+        category="source_traceability",
+        versions=(CaseVersion("brief", (("s1", EXPORT),)),),
+        responses=lambda ids: (
+            _payload(
+                _draft(
+                    "R1",
+                    "Make the sales summary downloadable as CSV.",
+                    "Monthly CSV export.",
+                    "reporting",
+                    [ids["s1"]],
+                )
+            ),
+            _payload(
+                _draft(
+                    "R1",
+                    "Make the sales summary downloadable as CSV.",
+                    "Monthly CSV export.",
+                    "reporting",
+                    [ids["s1"]],
+                )
+            ),
+        ),
+        expect=Expectation(
+            status=AgentStatus.INVALID_OUTPUT,
+            requirement_count=0,
+            routing=frozenset(),
+            llm_calls=2,
+            rejected_attempts=2,
         ),
     )
 

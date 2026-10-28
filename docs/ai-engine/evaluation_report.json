@@ -223,6 +223,36 @@
       "requirements": 1,
       "llm_calls": 1,
       "rejected_attempts": 0
+    },
+    {
+      "case_id": "EV-17-approval-status-injection",
+      "category": "approval_boundary",
+      "status": "invalid_output",
+      "passed": true,
+      "failures": [],
+      "requirements": 0,
+      "llm_calls": 2,
+      "rejected_attempts": 2
+    },
+    {
+      "case_id": "EV-18-dependency-cycle",
+      "category": "dependency_validation",
+      "status": "invalid_output",
+      "passed": true,
+      "failures": [],
+      "requirements": 0,
+      "llm_calls": 2,
+      "rejected_attempts": 2
+    },
+    {
+      "case_id": "EV-19-paraphrase-persistent",
+      "category": "source_traceability",
+      "status": "invalid_output",
+      "passed": true,
+      "failures": [],
+      "requirements": 0,
+      "llm_calls": 2,
+      "rejected_attempts": 2
     }
   ]
 }

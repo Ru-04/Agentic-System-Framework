@@ -149,3 +149,21 @@ def test_gate_fails_when_routing_is_missing() -> None:
         case, expect=replace(case.expect, routing=frozenset({("shopify_specialist", "selected")}))
     )
     assert run_case(broken).passed is False
+
+
+class _Unpicklable:
+    """Cannot be sent to a spawned child, so the start must fail and be reported as a status."""
+
+    category_id = "shopify_specialist"
+
+    def __init__(self) -> None:
+        self.hook = lambda: None
+
+    def investigate(self, task: SpecialistTask, evidence: object) -> SpecialistInvestigationResult:
+        raise AssertionError("never reached")
+
+
+def test_a_specialist_that_cannot_start_becomes_a_failed_status() -> None:
+    execution = run_specialist(_Unpicklable(), _task(timeout=5), SyntheticShopifyEvidence())  # type: ignore[arg-type]
+    assert execution.status is AgentStatus.FAILED
+    assert execution.errors == ("specialist could not start",)
