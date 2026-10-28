@@ -1,10 +1,20 @@
 """Test support for the authentication authority (R4, stage 2).
+
 Tests reach the authority only through its client, over loopback HTTP, on its own login role. The
 shared secret and the login password are generated per test run. They are test-only values and are
 never used for a production authority.
 
-``provision_login_password`` sets a fresh password on ``webdesk_authority_login``. It needs a role
-with CREATEROLE (the integration owner), taken from ``WEBDESK_TEST_DATABASE_URL``.
+``provision_login_password`` creates a login role for this test process only, named
+``webdesk_authority_test_<random>``. The role is a member of ``webdesk_authority``, exactly like
+the shipped ``webdesk_authority_login`` (migration 0023), and it has the same non-privileged
+attributes. It needs a role with CREATEROLE (the integration owner), taken from
+``WEBDESK_TEST_DATABASE_URL``.
+
+Why a per-process role: the shipped login is one cluster-wide role. Each test process used to set a
+new random password on it, so a second process running against the same PostgreSQL server (another
+worktree, another session) silently invalidated the first process's password, and the authority
+then refused every call. A per-process role gives each run its own credential and leaves the
+shipped role untouched. The role is dropped at process exit when no sessions use it.
 
 ``InProcessAuthority`` runs the same server module on a background thread for one database. The
 hardening suite instead starts the authority as a separate operating-system process (see
@@ -12,6 +22,7 @@ tests/hardening/conftest.py)."""
 
 from __future__ import annotations
 
+import atexit
 import os
 import secrets
 import threading
@@ -27,31 +38,59 @@ from webdesk.authority.client import AuthorityClient
 from webdesk.authority.server import AuthorityServer, build_server
 
 T = TypeVar("T")
-AUTHORITY_ROLE = "webdesk_authority_login"
+AUTHORITY_ROLE = "webdesk_authority_login"  # the shipped role; not used by test runs
 SECRET = secrets.token_urlsafe(32)
 _password: str | None = None
+_role: str | None = None
+_owner_url: str | None = None
 
 
 def provision_login_password(owner_url: str) -> str:
-    """Set (once per run) a fresh password on the authority login role and return it."""
-    global _password
+    """Create (once per process) this run's authority login role and return its password."""
+    global _password, _role, _owner_url
     if _password is None:
+        role = f"webdesk_authority_test_{secrets.token_hex(6)}"
         candidate = secrets.token_urlsafe(24)
         engine = create_engine(owner_url)
         try:
             with engine.begin() as conn:
-                conn.execute(text(f"ALTER ROLE {AUTHORITY_ROLE} PASSWORD '{candidate}'"))
+                conn.execute(
+                    text(
+                        f"CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT"
+                        f" PASSWORD '{candidate}'"
+                    )
+                )
+                conn.execute(text(f"GRANT webdesk_authority TO {role}"))
         finally:
             engine.dispose()
+        _role = role
+        _owner_url = owner_url
         _password = candidate
+        atexit.register(_drop_run_role)
     return _password
 
 
+def _drop_run_role() -> None:
+    """Remove this process's login role. A role still in use is kept and reported."""
+    if _role is None or _owner_url is None:
+        return
+    engine = create_engine(_owner_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"DROP ROLE IF EXISTS {_role}"))
+    except Exception as exc:  # cleanup must never fail a test run
+        print(f"authority test role {_role} kept: {type(exc).__name__}", flush=True)
+    finally:
+        engine.dispose()
+
+
 def authority_database_url(database_url: str, password: str) -> str:
-    """The same database as ``database_url``, reached as the authority login role."""
+    """The same database as ``database_url``, reached as this run's authority login role."""
+    if _role is None:
+        raise RuntimeError("provision_login_password must run before authority_database_url")
     return (
         make_url(database_url)
-        .set(drivername="postgresql+psycopg", username=AUTHORITY_ROLE, password=password)
+        .set(drivername="postgresql+psycopg", username=_role, password=password)
         .render_as_string(hide_password=False)
     )
 
