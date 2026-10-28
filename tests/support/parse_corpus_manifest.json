@@ -37,16 +37,16 @@
       "expected_class": "input_too_large",
       "expected_status": "failed",
       "mime": "application/pdf",
-      "sha256": "e8101e2f3bcc6821a525cb8201c86229de4c98b4bc6793e99dcd204e4137f677",
-      "size_bytes": 26214980
+      "sha256": "9054a8194d506a9a82985bb602e755fbafe477d923f763a4c58efa6b1c7d1b43",
+      "size_bytes": 20972100
     },
     "oversized-txt": {
       "category": "oversized",
       "expected_class": "input_too_large",
       "expected_status": "failed",
       "mime": "text/plain",
-      "sha256": "1b55f713d105dc0e7be77b11a4b2db46534405560d7dfe4265d1e6dac74441aa",
-      "size_bytes": 26214401
+      "sha256": "b0849bc28f66b0531cd1789a8e5c38abfca458a7997f39210814ec6f861d5378",
+      "size_bytes": 20971521
     },
     "partial-eml-html-only": {
       "category": "partial",
@@ -137,5 +137,5 @@
       "size_bytes": 62
     }
   },
-  "corpus_version": "1"
+  "corpus_version": "2"
 }

@@ -255,8 +255,8 @@ def test_markdown_records_its_heading_path_and_paragraph_index() -> None:
 def test_text_lines_get_line_range_locators() -> None:
     result = parse_text(b"first line\n\nthird line\n")
     assert [s.locator for s in result.segments] == [
-        {"line_start": 1, "line_end": 1, "char_start": 0, "char_end": 10},
-        {"line_start": 3, "line_end": 3, "char_start": 12, "char_end": 22},
+        {"line_start": 1, "line_end": 1, "start_offset": 0, "end_offset": 10},
+        {"line_start": 3, "line_end": 3, "start_offset": 12, "end_offset": 22},
     ]
 
 
@@ -267,8 +267,8 @@ def test_eml_yields_subject_and_body_and_lists_attachments_without_ingesting_the
     assert subject["eml_part"] == "subject"
     assert body["eml_part"] == "body"
     # Approved offsets (P4-GOV-2026-10-28): 0 to the length of the normalized part text.
-    assert subject["char_start"] == 0 and subject["char_end"] == len(result.segments[0].text)
-    assert body["char_start"] == 0 and body["char_end"] == len(result.segments[1].text)
+    assert subject["start_offset"] == 0 and subject["end_offset"] == len(result.segments[0].text)
+    assert body["start_offset"] == 0 and body["end_offset"] == len(result.segments[1].text)
     assert len(result.unprocessed_attachments) == 1
     attachment = result.unprocessed_attachments[0]
     assert attachment["filename"] == "spec.pdf"

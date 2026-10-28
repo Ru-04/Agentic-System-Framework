@@ -23,7 +23,7 @@ from docx import Document
 
 from webdesk.intake import limits
 
-CORPUS_VERSION = "1"
+CORPUS_VERSION = "2"
 
 
 @dataclass(frozen=True)

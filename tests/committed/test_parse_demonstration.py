@@ -215,13 +215,14 @@ def test_the_parse_pipeline_end_to_end_with_isolation_partial_failure_and_repars
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         locators = conn.execute(
             text(
-                "SELECT locator ->> 'line_start', locator ->> 'char_start', locator ->> 'char_end'"
+                "SELECT locator ->> 'line_start', locator ->> 'start_offset', "
+                "locator ->> 'end_offset'"
                 " FROM source_segments WHERE source_version_id = :v ORDER BY 1"
             ),
             {"v": versions["notes"]},
         ).all()
-    for line_start, char_start, char_end in locators:
-        _say(f"   line {line_start}: characters {char_start}-{char_end}")
+    for line_start, start_offset, end_offset in locators:
+        _say(f"   line {line_start}: characters {start_offset}-{end_offset}")
 
     _say("10. Audit: the events recorded against the notes version")
     with committed_engine.begin() as conn:

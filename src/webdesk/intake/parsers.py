@@ -1,18 +1,25 @@
 """Typed-locator parsers for the five permitted types (I-6; ARCH §13; SCHEMA §4.2; EVAL-F04).
 
 Each parser returns draft segments with a locator of the type its file format requires. A whole-file
-failure raises ``ParserFailure`` and commits nothing (I-7). A single unreadable region is
-recorded as ``flagged_regions`` and the parse becomes ``partial``, even when no text segment is
-produced, so the gap is never silent. A file with no flagged region and no extractable text is
-``unsupported``. There is no OCR. Attachments are listed, never parsed. Only the subject and
-body of an EML message become segments.
+failure raises ``ParserFailure`` and commits nothing (I-7). The result status follows the approved
+requirement schema (REQUIREMENT_SCHEMA section 4, ARCHITECTURE section 13, EVAL-F14b), and only the
+following classes are returned:
 
-Locator extensions (H-33; approved under P4-GOV-2026-10-28): ``txt_line_range`` carries character
-offsets into the decoded UTF-8 text; a ``docx_paragraph`` inside a table carries ``table_index``,
-``row`` and ``cell``; ``eml_part`` carries ``char_start`` and ``char_end`` (code points,
-end-exclusive, relative to the normalized part text) and the message's ``message_id`` as
-provenance. The locator CHECK (migration 0007) requires only the keys named there, so the extra
-keys are admitted.
+- ``succeeded``: at least one segment and no flagged region.
+- ``partial``: at least one committed segment AND at least one flagged region.
+- ``unsupported``: no committed segment. Flagged regions, if any, are kept as
+  ``unextractable_regions`` metadata. ``partial`` is never used for a zero-segment result
+  (WDS ruling, QA-02).
+- ``failed``: raised as ``ParserFailure``, never returned.
+
+There is no OCR. Attachments are listed, never parsed. Only the subject and body of an EML message
+become segments.
+
+Locator extensions (H-33; approved under P4-GOV-2026-10-28): ``txt_line_range`` and ``eml_part``
+carry ``start_offset`` and ``end_offset`` (the approved schema names; code points, zero-based,
+end-exclusive). A ``docx_paragraph`` inside a table carries ``table_index``, ``row`` and ``cell``.
+``eml_part`` also carries the message's ``message_id`` as provenance. The locator CHECK (migration
+0007) requires only the keys named there, so the extra keys are admitted.
 
 Libraries (approved defaults D-1): pypdf 5.1.0, python-docx 1.1.2. Markdown, TXT and EML use the
 standard library.
@@ -62,17 +69,17 @@ class SegmentDraft:
 
 @dataclass
 class ParseResult:
-    status: str  # succeeded | partial | unsupported
+    status: str  # succeeded | partial | unsupported (failed is raised, see ParserFailure)
     segments: list[SegmentDraft] = field(default_factory=list)
     flagged_regions: list[str] = field(default_factory=list)
     unprocessed_attachments: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _status(segments: list[SegmentDraft], flagged: list[str]) -> str:
-    """Any flagged region makes the result partial, with or without segments (D1, H-34)."""
-    if flagged:
-        return "partial"
-    return "succeeded" if segments else "unsupported"
+    """The approved classes (EVAL-F14b, QA-02 ruling). Partial requires a committed segment."""
+    if segments:
+        return "partial" if flagged else "succeeded"
+    return "unsupported"
 
 
 def _has_image(page: Any) -> bool:
@@ -159,7 +166,46 @@ def _bound_page(page: Any) -> bool:
     return hidden_text
 
 
+_STREAM_KEYWORD = re.compile(rb"stream\r?\n")
+_UNBOUNDED_FILTERS = (b"/LZWDecode", b"/RunLengthDecode")
+
+
+def _check_pdf_expansion(data: bytes) -> None:
+    """Bound every zlib-coded stream in the file before any reader decodes it (QA-05, H-31).
+
+    pypdf decodes cross-reference and object streams while the reader is opened, before any page
+    limit applies, so a small file can expand to a large size at that point (measured on the
+    baseline: a 61 KB file decoded to 60 MiB). This pass decompresses each stream whose bytes begin
+    with a zlib header, with an output bound, and refuses the file when the total decoded size or
+    its ratio to the file size exceeds the archive limits. Filters it cannot bound (LZW and
+    RunLength, which expand without a header) are refused by name. This is a bound on decoded size,
+    not a guarantee of memory containment on Windows (H-DEC-4).
+    """
+    if any(name in data for name in _UNBOUNDED_FILTERS):
+        raise ParserFailure(PDF_FILTER_UNSUPPORTED)
+    total = 0
+    for match in _STREAM_KEYWORD.finditer(data):
+        if data[max(0, match.start() - 3) : match.start()] == b"end":
+            continue  # the keyword inside "endstream"
+        end = data.find(b"endstream", match.end())
+        payload = data[match.end() : end if end >= 0 else len(data)]
+        size_room = limits.MAX_ARCHIVE_UNCOMPRESSED_BYTES - total
+        ratio_room = limits.MAX_ARCHIVE_RATIO * len(data) - total
+        room = min(size_room, ratio_room)
+        try:
+            out = zlib.decompressobj().decompress(payload, room + 1)
+        except zlib.error:
+            continue  # not zlib-coded, so it cannot expand here
+        if len(out) > room:
+            # Refused while decompressing, so no more than the room is ever held in memory.
+            raise ParserFailure(
+                limits.ARCHIVE_SIZE_LIMIT if size_room <= ratio_room else limits.ARCHIVE_RATIO_LIMIT
+            )
+        total += len(out)
+
+
 def parse_pdf(data: bytes) -> ParseResult:
+    _check_pdf_expansion(data)
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
@@ -343,7 +389,8 @@ def parse_markdown(data: bytes) -> ParseResult:
 def parse_text(data: bytes) -> ParseResult:
     """Lines split on ``\\n`` only (H-33). Offsets are code-point offsets into the decoded text.
 
-    ``decoded[char_start:char_end]`` equals the segment text exactly, so no location is fabricated.
+    ``decoded[start_offset:end_offset]`` equals the segment text exactly, so no location is
+    fabricated.
     """
     try:
         text = data.decode("utf-8")
@@ -354,12 +401,12 @@ def parse_text(data: bytes) -> ParseResult:
     for number, line in enumerate(text.split("\n"), start=1):
         stripped = line.strip()
         if stripped:
-            char_start = cursor + (len(line) - len(line.lstrip()))
+            start_offset = cursor + (len(line) - len(line.lstrip()))
             locator = {
                 "line_start": number,
                 "line_end": number,
-                "char_start": char_start,
-                "char_end": char_start + len(stripped),
+                "start_offset": start_offset,
+                "end_offset": start_offset + len(stripped),
             }
             segments.append(SegmentDraft("txt_line_range", locator, stripped))
         cursor += len(line) + 1
@@ -373,7 +420,7 @@ def _normalized(text: str) -> str:
 
 def _eml_part(part: str, text: str, provenance: dict[str, Any]) -> SegmentDraft:
     """An ``eml_part`` segment. Offsets are 0 and the normalized text length (approved P4-GOV)."""
-    locator = {"eml_part": part, "char_start": 0, "char_end": len(text), **provenance}
+    locator = {"eml_part": part, "start_offset": 0, "end_offset": len(text), **provenance}
     return SegmentDraft("eml_part", locator, text)
 
 

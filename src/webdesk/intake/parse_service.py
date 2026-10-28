@@ -124,11 +124,7 @@ def parse_version(
         return _fail(conn, version_id, project, limits.SEGMENT_LENGTH_LIMIT, actor_id)
 
     # H-34: a partial result records which regions were not extracted, so the gap is never silent.
-    error = (
-        {"class": "partial", "flagged_regions": list(result.flagged_regions)}
-        if result.status == "partial"
-        else None
-    )
+    error = _outcome_detail(result)
     try:
         with conn.begin_nested():
             for draft in result.segments:
@@ -161,6 +157,19 @@ def parse_version(
 
     _audit_parse(conn, version_id, project, result.status, None, actor_id)
     return result.status
+
+
+def _outcome_detail(result: ParseResult) -> dict[str, Any] | None:
+    """The persisted detail of a non-succeeded outcome (H-34, QA-02 ruling).
+
+    partial keeps its flagged regions beside its committed segments. unsupported keeps any
+    unextractable regions as metadata, under a different key, so it can never be read as partial.
+    """
+    if result.status == "partial":
+        return {"class": "partial", "flagged_regions": list(result.flagged_regions)}
+    if result.status == "unsupported" and result.flagged_regions:
+        return {"class": "unsupported", "unextractable_regions": list(result.flagged_regions)}
+    return None
 
 
 def _fail(

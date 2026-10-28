@@ -27,13 +27,14 @@ from tests.support.parse_corpus import build_pdf
 from tests.support.people import committed_active_user
 from tests.support.privileged import as_worker
 from tests.support.proofs import prove
-from webdesk.intake import parse_service
-from webdesk.intake.ingest import ingest_source
+from webdesk.intake import limits, parse_service, validation
+from webdesk.intake.ingest import IngestError, ingest_source
 from webdesk.intake.parse_service import ParseRefused
 from webdesk.intake.reparse import ReparseError, reparse_source_version
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
+from webdesk.storage import content_store
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
@@ -179,7 +180,7 @@ def test_a_committed_partial_parse_persists_its_flagged_region_beside_its_segmen
     assert state["segments"] == 1
 
 
-def test_d1_a_committed_html_only_email_keeps_its_flag_with_no_text_segment(
+def test_d1_a_committed_html_only_email_with_no_segment_is_unsupported_with_metadata(
     committed_engine: Engine, setup: Setup
 ) -> None:
     _admin, analyst, project, store = setup
@@ -190,10 +191,11 @@ def test_d1_a_committed_html_only_email_keeps_its_flag_with_no_text_segment(
     _, version = _upload(
         committed_engine, store, analyst, project, mime=EML, filename="html.eml", data=data
     )
-    assert _parse(committed_engine, store, version) == "partial"
+    # QA-02 ruling: zero committed segments is never partial; the region stays as metadata.
+    assert _parse(committed_engine, store, version) == "unsupported"
     assert _committed_state(committed_engine, version) == {
-        "status": "partial",
-        "error": {"class": "partial", "flagged_regions": ["eml_part:body_html_only"]},
+        "status": "unsupported",
+        "error": {"class": "unsupported", "unextractable_regions": ["eml_part:body_html_only"]},
         "segments": 0,
     }
 
@@ -350,7 +352,7 @@ def test_a_committed_partial_version_cannot_be_parsed_again(
         project,
         mime=PDF,
         filename="scan.pdf",
-        data=build_pdf([None]),
+        data=build_pdf(["readable page", None]),
     )
     assert _parse(committed_engine, store, version) == "partial"
     with pytest.raises(ParseRefused) as refused:
@@ -358,5 +360,101 @@ def test_a_committed_partial_version_cannot_be_parsed_again(
     assert refused.value.reason == "not_pending"
     assert _committed_state(committed_engine, version)["error"] == {
         "class": "partial",
-        "flagged_regions": ["pdf_page:1"],
+        "flagged_regions": ["pdf_page:2"],
     }
+
+
+def test_a_committed_image_only_document_is_unsupported_and_is_not_reparseable_as_failed(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    """QA-01 on committed rows: zero text is unsupported. Only a failed version is reparseable."""
+    admin, analyst, project, store = setup
+    source, version = _upload(
+        committed_engine,
+        store,
+        analyst,
+        project,
+        mime=PDF,
+        filename="image.pdf",
+        data=build_pdf([None]),
+    )
+    assert _parse(committed_engine, store, version) == "unsupported"
+    assert _committed_state(committed_engine, version) == {
+        "status": "unsupported",
+        "error": {"class": "unsupported", "unextractable_regions": ["pdf_page:1"]},
+        "segments": 0,
+    }
+    current = _source_revision(committed_engine, source)
+    with committed_engine.begin() as conn:
+        proof = prove(conn, admin, "source.reparse", version)
+    with pytest.raises(ReparseError) as refused, committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        reparse_source_version(
+            conn, proof, version, reason="not failed", expected_source_revision=current
+        )
+    assert refused.value.reason == "not_failed"
+    assert _committed_state(committed_engine, version)["status"] == "unsupported"
+
+
+def test_an_input_exactly_at_the_upload_maximum_is_admitted_and_fails_only_on_its_segment_limit(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    """QA-04 boundary: the parser input limit equals the upload maximum. At the limit the input is
+    admitted; the single 20 MiB line then exceeds the per-segment limit, the named refusal."""
+    _admin, analyst, project, store = setup
+    _, version = _upload(
+        committed_engine,
+        store,
+        analyst,
+        project,
+        mime=TEXT,
+        filename="boundary.txt",
+        data=b"x" * limits.MAX_INPUT_BYTES,
+    )
+    assert _parse(committed_engine, store, version) == "failed"
+    assert _committed_state(committed_engine, version) == {
+        "status": "failed",
+        "error": {"class": "segment_length_limit"},
+        "segments": 0,
+    }
+
+
+def test_the_database_refuses_to_persist_a_version_above_the_maximum(
+    committed_engine: Engine, setup: Setup, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Defence in depth for QA-04: migration 0007 bounds file_size_bytes to 1..20971520 in the
+    database.
+    Even if admission were bypassed, no version above the maximum can be stored."""
+    _admin, analyst, project, store = setup
+    monkeypatch.setattr(validation, "MAX_BYTES", limits.MAX_INPUT_BYTES + 1)
+    monkeypatch.setattr(content_store, "MAX_BYTES", limits.MAX_INPUT_BYTES + 1)
+    with pytest.raises(
+        IngestError
+    ) as refused:  # the ingest layer reports the refusal as database_refused
+        _upload(
+            committed_engine,
+            store,
+            analyst,
+            project,
+            mime=TEXT,
+            filename="persisted.txt",
+            data=b"x" * (limits.MAX_INPUT_BYTES + 1),
+        )
+    assert (refused.value.status, refused.value.reason) == (409, "database_refused")
+
+
+def test_an_upload_one_byte_above_the_maximum_is_refused_at_admission_with_413(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    _admin, analyst, project, store = setup
+    with pytest.raises(IngestError) as refused:
+        _upload(
+            committed_engine,
+            store,
+            analyst,
+            project,
+            mime=TEXT,
+            filename="too-large.txt",
+            data=b"x" * (limits.MAX_INPUT_BYTES + 1),
+        )
+    assert (refused.value.status, refused.value.reason) == (413, "too_large")

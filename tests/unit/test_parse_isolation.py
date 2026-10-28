@@ -136,7 +136,7 @@ def test_txt_offsets_recover_each_segment_exactly_and_split_only_on_newlines() -
     ]
     for draft in result.segments:
         locator = draft.locator
-        assert decoded[locator["char_start"] : locator["char_end"]] == draft.text
+        assert decoded[locator["start_offset"] : locator["end_offset"]] == draft.text
     assert result.segments[1].locator["line_start"] == 2
 
 

@@ -1,6 +1,8 @@
-"""Regression tests for the Phase 4 defects D1 to D4 and the approved EML offsets (no database).
+"""Regression tests for Phase 4 defects, approved status classes and EML offsets (no database).
 
-Each test builds its input in memory. Each names the defect it guards in its docstring.
+Each test builds its input in memory and names the defect or requirement it guards.
+Expectations follow the approved specification (REQUIREMENT_SCHEMA section 4,
+EVAL-F14b) and the WDS ruling QA-02, not the earlier implementation.
 """
 
 from __future__ import annotations
@@ -17,9 +19,12 @@ from docx import Document
 
 from tests.support.parse_corpus import build_pdf
 from webdesk.intake import limits, parsers
+from webdesk.intake.parse_service import _outcome_detail
 from webdesk.intake.parsers import (
     PDF_FILTER_UNSUPPORTED,
+    ParseResult,
     ParserFailure,
+    SegmentDraft,
     _bounded_stream,
     _check_archive,
     parse_docx,
@@ -66,32 +71,83 @@ def _assemble(objects: dict[int, bytes]) -> bytes:
     return out.getvalue()
 
 
-# D1: flagged regions survive a result with no text segment.
+# --- Approved status classes (QA-02 ruling) ---------------------------------------------------
 
 
-def test_d1_an_html_only_email_with_no_subject_is_partial_and_keeps_its_flag() -> None:
-    data = b"From: a@wds-test.example\nTo: b@wds-test.example\n"
-    data += b"Content-Type: text/html; charset=utf-8\n\n<p>only html</p>\n"
-    result = parse_eml(data)
+def test_a_fully_valid_extraction_is_succeeded_with_no_flagged_region() -> None:
+    result = parse_pdf(build_pdf(["first page", "second page"]))
+    assert result.status == "succeeded"
+    assert result.flagged_regions == []
+    assert len(result.segments) == 2
+
+
+def test_partial_needs_at_least_one_committed_segment_and_one_flagged_region() -> None:
+    result = parse_pdf(build_pdf(["readable page", None]))
     assert result.status == "partial"
-    assert result.segments == []
-    assert result.flagged_regions == ["eml_part:body_html_only"]
+    assert [s.locator for s in result.segments] == [{"page_number": 1}]
+    assert result.flagged_regions == ["pdf_page:2"]
 
 
-def test_d1_an_image_only_pdf_page_is_partial_with_zero_segments() -> None:
+def test_d1_an_image_only_pdf_with_no_text_is_unsupported_and_keeps_its_page_as_metadata() -> None:
+    """QA-01: ARCHITECTURE section 13 and EVAL-F14b(c) require unsupported, never partial."""
     result = parse_pdf(build_pdf([None]))
-    assert result.status == "partial"
+    assert result.status == "unsupported"
     assert result.segments == []
     assert result.flagged_regions == ["pdf_page:1"]
 
 
-def test_d1_a_clean_file_with_no_text_and_no_flag_stays_unsupported() -> None:
+def test_d1_an_html_only_email_without_subject_is_unsupported_with_its_region() -> None:
+    """QA-02: zero committed segments can never be partial."""
+    data = b"From: a@wds-test.example\nTo: b@wds-test.example\n"
+    data += b"Content-Type: text/html; charset=utf-8\n\n<p>only html</p>\n"
+    result = parse_eml(data)
+    assert result.status == "unsupported"
+    assert result.segments == []
+    assert result.flagged_regions == ["eml_part:body_html_only"]
+
+
+def test_an_html_only_email_with_a_subject_is_partial_beside_its_subject_segment() -> None:
+    data = (
+        b"Subject: status\nFrom: a@wds-test.example\n"
+        b"Content-Type: text/html; charset=utf-8\n\n<p>x</p>\n"
+    )
+    result = parse_eml(data)
+    assert result.status == "partial"
+    assert [s.locator["eml_part"] for s in result.segments] == ["subject"]
+    assert result.flagged_regions == ["eml_part:body_html_only"]
+
+
+def test_a_clean_file_with_no_text_and_no_flag_stays_unsupported() -> None:
     result = parse_pdf(build_pdf([""]))
     assert result.status == "unsupported"
     assert result.flagged_regions == []
 
 
-# D2: DOCX expansion is measured on actual bytes, never on declared sizes.
+def test_a_corrupt_file_is_a_parser_failure_and_is_never_returned_as_a_status() -> None:
+    with pytest.raises(ParserFailure) as exc:
+        parse_pdf(b"%PDF-1.4 not a document")
+    assert exc.value.reason == "corrupt_structure"
+
+
+def test_persisted_outcome_detail_keeps_partial_and_unsupported_metadata_under_distinct_keys() -> (
+    None
+):
+    partial = ParseResult(
+        "partial", [SegmentDraft("pdf_page", {"page_number": 1}, "x")], ["pdf_page:2"]
+    )
+    unsupported = ParseResult("unsupported", [], ["pdf_page:1"])
+    clean = ParseResult("unsupported", [], [])
+    succeeded = ParseResult("succeeded", [SegmentDraft("pdf_page", {"page_number": 1}, "x")], [])
+    assert _outcome_detail(partial) == {"class": "partial", "flagged_regions": ["pdf_page:2"]}
+    assert _outcome_detail(unsupported) == {
+        "class": "unsupported",
+        "unextractable_regions": ["pdf_page:1"],
+    }
+    assert _outcome_detail(clean) is None
+    assert _outcome_detail(succeeded) is None
+
+
+# --- D2: DOCX expansion is measured on actual bytes, never on declared sizes. -----------------
 
 
 def _zip_with(member: bytes) -> bytes:
@@ -127,27 +183,37 @@ def test_d2_a_small_honest_archive_passes() -> None:
     _check_archive(_zip_with(b"<w:document/>" * 10))
 
 
-# D3: a table nested in a cell is reported, not silently dropped.
+# --- D3: a table nested in a cell is reported, not silently dropped. --------------------------
 
 
-def test_d3_a_nested_table_is_a_flagged_region_and_its_text_is_not_invented() -> None:
+def _docx_with_nested(outer_text: str | None) -> bytes:
     document = Document()
     table = document.add_table(rows=1, cols=1)
     cell = table.rows[0].cells[0]
-    cell.text = "outer cell text"
+    if outer_text is not None:
+        cell.text = outer_text
     inner = cell.add_table(rows=1, cols=1)
     inner.rows[0].cells[0].text = "inner nested text"
     buffer = io.BytesIO()
     document.save(buffer)
+    return buffer.getvalue()
 
-    result = parse_docx(buffer.getvalue())
+
+def test_d3_a_nested_table_is_a_flagged_region_and_its_text_is_not_invented() -> None:
+    result = parse_docx(_docx_with_nested("outer cell text"))
     assert result.status == "partial"
     assert result.flagged_regions == ["docx_nested_table:1.1.1.1"]
-    texts = [segment.text for segment in result.segments]
-    assert texts == ["outer cell text"]
+    assert [segment.text for segment in result.segments] == ["outer cell text"]
 
 
-# D4: PDF stream expansion is bounded before it is held in memory.
+def test_d3_a_nested_table_with_no_other_text_is_unsupported_with_its_region_as_metadata() -> None:
+    result = parse_docx(_docx_with_nested(None))
+    assert result.status == "unsupported"
+    assert result.segments == []
+    assert result.flagged_regions == ["docx_nested_table:1.1.1.1"]
+
+
+# --- D4: PDF expansion is bounded before any reader holds it in memory. ----------------------
 
 
 class _FakeStream:
@@ -178,39 +244,47 @@ def test_d4_a_flate_stream_expanding_past_the_budget_is_never_held_whole() -> No
     assert len(decoded) == budget + 1
 
 
-def test_d4_a_page_whose_decoded_content_exceeds_the_limit_is_refused() -> None:
-    compressed = zlib.compress(b" " * (12 * MiB))
+def test_d4_a_page_whose_decoded_content_exceeds_the_per_page_limit_is_refused() -> None:
+    # Incompressible content: the file check passes, so the per-page limit decides.
+    compressed = zlib.compress(os.urandom(11 * MiB))
     data = _assemble(
-        _pdf_objects(
-            b"/Font << /F1 5 0 R >>",
-            compressed,
-            content_filter=b"/Filter /FlateDecode",
-        )
+        _pdf_objects(b"/Font << /F1 5 0 R >>", compressed, content_filter=b"/Filter /FlateDecode")
     )
     with pytest.raises(ParserFailure) as exc:
         parse_pdf(data)
     assert exc.value.reason == limits.PDF_STREAM_LIMIT
 
 
-def test_d4_text_in_a_form_xobject_is_flagged_not_silently_omitted() -> None:
+def test_d4_a_compressible_expansion_is_refused_by_the_file_level_ratio_before_any_reader() -> None:
+    compressed = zlib.compress(b" " * (12 * MiB))
+    data = _assemble(
+        _pdf_objects(b"/Font << /F1 5 0 R >>", compressed, content_filter=b"/Filter /FlateDecode")
+    )
+    with pytest.raises(ParserFailure) as exc:
+        parse_pdf(data)
+    assert exc.value.reason == limits.ARCHIVE_RATIO_LIMIT
+
+
+def test_d4_form_xobject_text_is_flagged_and_zero_text_is_unsupported() -> None:
     body = b"BT (hidden) Tj ET"
     form = b"<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length %d >>\nstream\n" % len(body)
     form += body + b"\nendstream"
     objects = _pdf_objects(b"/XObject << /Fm0 6 0 R >>", b"q /Fm0 Do Q")
     objects[6] = form
     result = parse_pdf(_assemble(objects))
-    assert result.status == "partial"
+    assert result.status == "unsupported"
+    assert result.segments == []
     assert result.flagged_regions == ["pdf_page:1"]
 
 
-def test_d4_an_unbounded_filter_flags_its_page_and_does_not_fail_the_file() -> None:
+def test_d4_an_lzw_stream_refuses_the_file_by_name_because_it_cannot_be_bounded() -> None:
     objects = _pdf_objects(b"/Font << /F1 5 0 R >>", b"BT ET", content_filter=b"/Filter /LZWDecode")
-    result = parse_pdf(_assemble(objects))
-    assert result.status == "partial"
-    assert result.flagged_regions == ["pdf_page:1"]
+    with pytest.raises(ParserFailure) as exc:
+        parse_pdf(_assemble(objects))
+    assert exc.value.reason == PDF_FILTER_UNSUPPORTED
 
 
-def test_d4_the_unsupported_filter_is_the_named_refusal() -> None:
+def test_d4_the_unsupported_filter_is_the_named_refusal_for_a_page_stream() -> None:
     with pytest.raises(ParserFailure) as exc:
         _bounded_stream(_FakeStream(b"x", filters="/LZWDecode"), 10)
     assert exc.value.reason == PDF_FILTER_UNSUPPORTED
@@ -222,26 +296,185 @@ def test_d4_a_predictor_stream_is_not_decoded_unbounded() -> None:
     assert exc.value.reason == PDF_FILTER_UNSUPPORTED
 
 
-# EML offsets (approved P4-GOV-2026-10-28): normalized text, zero-based, end-exclusive.
+def test_d4_a_modest_flate_content_stream_within_the_limits_is_accepted() -> None:
+    compressed = zlib.compress(b"BT /F1 12 Tf 72 720 Td (within limits) Tj ET")
+    data = _assemble(
+        _pdf_objects(b"/Font << /F1 5 0 R >>", compressed, content_filter=b"/Filter /FlateDecode")
+    )
+    result = parse_pdf(data)
+    assert result.status == "succeeded"
+    assert "within limits" in result.segments[0].text
+
+
+def _object_stream_pdf(padding: int) -> bytes:
+    """Page objects in a flate object stream that expands by ``padding`` bytes."""
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R >>",
+    ]
+    header = b""
+    body = b""
+    for index, obj in enumerate(objs, start=1):
+        header += f"{index} {len(body)} ".encode()
+        body += obj + b" "
+    stream_data = header + body + b" " * padding
+    compressed = zlib.compress(stream_data, 9)
+    objstm = (
+        (
+            f"<< /Type /ObjStm /N 3 /First {len(header)} /Filter /FlateDecode "
+            f"/Length {len(compressed)} >>\nstream\n"
+        ).encode()
+        + compressed
+        + b"\nendstream"
+    )
+    content = b"BT ET"
+    content_obj = f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"\nendstream"
+    out = bytearray(b"%PDF-1.5\n")
+    offsets: dict[int, int] = {}
+    offsets[4] = len(out)
+    out += b"4 0 obj\n" + objstm + b"\nendobj\n"
+    offsets[5] = len(out)
+    out += b"5 0 obj\n" + content_obj + b"\nendobj\n"
+    rows = b"".join(
+        [struct.pack(">BIH", 0, 0, 65535)]
+        + [struct.pack(">BIH", 2, 4, index) for index in range(3)]
+        + [struct.pack(">BIH", 1, offsets[4], 0), struct.pack(">BIH", 1, offsets[5], 0)]
+    )
+    xref_offset = len(out)
+    rows += struct.pack(">BIH", 1, xref_offset, 0)
+    xc = zlib.compress(rows, 9)
+    out += (
+        (
+            b"6 0 obj\n<< /Type /XRef /Size 7 /W [1 4 2] /Root 1 0 R /Filter /FlateDecode "
+            b"/Length %d >>\nstream\n" % len(xc)
+        )
+        + xc
+        + b"\nendstream\nendobj\n"
+    )
+    out += b"startxref\n%d\n%%%%EOF\n" % xref_offset
+    return bytes(out)
+
+
+def test_d4_an_object_stream_that_expands_hugely_is_refused_before_the_reader_decodes_it() -> None:
+    """QA-05: pypdf decodes object streams while the reader is opened, before the page limits.
+
+    A 60 MiB padding in a flate object stream costs about 60 KB of file. On the baseline it peaked
+    137 MiB of traced memory before any check. The expansion pass must refuse it first.
+    """
+    data = _object_stream_pdf(60 * MiB)
+    assert len(data) < 200 * 1024
+    with pytest.raises(ParserFailure) as exc:
+        parse_pdf(data)
+    assert exc.value.reason == limits.ARCHIVE_RATIO_LIMIT
+
+
+def test_d4_a_small_object_stream_is_read_normally() -> None:
+    result = parse_pdf(_object_stream_pdf(0))
+    assert result.status == "unsupported"
+    assert result.flagged_regions == []
+
+
+# --- EML offsets (approved P4-GOV-2026-10-28; field names aligned to the schema, QA-03). -------
 
 
 def test_eml_offsets_are_relative_to_the_nfc_normalized_part_text() -> None:
-    decomposed = "Café plan"  # NFD: "e" plus a combining acute accent
+    decomposed = "Café plan"  # "e" followed by a combining acute accent
     data = f"Subject: {decomposed}\nFrom: a@wds-test.example\n\nbody\n".encode()
-    result = parse_eml(data)
-    subject = result.segments[0]
+    subject = parse_eml(data).segments[0]
     assert subject.text == "Café plan"
-    assert subject.locator["char_start"] == 0
-    assert subject.locator["char_end"] == len(subject.text) == 9
+    assert subject.locator["start_offset"] == 0
+    assert subject.locator["end_offset"] == len(subject.text) == 9
 
 
-def test_eml_body_offsets_follow_the_stripped_text() -> None:
+def test_eml_body_offsets_follow_the_stripped_text_and_span_it_exactly() -> None:
     result = parse_eml(b"Subject: s\nFrom: a@wds-test.example\n\n   hello there   \n")
     body = result.segments[-1]
     assert body.text == "hello there"
-    assert body.locator == {"eml_part": "body", "char_start": 0, "char_end": 11}
-    assert body.text[body.locator["char_start"] : body.locator["char_end"]] == body.text
+    assert body.locator == {"eml_part": "body", "start_offset": 0, "end_offset": 11}
+    assert body.text[body.locator["start_offset"] : body.locator["end_offset"]] == body.text
+
+
+def test_eml_locators_use_the_schema_names_and_never_the_superseded_ones() -> None:
+    result = parse_eml(
+        b"Subject: s\nMessage-ID: <m@wds-test.example>\nFrom: a@wds-test.example\n\nbody\n"
+    )
+    for segment in result.segments:
+        assert {"start_offset", "end_offset", "eml_part", "message_id"} <= set(segment.locator)
+        assert "char_start" not in segment.locator and "char_end" not in segment.locator
+        assert segment.locator["message_id"] == "<m@wds-test.example>"
+
+
+def test_eml_zero_length_parts_produce_no_segment_and_a_zero_offset_is_never_emitted() -> None:
+    data = b"Subject:    \nFrom: a@wds-test.example\n\n   \n"
+    result = parse_eml(data)
+    assert result.segments == []
+    assert result.status == "unsupported"
 
 
 def test_the_parser_module_exposes_the_stable_filter_class() -> None:
     assert parsers.PDF_FILTER_UNSUPPORTED == "pdf_filter_unsupported"
+
+
+# --- QA-04: one input boundary across upload and parser. --------------------------------------
+
+
+def test_the_parser_input_limit_is_the_approved_upload_maximum_in_one_unit() -> None:
+    from webdesk.storage import content_store
+
+    assert limits.MAX_INPUT_BYTES == content_store.MAX_BYTES == 20 * MiB
+
+
+def test_upload_admits_exactly_the_maximum_and_refuses_one_byte_more() -> None:
+    from webdesk.intake.validation import UploadRefusal, validate_upload
+
+    validate_upload("boundary.txt", "text/plain", b"x" * (20 * MiB))
+    with pytest.raises(UploadRefusal) as refused:
+        validate_upload("boundary.txt", "text/plain", b"x" * (20 * MiB + 1))
+    assert (refused.value.status, refused.value.reason) == (413, "too_large")
+
+
+def _xref_stream_pdf(padding: int) -> bytes:
+    """A file whose cross-reference stream expands by ``padding`` bytes on open."""
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
+    ]
+    out = bytearray(b"%PDF-1.5\n")
+    offsets: dict[int, int] = {}
+    for index, obj in enumerate(objs, start=1):
+        offsets[index] = len(out)
+        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    content = b"BT ET"
+    offsets[4] = len(out)
+    out += b"4 0 obj\n" + f"<< /Length {len(content)} >>\nstream\n".encode() + content
+    out += b"\nendstream\nendobj\n"
+    rows = b"".join(
+        [struct.pack(">BIH", 0, 0, 65535)]
+        + [struct.pack(">BIH", 1, offsets[index], 0) for index in (1, 2, 3, 4)]
+    )
+    xref_offset = len(out)
+    rows += struct.pack(">BIH", 1, xref_offset, 0)
+    compressed = zlib.compress(rows + b" " * padding, 9)
+    out += (
+        b"5 0 obj\n<< /Type /XRef /Size 6 /W [1 4 2] /Root 1 0 R /Filter /FlateDecode "
+        b"/Length %d >>\nstream\n" % len(compressed)
+    )
+    out += compressed + b"\nendstream\nendobj\n"
+    out += b"startxref\n%d\n%%%%EOF\n" % xref_offset
+    return bytes(out)
+
+
+def test_d4_a_cross_reference_stream_that_expands_hugely_is_refused_before_the_reader() -> None:
+    """QA-05: the cross-reference stream is decoded when the reader opens. It is bounded too."""
+    data = _xref_stream_pdf(60 * MiB)
+    assert len(data) < 200 * 1024
+    with pytest.raises(ParserFailure) as exc:
+        parse_pdf(data)
+    assert exc.value.reason == limits.ARCHIVE_RATIO_LIMIT
+
+
+def test_d4_a_plain_cross_reference_file_is_read_normally() -> None:
+    result = parse_pdf(_xref_stream_pdf(0))
+    assert result.status == "unsupported"

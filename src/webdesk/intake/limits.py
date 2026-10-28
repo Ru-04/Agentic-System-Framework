@@ -15,7 +15,11 @@ from __future__ import annotations
 
 import sys
 
-MAX_INPUT_BYTES = 25 * 1024 * 1024
+from webdesk.storage.content_store import MAX_BYTES
+
+# The approved maximum upload (ARCHITECTURE section 13). Upload refuses above it with 413, and the
+# parser refuses above it with input_too_large, with the same boundary (QA-04).
+MAX_INPUT_BYTES = MAX_BYTES
 MAX_PDF_PAGES = 500
 MAX_PDF_PAGE_STREAM_BYTES = 10 * 1024 * 1024
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
