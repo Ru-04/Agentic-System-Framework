@@ -14,7 +14,8 @@ Prepared by engineering for the reviewer named by the WDS Authorized Approver. E
 
 ## 2. Reviewer and independence
 
-- Reviewer named by WDS: **PG**, named by the WDS Authorized Approver on 28 October 2026.
+- WDS appointment (28 October 2026, by the WDS Authorized Approver): PG is appointed as the authorized Independent QA Reviewer and QA Acceptance Signatory for M2 Sprint 4. The appointment authorizes PG to review and sign. It does not establish PG's independence and does not constitute PG's review.
+- Delivery of this package to PG: **NOT YET DELIVERED.** Engineering has no channel to PG. Delivery must be made by an authorized party through an authorized channel, and recorded here when it happens.
 - Engineering has not verified PG's independence for Sprint 4. The independence declaration template (`docs/governance/PG_INDEPENDENCE_DECLARATION_TEMPLATE_2026-10-26.md`) is blank.
 - **PG independence declaration: PENDING. PG completes it personally, naming the commits reviewed.** Engineering does not fill it in.
 
