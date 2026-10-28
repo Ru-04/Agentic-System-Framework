@@ -1,14 +1,14 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`
+Candidate: `base 211d308; evaluated source sha256 1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
 ## Summary
 
 - Total scenarios: 133
-- Outcomes: {'blocked': 13, 'delegated': 3, 'open_limitation': 5, 'pass': 112}
-- Synthetic (A) executed: 112; passed 112; failed 0
+- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 5, 'pass': 113}
+- Synthetic (A) executed: 113; passed 113; failed 0
 
 ## Results
 
@@ -136,7 +136,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | STL-02 | A-isolated-synthetic | pass | critical | - | reported as an integrity issue for the requirement; its deliverable is not complete | reported=True; deliverable complete=False; likely=None |
 | STL-03 | A-isolated-synthetic | pass | major | - | integrity issue reported; the SOW is still produced | missing revision reported as an integrity issue; SOW still produced |
 | STL-04 | A-isolated-synthetic | pass | critical | run_investigation | StaleSelectionError raised at run_investigation; the agent never runs | refused 'analysis is for project revision 3 but the project is at revision 4; analyse and decide again' enforced by run_investigation; agent calls 0 |
-| STL-05 | A-isolated-synthetic | blocked | major | - | stale requirement and estimate inputs are refused, not flagged | GOVERNANCE DECISION REQUIRED: spec section 8 says stale inputs are rejected; the accepted AI-S07/S08/S09 contracts flag, exclude or mark needs_inputs and never refuse the operation. Flagging is not counted as rejection |
+| STL-05 | A-isolated-synthetic | pass | critical | - | no authoritative numbers from the stale input; stale evidence does not back; the stale requirement is named in an integrity finding; the approval stays pending | no numbers=True; traced=True; stale evidence flagged=True not backed=True; SOW flagged=True; approval pending=True |
 | STL-06 | A-isolated-synthetic | pass | critical | - | approval stays pending_human_approval; the draft is not approved; project totals stay incomplete | approval pending_human_approval; draft draft_not_approved; project complete False |
 | TRC-01 | A-isolated-synthetic | pass | critical | - | specialist outcomes, estimate revisions and the governance fingerprint agree | specialist covers requirements=True; estimate covers=True; fingerprint carried=True |
 | TRC-02 | B-foundation-integration | blocked | major | - | a Foundation-fed run reaches a SOW through the integrated adapter | no integrated Foundation adapter path exists; the offline pipeline uses synthetic fixtures; Foundation approval required |

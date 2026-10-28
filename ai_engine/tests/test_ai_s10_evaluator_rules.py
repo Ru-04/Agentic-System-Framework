@@ -84,14 +84,17 @@ def test_every_refusal_expectation_declares_its_enforcement_point() -> None:
     assert all(results[s].outcome == Outcome.PASS for s in ("SEC-05", "SEC-06", "RPL-02"))
 
 
-def test_stale_input_that_is_only_flagged_is_not_classed_as_rejected() -> None:
-    """Spec section 8 requires rejection. Flagging does not satisfy it, so the criterion is blocked
-    pending a governance decision, and is never counted as a pass."""
+def test_stale_input_policy_is_flag_and_exclude_with_operator_rejection() -> None:
+    """Approved policy (WDS, 2026-10-28): stale inputs are flagged, excluded from authoritative
+    use and carried as findings; stale operator authorisations are rejected at the decision
+    boundary."""
     by_id = {s.scenario_id: s for s in CATALOG}
-    assert by_id["STL-05"].status is Status.BLOCKED
-    assert "GOVERNANCE DECISION REQUIRED" in by_id["STL-05"].dependency
-    # The operator-selection path is a genuine rejection and is enforced at its raise site.
+    assert by_id["STL-05"].status is Status.EXECUTED
+    assert by_id["STL-05"].enforcement is None
+    assert "approved policy" in by_id["STL-05"].title or "flagged" in by_id["STL-05"].title
+    # The only rejection in the stale family is the operator-selection boundary.
     assert by_id["STL-04"].enforcement == "run_investigation"
+    assert by_id["STL-04"].expected.startswith("StaleSelectionError")
 
 
 def test_frozen_expectation_for_rec03_is_the_acceptance_contract_not_the_observation() -> None:

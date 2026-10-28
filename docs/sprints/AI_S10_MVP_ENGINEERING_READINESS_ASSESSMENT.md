@@ -6,7 +6,7 @@ recommendation and not a production-readiness statement.
 ## 1. Verdict
 
 - **Offline synthetic engineering scope (AI-S06 to AI-S09, with AI-S01 and AI-S02 offline coverage):**
-  engineering-complete as a Stage 3 checkpoint, **subject to the Stage 2 re-review**. Class A: 112 executed
+  engineering-complete as a Stage 3 checkpoint, **subject to the Stage 2 re-review**. Class A: 113 executed
   scenarios pass, none fails.
 - **MVP as a whole:** **not ready.** Foundation integration, the governance decisions in section 2, real-provider
   and real-platform validation, and production readiness are open. None is claimed.
@@ -19,7 +19,7 @@ recommendation and not a production-readiness statement.
 | **Engineering-defective (open)** | **UD-01**: AI-S09 SOW does not compare the estimate and governance fingerprints (upstream, recorded, not fixed). **C-15**: execution reports `succeeded` when evidence is unavailable (`REC-03`, open limitation). **EVID-16**: lexical evidence sufficiency (open limitation) | Observed behaviour; the open-limitation checks pass only while the limitation is present |
 | **Engineering gap (coverage)** | AI-S05 (130 tests, 2 scenarios); `PIPE-04`, `PIPE-05`, `SPEC-14` remain delegated to sprint test files | Traceability matrix |
 | **Integration-blocked** | R-2 (unsigned confirmations, `EXT-06`); authoritative Foundation reads (`EXT-05`); durable audit (`SEC-18`); Foundation integration tests (`EXT-07`, skipped); integrated Foundation-to-SOW path (`TRC-02`) | Foundation blocker register |
-| **Governance-decision-required** | `STL-05` (stale-input rejection rule, spec section 8); A-4, C-15, GP-1, D-05, D-06, D-07, D-10, D-04/C-08, D-14, R-1, R-2, D-12, D-13, DEC-09, D-02; numerical thresholds (PENDING WDS Technical Lead) | Governance decision register |
+| **Governance-decision-required** | A-4, C-15, GP-1, D-05, D-06, D-07, D-10, D-04/C-08, D-14, R-1, R-2, D-12, D-13, DEC-09, D-02; numerical thresholds (PENDING WDS Technical Lead) | Governance decision register |
 | **Real-provider validation required** | `EXT-01` (live LLM evaluation). Not run | Real-provider register |
 | **Real-platform validation required** | `SPEC-15`, `SPEC-16`, `EXT-02`, `SOW-13`. Not run | Real-provider and platform register |
 | **Production-readiness pending** | `EXT-04` (production security and readiness); `EXT-03` (human UAT, Stage D). Not run | Scenario catalogue |
@@ -34,12 +34,12 @@ cases in the catalogue. They do not show that:
 - the gate resists a real operator, a real attacker or a Foundation deployment (R-1 and R-2 are open);
 - estimates are right for any real project (no reference data; no approved bases);
 - any SOW is acceptable to a client or matches the house template (`SOW-13` blocked);
-- stale inputs are rejected as the spec requires (`STL-05` blocked; flagging is what the accepted contracts do).
+- stale inputs are flagged and excluded under the approved stale-input policy (`STL-05`); stale or replayed operator authorisations are rejected.
 
 ## 4. Readiness conditions for the next gate
 
 1. The Stage 2 re-review of the remediation commit returns PASS for the approved offline scope.
-2. WDS rules on `STL-05` (stale-input rejection) and on the C-15 envelope semantics that `REC-03` records.
+2. WDS rules on the C-15 envelope semantics that `REC-03` records.
 3. WDS decides whether `UD-01` is corrected upstream (and re-verified) or accepted as a known limitation.
 4. The coverage limits in section 2 are closed or explicitly accepted.
 5. The Foundation blockers are resolved, or accepted as out of scope for this MVP step.

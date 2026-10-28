@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e",
+    "commit": "base 211d308; evaluated source sha256 1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac",
     "python": "3.12.10"
   },
   "results": [
@@ -1873,13 +1873,13 @@
       "title": "A stale operator selection is rejected before any agent runs"
     },
     {
-      "actual": "GOVERNANCE DECISION REQUIRED: spec section 8 says stale inputs are rejected; the accepted AI-S07/S08/S09 contracts flag, exclude or mark needs_inputs and never refuse the operation. Flagging is not counted as rejection",
+      "actual": "no numbers=True; traced=True; stale evidence flagged=True not backed=True; SOW flagged=True; approval pending=True",
       "classification": "A-isolated-synthetic",
-      "dependency": "GOVERNANCE DECISION REQUIRED: spec section 8 says stale inputs are rejected; the accepted AI-S07/S08/S09 contracts flag, exclude or mark needs_inputs and never refuse the operation. Flagging is not counted as rejection",
+      "dependency": "none (isolated synthetic)",
       "enforced_by": null,
       "enforcement": null,
-      "expected": "stale requirement and estimate inputs are refused, not flagged",
-      "outcome": "blocked",
+      "expected": "no authoritative numbers from the stale input; stale evidence does not back; the stale requirement is named in an integrity finding; the approval stays pending",
+      "outcome": "pass",
       "references": [
         "AI-S07",
         "AI-S08",
@@ -1887,8 +1887,8 @@
         "AI-S10 spec section 8"
       ],
       "scenario_id": "STL-05",
-      "severity": "major",
-      "title": "Stale requirement or estimate input is refused at the boundary (spec section 8)"
+      "severity": "critical",
+      "title": "Stale inputs are flagged, excluded from authoritative use and carried as findings"
     },
     {
       "actual": "approval pending_human_approval; draft draft_not_approved; project complete False",
@@ -2050,10 +2050,9 @@
   "summary": {
     "by_classification": {
       "A-isolated-synthetic": {
-        "blocked": 1,
         "delegated": 3,
         "open_limitation": 5,
-        "pass": 112
+        "pass": 113
       },
       "B-foundation-integration": {
         "blocked": 5
@@ -2072,14 +2071,14 @@
       }
     },
     "by_outcome": {
-      "blocked": 13,
+      "blocked": 12,
       "delegated": 3,
       "open_limitation": 5,
-      "pass": 112
+      "pass": 113
     },
-    "synthetic_executed": 112,
+    "synthetic_executed": 113,
     "synthetic_failed": 0,
-    "synthetic_passed": 112,
+    "synthetic_passed": 113,
     "total_scenarios": 133
   }
 }

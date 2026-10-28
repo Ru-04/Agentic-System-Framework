@@ -30,7 +30,7 @@ show that no other defect exists. Each class lists the cases that exist, not a s
 | Stale requirement revision | `STL-02`, `SEC-04`, `EST-07` | pass | none (flagged) | Reported; the deliverable is not complete; not classed as rejected |
 | Missing requirement revision | `STL-03` | pass | none (flagged) | Reported; the SOW is still produced |
 | Flagged stale input treated as approved | `STL-06` | pass | none | Approval pending; draft not approved; totals incomplete |
-| Stale input rejected per spec section 8 | `STL-05` | **blocked** (governance) | — | Requires a WDS decision; flagging is not rejection |
+| Stale input excluded from authoritative use (approved policy) | `STL-05` | pass | none (flagged) | Stale estimate gives no numbers; stale evidence does not back; SOW names the stale requirement; approval pending |
 | Upstream fingerprint mismatch undetected | `UD-01` | **open limitation** | — | Defect in AI-S09; not fixed |
 | Cross-project evidence access | `XP-01` | pass | none (filtered) | No outcome cites a record of the other project |
 | Cross-project citation by the reviewer | `XP-02` | pass | none (finding) | `CROSS_PROJECT_CITATION` flagged; requirement not backed |
@@ -75,8 +75,8 @@ passes. Each is required to fail or to stay non-pass. See `tests/test_ai_s10_eva
 
 ## 3. Summary
 
-- Class A scenarios: 112 pass, 0 fail; 5 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`, `UD-01`);
-  3 delegated; 1 blocked (`STL-05`).
+- Class A scenarios: 113 pass, 0 fail; 5 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`, `UD-01`);
+  3 delegated; 0 blocked in class A.
 - Classes B to F: 12 blocked. None is counted as a pass.
 
 ## 4. Limitations of this matrix

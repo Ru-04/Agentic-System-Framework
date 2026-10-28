@@ -70,10 +70,7 @@ Dispositions:
   is reported and its deliverable is not complete; a missing revision is reported; flagged stale input does
   not produce a completed or approved outcome. These prove exclusion and no false completion. They are
   **not** counted as rejection.
-- `STL-05` (blocked, governance decision): spec section 8 says stale inputs are rejected; the accepted
-  contracts flag, exclude or mark `needs_inputs` and never refuse the operation. Flagging is not counted as
-  rejection. This criterion cannot pass until WDS decides which behaviour is required. If refusal is
-  required, the change is an upstream AI-S08/AI-S09 correction through the permitted process.
+- `STL-05` (executed under the approved stale-input policy, 2026-10-28): stale estimate, stale evidence and stale SOW revision are excluded from authoritative use and reported as integrity findings.
 
 No engine behaviour was changed to produce a pass.
 
@@ -105,7 +102,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`.
+  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.
@@ -157,7 +154,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 | A declared limitation cannot count as an executed PASS | `OPEN_LIMITATION` outcome | `test_an_open_limitation_that_disappears_is_not_a_pass`, `test_a_present_open_limitation_is_reported_as_open_not_as_a_pass` |
 | Blocked and delegated cannot be successful | Runner | `test_non_synthetic_classes_are_never_reported_as_passed`, `test_delegated_and_open_limitation_rows_are_not_passes` |
 | Mutations of mandatory controls are detected | Controlled monkeypatch mutations | `test_ledger_consume_removed_is_detected`, `test_always_refuse_verification_is_detected` |
-| Stale input that is only flagged is not classed as rejected | `STL-05` blocked; `STL-04` is the only rejection | `test_stale_input_that_is_only_flagged_is_not_classed_as_rejected` |
+| Stale input is flagged and excluded under the approved policy; operator staleness is rejected | `STL-05` executed; `STL-04` is the rejection | `test_stale_input_policy_is_flag_and_exclude_with_operator_rejection` |
 | Expected and actual remain independent; REC-03 expectation frozen | Expectations are catalogue literals; frozen-text test | `test_frozen_expectation_for_rec03_is_the_acceptance_contract_not_the_observation` |
 | Every result references a reproducible candidate | Source digest | `test_committed_results_match_the_regenerated_output` |
 | Scenario results are consistent with their status | Status-to-outcome map | `test_each_result_agrees_with_its_scenario_status` |
@@ -174,11 +171,11 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 6. Catalogue after remediation
 
-- 133 scenarios. Class A: 112 executed and passing, 0 failing; 5 open limitations (`SEC-09`, `EVID-16`,
-  `EXT-08`, `REC-03`, `UD-01`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 1 blocked (`STL-05`).
+- 133 scenarios. Class A: 113 executed and passing, 0 failing; 5 open limitations (`SEC-09`, `EVID-16`,
+  `EXT-08`, `REC-03`, `UD-01`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 0 blocked in class A.
 - Class B: 5 blocked (`EXT-05`, `EXT-06`, `EXT-07`, `SEC-18`, `TRC-02`). Class C: 1 (`EXT-01`).
   Class D: 2 (`EXT-02`, `SPEC-15`). Class E: 3 (`EXT-03`, `SOW-13`, `SPEC-16`). Class F: 1 (`EXT-04`).
-- Outcomes: pass 112, open_limitation 5, delegated 3, blocked 13, fail 0.
+- Outcomes: pass 113, open_limitation 5, delegated 3, blocked 12, fail 0.
 
 ## 7. Upstream defect recorded, not fixed
 
@@ -191,7 +188,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - Mutation coverage is two controls: the ledger `consume` and the verification gate. The inline stale-revision
   check and the upstream fingerprint gap are not mutation-tested. `UD-01` shows the gap by observation.
-- `STL-05` cannot pass until WDS decides whether stale input must be rejected or flagged.
+- The stale-input rule was decided by WDS on 2026-10-28 (flag, exclude, carry as findings). See the policy decision record.
 - `REC-03` and `C-15` remain unresolved policy; the scenario shows the condition rather than resolving it.
 - AI-S01 wrapper denials (`S01-02`, `S01-03`) are status-based, not exception-based; their enforcement point is
   recorded as none.

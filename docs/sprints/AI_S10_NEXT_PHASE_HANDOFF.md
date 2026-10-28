@@ -7,7 +7,7 @@ Status: the Stage 3 remediation is ready for the Stage 2 re-review. Nothing was 
 - Branch: `integration/ai-s01-s02-s03` in the `integration-baseline` worktree. Base commit: `211d308`.
 - Remediation commit: the full SHA is recorded in the Stage 4 acceptance packet (a commit cannot name its own SHA).
 - Candidate source digest (engine source and AI-S10 test package):
-  `adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`.
+  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`.
 - Engine source (`ai_engine/src`): unchanged from `211d308`.
 - The session checkout `webdesk-ai-s02` (`feature/ai-s02`) does **not** contain AI-S06 to AI-S09 code. Do not run
   the AI-S10 gates there.
@@ -28,7 +28,7 @@ From `ai_engine` in the `integration-baseline` worktree (see the reproducibility
 1. QA-1 to QA-6 and every minor disposition in `AI_S10_QA_FINDINGS_REGISTER.md`.
 2. The enforcement-point assertions (`enforced_by`) for each refusal scenario.
 3. The replay mutation evidence: `consume` removed, and the always-refuse verification mutation.
-4. Stale-input behaviour and classification: `STL-04` (rejection) against `STL-01`..`STL-03`, `STL-06` (exclusion), and `STL-05` (blocked).
+4. Stale-input behaviour and classification: `STL-04` (rejection) against `STL-01`..`STL-03`, `STL-06` (exclusion), and `STL-05` (executed under the approved policy).
 5. REC-03 and C-15 reporting: it must stay `open_limitation` and must never count as a pass.
 6. Test-count reproducibility: the committed-tree clean export against the expected 1680 passed, 0 skipped.
 7. Specification provenance: the sprint spec and master plan are untracked and cited as such.
@@ -38,8 +38,7 @@ From `ai_engine` in the `integration-baseline` worktree (see the reproducibility
 
 ## 4. Decisions WDS must make (not made here)
 
-- **`STL-05`:** does spec section 8 require stale inputs to be **rejected** (an upstream change to AI-S08 and AI-S09),
-  or is flagging and exclusion the intended behaviour (in which case the spec wording is amended)?
+- **`STL-05`:** resolved by the WDS stale-input policy decision of 2026-10-28. No open decision remains on this item.
 - **C-15:** envelope semantics for `succeeded` with `evidence_unavailable` (`REC-03`).
 - **`UD-01`:** correct the AI-S09 SOW through the permitted upstream process, or accept the limitation.
 - **R-1 and R-2:** the gate bypass and the unsigned confirmations, before any Foundation integration.

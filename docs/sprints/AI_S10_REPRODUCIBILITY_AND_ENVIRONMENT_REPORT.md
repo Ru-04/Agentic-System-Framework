@@ -12,7 +12,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`
+  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
@@ -65,7 +65,7 @@ number.
 | Committed tree: expected passed | 1680 | development passed (1744) minus the untracked Foundation passes (64) |
 | Committed tree: expected skipped | 0 | the skipped tests are untracked |
 | Collected but not run | 0 | no collected test is excluded from the run |
-| External integration criteria not executed | 13 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |
+| External integration criteria not executed | 12 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |
 
 The committed-tree figures are the expectation derived from the counts above. The measured clean-export
 figures of the remediation commit are recorded in the Stage 4 acceptance packet.
@@ -73,9 +73,9 @@ figures of the remediation commit are recorded in the Stage 4 acceptance packet.
 ## 6. Scenario catalogue counts (regenerated from source)
 
 - Total: 133 scenarios.
-- Class A (isolated synthetic): 112 pass, 0 fail, 5 open limitations, 3 delegated, 1 blocked.
+- Class A (isolated synthetic): 113 pass, 0 fail, 5 open limitations, 3 delegated, 0 blocked.
 - Class B to F (external): 12 blocked, none passed.
-- Outcomes: pass 112, open_limitation 5, delegated 3, blocked 13, fail 0.
+- Outcomes: pass 113, open_limitation 5, delegated 3, blocked 12, fail 0.
 - No cross-class percentage is computed.
 
 ## 7. Metric definitions

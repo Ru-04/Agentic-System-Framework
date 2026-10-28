@@ -9,7 +9,7 @@ move this register to PASS. The author's self-checks are not an independent verd
 | ID | Severity | Finding (as reported) | Disposition | Evidence |
 |---|---|---|---|---|
 | QA-1 | Blocking | Replay test refused by workflow state before the ledger; removing `consume` left the suite green. | **Resolved.** Replay executors reach the ledger boundary (`consume`); refusals are checked at the enforcement point; mutation fails the replay tests. | `RPL-01`..`RPL-07`, `SEC-06`; `test_ledger_consume_removed_is_detected`. |
-| QA-2 | Blocking | Spec section 8 requires stale-input rejection; the engine only flags it. | **Resolved as classification; governance decision open.** Genuine rejection proven for stale operator selections (`STL-04`). Flagged revisions proven excluded and not completed (`STL-01`..`STL-03`, `STL-06`). The spec's rejection requirement for requirement and estimate inputs is **blocked** (`STL-05`) pending a WDS decision. | `STL-*`; `test_stale_input_that_is_only_flagged_is_not_classed_as_rejected`. |
+| QA-2 | Blocking | Spec section 8 required stale-input rejection; the engine flags it. | **Resolved by WDS policy decision (2026-10-28).** Stale inputs are flagged, excluded from authoritative use and carried as findings (`STL-05`, `STL-01`..`STL-03`, `STL-06`). Stale or replayed operator authorisations are rejected (`STL-04`, `SEC-06`..`SEC-08`, `RPL-*`). | `STL-*`; `test_stale_input_policy_is_flag_and_exclude_with_operator_rejection`. |
 | QA-3 | Major | REC-03 expectation rewritten to fit the observed behaviour (C-15). | **Resolved.** Expectation restored and frozen. Classified `OPEN_LIMITATION`, linked to C-15, excluded from PASS. Producer unchanged. | `REC-03`; `test_frozen_expectation_for_rec03_*`. |
 | QA-4 | Major | Negative tests passed under an always-refuse mutation (SEC-05, SEC-07, SEC-08, SPEC-08). | **Resolved.** Exact reasons and enforcement points asserted; positive controls added; always-refuse mutation detected. | `SEC-05`, `SEC-07`, `SEC-08`, `SPEC-08`; `test_always_refuse_verification_is_detected`. |
 | QA-5 | Major | Results not anchored to one candidate; 1728 cited against 1664 committed; untracked provenance unclear. | **Resolved.** Candidate source digest; consistency test; separate test-count table; provenance stated per source; documents reconciled. | `report.candidate_digest()`; `test_committed_results_match_the_regenerated_output`; reproducibility report section 5. |
@@ -41,7 +41,7 @@ move this register to PASS. The author's self-checks are not an independent verd
 
 - Mutation coverage is two controls (ledger `consume`; verification gate). The inline stale-revision check and
   the upstream fingerprint gap are not mutation-tested.
-- `STL-05` (spec section 8 rejection) cannot pass until WDS decides the rule.
+- `STL-05` is executed under the stale-input policy ratified by WDS on 2026-10-28; no open decision remains on it.
 - `REC-03` / `C-15` remain unresolved policy.
 - AI-S01 wrapper denials are status-based; their enforcement point is recorded as none.
 - AI-S05 has 130 accepted tests and 2 catalogue scenarios; its breadth is in its test file.

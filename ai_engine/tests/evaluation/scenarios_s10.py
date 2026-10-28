@@ -1312,7 +1312,56 @@ def sow_injection_data() -> Check:
     )
 
 
+def stl05_policy_flag_exclude_track() -> Check:
+    """Approved policy: stale inputs are flagged, excluded from authoritative use, and carried as
+    traceable integrity findings (docs/sprints/AI_S10_STALE_INPUT_POLICY_DECISION.md)."""
+    # (a) a stale analytical input gives no authoritative numbers and is not complete
+    tasks = (
+        _task(
+            "TSK-001",
+            key="IMP-A",
+            rid=R1,
+            allocations=(_alloc(Discipline.FRONTEND, 8.0, 12.0, 20.0),),
+        ),
+    )
+    draft = estimate(est_request(tasks, requirements=(_snapshot(R1, revision=2),)))
+    line = draft.lines[0]
+    no_numbers = line.likely is None and draft.project.complete is False
+    traced = R1 in line.requirement_ids and any(
+        "TSK-001" in issue and "stale" in issue for issue in line.issues
+    )
+    # (b) stale evidence is flagged and never backs a requirement
+    stale_record = _ev(
+        "EVD-SYN-0003",
+        kind=EvidenceKind.APPROVED_INTERNAL,
+        status=EvidenceStatus.VERIFIED,
+        summary="Coupons applied at checkout are documented.",
+        checked_at=NOW - timedelta(days=400),
+    )
+    served = stale_record.model_copy(update={"evidence_status": EvidenceStatus.UNVERIFIED})
+    output = _output(
+        "shopify_specialist",
+        (R1,),
+        evidence=(served,),
+        claims=(_claim("CLM-001", R1, evidence=("EVD-SYN-0003",)),),
+    )
+    report = _run(output, (stale_record,))
+    stale_flagged = DefectClass.STALE_EVIDENCE_CITED in _classes(report)
+    not_backed = report.requirement_status[R1] is not ReviewStatus.EVIDENCE_BACKED
+    # (c) the SOW is still produced, names the stale requirement, and is not complete or approved
+    sow = generate(sow_request(estimate_draft=sow_estimate(revisions={R1: 2})))
+    sow_flagged = any(f"stale requirement revision for {R1}" in i for i in sow.integrity_issues)
+    not_approved = sow.approval.state == "pending_human_approval"
+    ok = no_numbers and traced and stale_flagged and not_backed and sow_flagged and not_approved
+    return Check(
+        ok,
+        f"no numbers={no_numbers}; traced={traced}; stale evidence flagged={stale_flagged} "
+        f"not backed={not_backed}; SOW flagged={sow_flagged}; approval pending={not_approved}",
+    )
+
+
 EXECUTORS: dict[str, Any] = {
+    "stl05_policy_flag_exclude_track": stl05_policy_flag_exclude_track,
     "llm01_intake_accepts_fixture": llm01_intake_accepts_fixture,
     "llm02_hallucinated_quote_refused": llm02_hallucinated_quote_refused,
     "llm03_untrusted_text_stays_out_of_system_prompt": (

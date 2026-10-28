@@ -1331,16 +1331,17 @@ def _remediation_rows() -> list[Scenario]:
             "critical",
             "stl_stale_operator_selection_rejected",
         ),
-        _ext(
+        _ex(
             "STL-05",
-            "Stale requirement or estimate input is refused at the boundary (spec section 8)",
+            "Stale inputs are flagged, excluded from authoritative use and carried as findings",
             "stale",
-            Classification.SYNTHETIC,
             ("AI-S07", "AI-S08", "AI-S09", "AI-S10 spec section 8"),
-            "stale requirement and estimate inputs are refused, not flagged",
-            "GOVERNANCE DECISION REQUIRED: spec section 8 says stale inputs are rejected; the "
-            "accepted AI-S07/S08/S09 contracts flag, exclude or mark needs_inputs and never refuse "
-            "the operation. Flagging is not counted as rejection",
+            "synthetic stale estimate line, stale evidence and stale SOW revision under the "
+            "approved stale-input policy (2026-10-28)",
+            "no authoritative numbers from the stale input; stale evidence does not back; the "
+            "stale requirement is named in an integrity finding; the approval stays pending",
+            "critical",
+            "stl05_policy_flag_exclude_track",
         ),
         _ex(
             "STL-06",
