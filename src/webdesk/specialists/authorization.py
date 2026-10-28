@@ -245,22 +245,32 @@ def execute_verified(
         return operation()
 
 
-_HARNESS_SCOPE: ContextVar[bool] = ContextVar("webdesk_harness_scope", default=False)
+@dataclass
+class _Scope:
+    active: bool = True
+
+
+# The scope object is deactivated on exit. A task created inside the scope copies the context, so
+# it still sees this object, but it is inactive by the time it runs after the scope has closed.
+_HARNESS_SCOPE: ContextVar[_Scope | None] = ContextVar("webdesk_harness_scope", default=None)
 
 
 @contextmanager
 def harness_scope() -> Iterator[None]:
-    """Mark the current execution as harness-mediated. Reset on exit, including on error."""
-    token = _HARNESS_SCOPE.set(True)
+    """Mark the current execution as harness-mediated. Deactivated on exit, including on error."""
+    scope = _Scope()
+    token = _HARNESS_SCOPE.set(scope)
     try:
         yield
     finally:
+        scope.active = False
         _HARNESS_SCOPE.reset(token)
 
 
 def require_harness_scope() -> None:
     """Called by every provider's run. Refuses a direct call or a call outside the harness."""
-    if not _HARNESS_SCOPE.get():
+    scope = _HARNESS_SCOPE.get()
+    if scope is None or not scope.active:
         raise AuthorizationDenied(AuthzCode.NO_HARNESS_SCOPE)
 
 

@@ -38,7 +38,7 @@ The review must be bound to the final CI-passing commit. If `d60e794` passes CI,
 ## Points PG should look at specifically
 
 - **Audit assertion change.** `tests/unit/test_pilot.py` now expects one audit entry per pilot case. Confirm that this is the correct contract and that the test still detects missing or duplicate decisions.
-- **Asynchronous paths.** `asyncio` tasks copy the context at creation. A task created inside a verified scope inherits it. No asyncio test exists.
+- **Asynchronous paths.** A task created inside a verified scope copies the context. The scope is now a deactivatable object, so the copy is refused once the scope closes. Tests: `tests/unit/test_qa07_rbac_wiring.py` asyncio section. This fix was made after `8304d2c`, so it is covered only by the CI run on the final SHA.
 - **In-process limit.** `harness_scope` is public. Code that imports it can enter the scope. The control refuses direct and accidental calls only.
 - **Production wiring.** The RBAC check is not exercised against the SQL store in an integration test.
 - **Six deleted lines** in `src/webdesk/intake/reassess.py` and two test files, from the earlier format-only commit `79c90bc`. AST equivalence was not re-verified in this session.

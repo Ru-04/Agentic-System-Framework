@@ -89,7 +89,7 @@
 | Expiry and revocation | Implemented (unit) | Expired and revoked refusals. Revocation is an in-memory flag, not visible across processes. |
 | Direct provider and retrieval refusal | Implemented (unit) | `require_harness_scope` in each provider and in retrieval. Refusal tests call providers and retrieval directly. In-process code can still import and enter the scope (known limit 1). |
 | Pilot self-authorization prevention | Implemented (unit) | `run_pilot` no longer enters the scope. Six self-authorization cases make zero requests. `harness_scope` remains public, so in-process code can still enter it (known limit 1). |
-| Asynchronous execution safety | Partial | A thread-boundary test exists. `asyncio` tasks copy the context at creation, so a task created inside a verified scope inherits it. No asyncio test exists. No specialist asynchronous path exists today. |
+| Asynchronous execution safety | Implemented (unit) | The scope is a deactivatable object, so a task created inside the scope is refused once the scope closes (`test_a_task_created_in_the_scope_cannot_use_it_after_the_scope_closes`). Tasks outside the scope and other threads are refused. No specialist asynchronous path exists today. |
 | Sanitized errors and audit records | Implemented (unit) | Fixed error text; audit holds identifiers and outcome only. |
 | Fail-closed behaviour | Implemented (unit) | Missing verifier, missing decision, naive timestamp, and missing scope all refuse before any protected action. |
 | Production-only limitations | Documented | `QA07_CONTROL_MATRIX_2026-10-28.md`, classes B and C. |

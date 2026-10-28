@@ -7,6 +7,7 @@ same protocol the SQL store does.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -21,6 +22,7 @@ from webdesk.specialists.authorization import (
     InMemoryDecisionStore,
     OperatorDecision,
     execute_verified,
+    harness_scope,
     rbac_permission_check,
     require_harness_scope,
     verify_operator_decision,
@@ -275,3 +277,39 @@ def test_the_scope_entered_by_execute_verified_does_not_leak_after_an_error() ->
         )
     with pytest.raises(AuthorizationDenied):
         require_harness_scope()
+
+
+# --- asynchronous paths -------------------------------------------------------------------------
+
+
+async def _probe() -> None:
+    require_harness_scope()
+
+
+def test_an_asyncio_task_created_outside_the_scope_is_refused() -> None:
+    async def run() -> None:
+        with pytest.raises(AuthorizationDenied) as caught:
+            await asyncio.create_task(_probe())
+        assert caught.value.code is AuthzCode.NO_HARNESS_SCOPE
+
+    asyncio.run(run())
+
+
+def test_an_asyncio_task_created_inside_the_scope_runs_while_the_scope_is_active() -> None:
+    async def run() -> None:
+        with harness_scope():
+            await asyncio.create_task(_probe())
+
+    asyncio.run(run())
+
+
+def test_a_task_created_in_the_scope_cannot_use_it_after_the_scope_closes() -> None:
+    async def run() -> None:
+        with harness_scope():
+            pending = asyncio.create_task(_probe())
+        # The scope has closed before the task first runs.
+        with pytest.raises(AuthorizationDenied) as caught:
+            await pending
+        assert caught.value.code is AuthzCode.NO_HARNESS_SCOPE
+
+    asyncio.run(run())
