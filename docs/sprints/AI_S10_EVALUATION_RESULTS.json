@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 eaadbbd963b55ad1577f5e1b2ec7fb3f6742b1f8a0624a57c6e0878352c17573",
+    "commit": "base 211d308; evaluated source sha256 8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b",
     "python": "3.12.10"
   },
   "results": [
@@ -1336,6 +1336,21 @@
       "title": "Durable, tamper-evident audit of runs, confirmations and refusals"
     },
     {
+      "actual": "unproposed category 'confirmation selects categories that were not proposed' enforced by verify_confirmation; proposed selection accepted=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "enforced_by": "verify_confirmation",
+      "enforcement": "verify_confirmation",
+      "expected": "refused with 'confirmation selects categories that were not proposed' at verify_confirmation; a proposed selection is accepted",
+      "outcome": "pass",
+      "references": [
+        "AI-S06"
+      ],
+      "scenario_id": "SEC-19",
+      "severity": "critical",
+      "title": "Confirmation selecting a category that was not proposed is refused"
+    },
+    {
       "actual": "12 sections plus overview",
       "classification": "A-isolated-synthetic",
       "dependency": "none (isolated synthetic)",
@@ -2052,7 +2067,7 @@
       "A-isolated-synthetic": {
         "delegated": 3,
         "open_limitation": 5,
-        "pass": 113
+        "pass": 114
       },
       "B-foundation-integration": {
         "blocked": 5
@@ -2074,11 +2089,11 @@
       "blocked": 12,
       "delegated": 3,
       "open_limitation": 5,
-      "pass": 113
+      "pass": 114
     },
-    "synthetic_executed": 113,
+    "synthetic_executed": 114,
     "synthetic_failed": 0,
-    "synthetic_passed": 113,
-    "total_scenarios": 133
+    "synthetic_passed": 114,
+    "total_scenarios": 134
   }
 }

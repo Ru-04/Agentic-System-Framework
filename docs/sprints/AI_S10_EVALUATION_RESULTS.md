@@ -1,14 +1,14 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 eaadbbd963b55ad1577f5e1b2ec7fb3f6742b1f8a0624a57c6e0878352c17573`
+Candidate: `base 211d308; evaluated source sha256 8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
 ## Summary
 
-- Total scenarios: 133
-- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 5, 'pass': 113}
-- Synthetic (A) executed: 113; passed 113; failed 0
+- Total scenarios: 134
+- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 5, 'pass': 114}
+- Synthetic (A) executed: 114; passed 114; failed 0
 
 ## Results
 
@@ -101,6 +101,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | SEC-16 | A-isolated-synthetic | pass | critical | - | sentinel absent from messages | 2 messages inspected; sentinel absent=True |
 | SEC-17 | A-isolated-synthetic | pass | major | - | inputs unchanged after execution | reviewer and estimator inputs unchanged |
 | SEC-18 | B-foundation-integration | blocked | major | - | every run and refusal persisted and tamper-evident | Foundation audit and run-state persistence; not implemented |
+| SEC-19 | A-isolated-synthetic | pass | critical | verify_confirmation | refused with 'confirmation selects categories that were not proposed' at verify_confirmation; a proposed selection is accepted | unproposed category 'confirmation selects categories that were not proposed' enforced by verify_confirmation; proposed selection accepted=True |
 | SOW-01 | A-isolated-synthetic | pass | major | - | twelve section identifiers including overview | 12 sections plus overview |
 | SOW-02 | A-isolated-synthetic | pass | critical | - | unrepresented listed; traceability rows | unrepresented ('REQ-SYN-0002',) |
 | SOW-03 | A-isolated-synthetic | pass | major | - | exclusion labelled as proposal requiring confirmation | 1 out-of-scope item(s) |

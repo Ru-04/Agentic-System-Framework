@@ -1606,6 +1606,17 @@ def _remediation_rows() -> list[Scenario]:
             "req08_inferred_requirements_never_accepted",
         ),
         _ex(
+            "SEC-19",
+            "Confirmation selecting a category that was not proposed is refused",
+            "security",
+            ("AI-S06",),
+            "confirmation with one unproposed category added",
+            "refused with 'confirmation selects categories that were not proposed' at "
+            "verify_confirmation; a proposed selection is accepted",
+            "critical",
+            "sec_categories_not_proposed",
+        ),
+        _ex(
             "TRC-01",
             "Requirement identifiers stay correlated through specialist, estimate and governance",
             "traceability",
@@ -1649,6 +1660,7 @@ ENFORCEMENT: dict[str, str] = {
     "XP-06": "generate",
     "S01-01": "build_operator_selection",
     "S01-07": "verify_selection",
+    "SEC-19": "verify_confirmation",
     "REQ-03": "analyze",
     "REQ-04": "analyze",
     "EST-02": "ThreePoint",

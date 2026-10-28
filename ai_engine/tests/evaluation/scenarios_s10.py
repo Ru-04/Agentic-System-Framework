@@ -1328,11 +1328,17 @@ def stl05_policy_flag_exclude_track() -> Check:
     line = draft.lines[0]
     # No low, likely or high value from the stale line; the project total is marked incomplete and
     # the stale line contributes nothing to it (its total is 0.0 only because it is incomplete).
+    # The project total must not carry any contribution from the stale line. With only the stale
+    # line present, every project value is exactly 0.0 and the total is marked incomplete.
+    project_excludes_stale = (
+        draft.project.low == 0.0 and draft.project.likely == 0.0 and draft.project.high == 0.0
+    )
     no_numbers = (
         line.low is None
         and line.likely is None
         and line.high is None
         and draft.project.complete is False
+        and project_excludes_stale
     )
     traced = R1 in line.requirement_ids and any(
         "TSK-001" in issue and "stale" in issue for issue in line.issues
@@ -1367,7 +1373,31 @@ def stl05_policy_flag_exclude_track() -> Check:
     )
 
 
+def sec_categories_not_proposed() -> Check:
+    """Confirmation selecting a category that was not proposed is refused at verify_confirmation."""
+    orch, proposal = _production_proposal()
+    extra = _confirmation(
+        proposal, mock=False, categories=(*proposal.categories, "not-a-proposed-category")
+    )
+    reason, where = _refusal(lambda: orch.confirm(extra, actor=OPERATOR), VERIFY)
+    orch2, proposal2 = _production_proposal()
+    valid = _confirmation(proposal2, mock=False)
+    accepted = _refusal(lambda: orch2.confirm(valid, actor=OPERATOR), VERIFY)[0] is None
+    ok = (
+        reason == "confirmation selects categories that were not proposed"
+        and where == "verify_confirmation"
+        and accepted
+    )
+    return Check(
+        ok,
+        f"unproposed category {reason!r} enforced by {where}; "
+        f"proposed selection accepted={accepted}",
+        enforced_by=where,
+    )
+
+
 EXECUTORS: dict[str, Any] = {
+    "sec_categories_not_proposed": sec_categories_not_proposed,
     "stl05_policy_flag_exclude_track": stl05_policy_flag_exclude_track,
     "llm01_intake_accepts_fixture": llm01_intake_accepts_fixture,
     "llm02_hallucinated_quote_refused": llm02_hallucinated_quote_refused,

@@ -86,3 +86,21 @@ def test_mutations_are_undone_after_each_test() -> None:
     assert {sid: outcomes[sid] for sid in GATE_SCENARIOS} == {
         sid: Outcome.PASS for sid in GATE_SCENARIOS
     }
+
+
+def test_project_total_leak_from_a_stale_line_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If the project total carries a value from a stale line, STL-05 must fail: stale input may not
+    supply an authoritative numerical estimate."""
+    import dataclasses
+
+    import ai_engine.estimation.engine as estimation_engine
+
+    original = estimation_engine._totals
+
+    def leaking(lines: object, *, incomplete: bool = False) -> object:
+        totals = original(lines, incomplete=incomplete)  # type: ignore[arg-type]
+        return dataclasses.replace(totals, likely=42.0)
+
+    monkeypatch.setattr(estimation_engine, "_totals", leaking)
+    outcomes = _outcomes()
+    assert outcomes["STL-05"] == Outcome.FAIL
