@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import uuid
+import weakref
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -341,30 +342,54 @@ def worker_url(committed_engine: Engine, committed_url: str) -> Iterator[str]:
     yield _provision_worker_login(committed_engine, committed_url)
 
 
-def _await_started(proc: subprocess.Popen[str], timeout: float = 90.0) -> None:
-    """Wait until the worker reports that its handlers are installed and its loop started.
+# Keyed by process object: PIDs are reused, and a reused PID must not inherit a queue.
+_WATCHES: weakref.WeakKeyDictionary[subprocess.Popen[str], queue.Queue[str]] = (
+    weakref.WeakKeyDictionary()
+)
 
-    A stop signal sent earlier would reach the default handler and skip the graceful path.
-    """
-    lines: queue.Queue[str] = queue.Queue()
 
-    def reader() -> None:
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            lines.put(line)
+def _watch(proc: subprocess.Popen[str]) -> queue.Queue[str]:
+    """One reader per worker process. Every stdout line goes to a queue, so a test can wait for an
+    event the worker prints (explicit synchronisation) instead of polling the database."""
+    if proc not in _WATCHES:
+        lines: queue.Queue[str] = queue.Queue()
 
-    threading.Thread(target=reader, daemon=True).start()
+        def reader() -> None:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                lines.put(line)
+
+        threading.Thread(target=reader, daemon=True).start()
+        _WATCHES[proc] = lines
+    return _WATCHES[proc]
+
+
+def _await_line(proc: subprocess.Popen[str], *needles: str, timeout: float = 120.0) -> str:
+    """Wait for a stdout line containing every needle. Fails at once if the process exits first."""
+    lines = _watch(proc)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             line = lines.get(timeout=0.5)
         except queue.Empty:
             if proc.poll() is not None:
-                raise AssertionError(f"exited before it started: {proc.returncode}") from None
+                raise AssertionError(f"exited ({proc.returncode}) before {needles}") from None
             continue
-        if '"worker.started"' in line:
-            return
-    raise AssertionError("the worker never reported that it had started")
+        if all(needle in line for needle in needles):
+            return line
+    raise AssertionError(f"timed out waiting for {needles}")
+
+
+def _await_started(proc: subprocess.Popen[str], timeout: float = 90.0) -> None:
+    """The worker has installed its handlers and started its loop (a stop sent earlier would skip
+    the graceful path)."""
+    _await_line(proc, '"worker.started"', timeout=timeout)
+
+
+def _await_claim(proc: subprocess.Popen[str], owner: str, timeout: float = 120.0) -> None:
+    """The worker printed ``job.claimed`` for ``owner``. The worker prints it only after its claim
+    transaction has committed, so the database must now show the lease."""
+    _await_line(proc, '"job.claimed"', f'"owner": "{owner}"', timeout=timeout)
 
 
 def _spawn(
@@ -410,7 +435,7 @@ def test_a_killed_worker_is_recovered_after_lease_expiry_and_attempts_are_counte
 ) -> None:
     victim = _spawn(worker_url, run_fixture.store_root, "w-victim", lease=2, step_delay=60)
     try:
-        _wait_until(lambda: _leased_by(committed_engine, run_fixture.run, "w-victim"))
+        _await_claim(victim, "w-victim")
         assert _job(committed_engine, run_fixture.run)["attempts"] == 1
         victim.kill()
         victim.wait(timeout=10)
@@ -434,7 +459,7 @@ def test_three_crashes_exhaust_the_attempts_and_the_reaper_releases_the_slot(
         owner = f"w-crash-{attempt}"
         victim = _spawn(worker_url, run_fixture.store_root, owner, lease=2, step_delay=60)
         try:
-            _wait_until(lambda owner=owner: _leased_by(committed_engine, run_fixture.run, owner))
+            _await_claim(victim, owner)
             victim.kill()
             victim.wait(timeout=10)
         finally:
@@ -604,7 +629,7 @@ def test_phase3_demonstration_run_interruption_recovery_and_refusals(
 
     victim = _spawn(worker_url, run_fixture.store_root, "w-demo-a", lease=2, step_delay=60)
     try:
-        _wait_until(lambda: _leased_by(committed_engine, run_fixture.run, "w-demo-a"))
+        _await_claim(victim, "w-demo-a")
         step("2. worker A claimed the job (committed claim, attempt 1)")
         victim.kill()
         victim.wait(timeout=10)
@@ -1088,7 +1113,7 @@ def test_phase3_demonstration_heartbeat_exhaustion_stuck_report_and_shutdown_mod
         owner = f"demo-crash-{attempt}"
         victim = _spawn(worker_url, run_fixture.store_root, owner, lease=2, step_delay=60)
         try:
-            _wait_until(lambda owner=owner: _leased_by(committed_engine, run_fixture.run, owner))
+            _await_claim(victim, owner)
             victim.kill()
             victim.wait(timeout=10)
         finally:
@@ -1118,7 +1143,7 @@ def test_phase3_demonstration_heartbeat_exhaustion_stuck_report_and_shutdown_mod
     graceful = _spawn(worker_url, run_fixture.store_root, "demo-graceful", lease=5, step_delay=3)
     try:
         _await_started(graceful)
-        _wait_until(lambda: _leased_by(committed_engine, second, "demo-graceful"))
+        _await_claim(graceful, "demo-graceful")
         if os.name == "nt":
             graceful.send_signal(signal.CTRL_BREAK_EVENT)
         else:
