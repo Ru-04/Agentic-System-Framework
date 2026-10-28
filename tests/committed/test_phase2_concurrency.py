@@ -43,8 +43,26 @@ def _as_app(conn: Connection) -> None:
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
 
 
+RACE_TIMEOUT_SECONDS = 60.0
+_POLL_SECONDS = 0.01
+
+
+def _lock_wait_observed(engine: Engine, pid: int) -> bool:
+    with engine.connect() as conn:
+        return bool(
+            conn.execute(
+                text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :p"),
+                {"p": pid},
+            ).scalar()
+        )
+
+
 def _race(engine: Engine, first: Operation, second: Operation) -> tuple[bool, BaseException | None]:
     """Hold ``first`` open, start ``second`` on another connection, commit ``first``.
+
+    ``first`` is committed only after ``second`` is observed either waiting on a lock in
+    ``pg_stat_activity`` or already finished. No fixed sleep sets the ordering, so a slow machine
+    cannot let ``first`` commit before ``second`` has reached the lock.
 
     Returns whether ``second`` waited for ``first``, and the exception ``second``
     raised (None on success).
@@ -53,20 +71,31 @@ def _race(engine: Engine, first: Operation, second: Operation) -> tuple[bool, Ba
     first_tx = first_conn.begin()
     first(first_conn)
     outcome: list[BaseException] = []
+    second_pid: dict[str, int] = {}
+
+    def observed_second(conn: Connection) -> object:
+        second_pid["pid"] = int(conn.execute(text("SELECT pg_backend_pid()")).scalar_one())
+        return second(conn)
 
     def run_second() -> None:
         try:
-            run_in_transaction(engine, second)
+            run_in_transaction(engine, observed_second)
         except BaseException as exc:  # reported to the test, never swallowed
             outcome.append(exc)
 
     worker = threading.Thread(target=run_second, daemon=True)
     worker.start()
-    time.sleep(1.5)
-    waited = worker.is_alive()
+    deadline = time.monotonic() + RACE_TIMEOUT_SECONDS
+    waited = False
+    while worker.is_alive() and time.monotonic() < deadline:
+        pid = second_pid.get("pid")
+        if pid is not None and _lock_wait_observed(engine, pid):
+            waited = True
+            break
+        time.sleep(_POLL_SECONDS)
     first_tx.commit()
     first_conn.close()
-    worker.join(timeout=60)
+    worker.join(timeout=RACE_TIMEOUT_SECONDS)
     assert not worker.is_alive(), "the second operation never finished"
     return waited, (outcome[0] if outcome else None)
 
