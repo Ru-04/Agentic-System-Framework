@@ -162,7 +162,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 5. Gates (development worktree, after remediation)
 
-- Full suite: **1744 passed, 3 skipped**. The 3 skips are the Foundation tests at
+- Full suite (development worktree): **1745 passed, 3 skipped**; committed tree 1681 passed. The 3 skips are the Foundation tests at
   `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, not run offline.
 - AI-S10 files: 32 passed (`test_ai_s10_evaluation`, `_evaluator_rules`, `_mutations`, `_consistency`) on the
   final catalogue, plus the full suite above.

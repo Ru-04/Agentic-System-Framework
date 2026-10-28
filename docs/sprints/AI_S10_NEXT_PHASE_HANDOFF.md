@@ -17,7 +17,7 @@ Status: the Stage 3 remediation is ready for the Stage 2 re-review. Nothing was 
 From `ai_engine` in the `integration-baseline` worktree (see the reproducibility report, sections 4 and 8):
 
 - AI-S10 files: `tests/test_ai_s10_evaluation.py`, `_evaluator_rules.py`, `_mutations.py`, `_consistency.py` (32 tests).
-- Full suite: 1744 passed, 3 skipped in the development worktree; the committed tree is smaller by the 64
+- Full suite: 1745 passed, 3 skipped in the development worktree; the committed tree is smaller by the 64
   untracked Foundation passes.
 - `ruff check .`, `ruff format --check .`, `mypy --strict src tests`.
 - Regenerate: `PYTHONPATH="src;tests" .venv/Scripts/python.exe -m evaluation.report ../docs/sprints`.
@@ -30,7 +30,7 @@ From `ai_engine` in the `integration-baseline` worktree (see the reproducibility
 3. The replay mutation evidence: `consume` removed, and the always-refuse verification mutation.
 4. Stale-input behaviour and classification: `STL-04` (rejection) against `STL-01`..`STL-03`, `STL-06` (exclusion), and `STL-05` (executed under the approved policy).
 5. REC-03 and C-15 reporting: it must stay `open_limitation` and must never count as a pass.
-6. Test-count reproducibility: the committed-tree clean export against the expected 1680 passed, 0 skipped.
+6. Test-count reproducibility: the committed-tree clean export against the expected 1681 passed, 0 skipped.
 7. Specification provenance: the sprint spec and master plan are untracked and cited as such.
 8. AI-S01 coverage, requirement extraction, cross-project isolation and pipeline traceability.
 9. `UD-01`: the upstream fingerprint gap is recorded and must not be presented as a pass.
