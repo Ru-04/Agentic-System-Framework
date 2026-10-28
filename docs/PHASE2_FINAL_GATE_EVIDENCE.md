@@ -54,3 +54,19 @@ Blocking dependency: pids 11124 and 35144 (Phase 3 session's full-suite runs on 
 - `111f304` F-06, F-09, F-11 documents.
 
 Each commit was made from a file group. Intermediate commits were not each verified by a full run; the final SHA is the only one under gate.
+
+## 7. Attempts on `250f90a` (latest)
+
+| Run | Namespace | Command | Result | Exit | Counted |
+|---|---|---|---|---|---|
+| final-gate-1 | `final-gate-1` | `pytest tests -q` | 681 passed, 1 warning | 0 | No: poll showed a foreign pytest process during the window (main checkout, pid 1260, started 16:04:23) |
+| final-gate-2 | — | refused before start (foreign pytest, pid 1260) | — | 3 | No |
+| clean-gate-1 | `clean-gate-1` | `pytest tests -q` | 681 passed, 1 warning, 375.6 s | 0 | No: poller saw foreign pytest at 16:13 (35 samples) |
+
+Cause of the remaining overlap: the main checkout (`D:\WDS\Agentic System FrameWork`) repeatedly runs `pytest tests/committed/test_ai_read_v1.py` and full-suite pytest against the same cluster (for example pids 9300 and 7988, started 16:22:24). These are not owned by this sprint and were not terminated.
+
+Current counted result: **zero clean runs of three**. The gate is not met.
+
+Checks run without the database on `250f90a`: `ruff check src tests migrations` passes; `ruff format --check` reports only the five documented exception files; `mypy --strict src/webdesk` passes. Git status: clean.
+
+Not run on a clean window: migration 0042-to-head catalog comparison, privilege audit, AI Read Contract v1 regression.
