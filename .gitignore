@@ -10,3 +10,4 @@ build/
 dist/
 .env.hardening.local
 .env.integration.local
+.env.phase2-test.local
