@@ -102,7 +102,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `c1de7a7fcd09b10176b7d1f040f0a2d5c782f7844a7860499880261022c0fdc5`.
+  `ba6aa87b724cbfe8b06c8c350a28308adcd4e0efaa32651ef22d2785b6ca7bac`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.
@@ -162,7 +162,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 5. Gates (development worktree, after remediation)
 
-- Full suite (development worktree): **1806 passed, 3 skipped**; committed tree 1681 passed. The 3 skips are the Foundation tests at
+- Full suite (development worktree): **1809 passed, 3 skipped**; committed tree 1681 passed. The 3 skips are the Foundation tests at
   `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, not run offline.
 - AI-S10 files: 32 passed (`test_ai_s10_evaluation`, `_evaluator_rules`, `_mutations`, `_consistency`) on the
   final catalogue, plus the full suite above.

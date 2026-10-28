@@ -1,6 +1,6 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 c1de7a7fcd09b10176b7d1f040f0a2d5c782f7844a7860499880261022c0fdc5`
+Candidate: `base 211d308; evaluated source sha256 ba6aa87b724cbfe8b06c8c350a28308adcd4e0efaa32651ef22d2785b6ca7bac`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 

@@ -502,3 +502,18 @@ def test_content_exactly_at_the_size_limit_is_accepted() -> None:
     returned, mime = client.content(VERSION)
     assert len(returned) == MAX_CONTENT_BYTES
     assert mime == "application/octet-stream"
+
+
+@pytest.mark.parametrize("limit", [0, 201])
+def test_a_segment_limit_outside_the_contract_is_refused_before_any_request(limit: int) -> None:
+    client, transport = client_for({})
+    with pytest.raises(AiReadRefused, match="segment limit must be between 1 and 200"):
+        client.segments(VERSION, limit=limit)
+    assert transport.calls == []
+
+
+def test_a_segment_request_with_a_malformed_source_version_is_refused_before_any_request() -> None:
+    client, transport = client_for({})
+    with pytest.raises(AiReadRefused, match="not a UUID"):
+        client.segments("not-a-uuid")
+    assert transport.calls == []
