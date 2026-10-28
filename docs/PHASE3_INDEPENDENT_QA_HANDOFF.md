@@ -1,53 +1,73 @@
 # Foundation Phase 3: independent QA handoff
 
-Branch: `feature/foundation-phase-3`. Base: `46e0e14` (committed Phase 2 state). Status: **engineering complete for
-the stated scope, ready for independent Phase 3 QA. Not accepted. Not merged. Not pushed.**
+Branch `feature/foundation-phase-3`. Committed base `e9d888a`. Phase 3 commits (oldest first):
 
-Evidence: `docs/PHASE3_ENGINEERING_EVIDENCE.md`. Matrix: `docs/PHASE3_REQUIREMENTS_GAP_MATRIX.md`.
-Lifecycle: `docs/PHASE3_JOB_LEASE_LIFECYCLE.md`. Privileges: `docs/PHASE3_WORKER_PRIVILEGE_MATRIX.md`.
-Dependencies: `docs/PHASE3_DEPENDENCY_REGISTER.md`. Migration reconciliation: `docs/PHASE3_MIGRATION_RECONCILIATION.md`.
+| Commit | Content |
+|---|---|
+| `61de952` | Per-process authority test login role (fixes the shared-password credential race) |
+| `b398761` | Lease heartbeat, KEY SHARE step fence, stuck-job diagnostics, correlation keys; migration `0051`; tests |
+| `f640322` | Expiry sweep and recovery expiry on the database clock (H-21) |
+| `e02edc7` | Closure matrix, lease lifecycle, privilege matrix, evidence report, demonstration output |
+
+Status: **engineering handoff, not accepted, not merged, not pushed.** The verdict is
+**PHASE 3 ENGINEERING INCOMPLETE — BLOCKERS REMAIN** (see Blockers). This handoff does not claim independent acceptance.
+
+## Evidence
+
+- Matrix: `docs/PHASE3_REQUIREMENTS_GAP_MATRIX.md`. Evidence: `docs/PHASE3_ENGINEERING_EVIDENCE.md`.
+- Lifecycle: `docs/PHASE3_JOB_LEASE_LIFECYCLE.md`. Privileges: `docs/PHASE3_WORKER_PRIVILEGE_MATRIX.md`.
+- Demonstration output: `docs/PHASE3_DEMONSTRATION_OUTPUT.txt`.
+- Dependencies: `docs/PHASE3_DEPENDENCY_REGISTER.md`. Migration reconciliation: `docs/PHASE3_MIGRATION_RECONCILIATION.md`.
+
+Final full regression on the dedicated cluster `127.0.0.1:5440` (compose project `webdesk-phase3-closure`):
+**707 passed, 0 failed, exit 0**, 2026-10-28 11:09:52Z to 11:18:26Z, on the working tree at `b398761`+`f640322`+`e02edc7`
+(the docs commit does not change tested code). Ruff check and format policy: clean. Strict mypy: clean.
+
+## Blockers (engineering)
+
+1. **H-21 (decision D-3)**: the pre-database authorization expiry in `ceremony/install.py` (`prepare_install`) compares
+   against the injected clock. Moving it to the database clock needs a WDS decision on the approved test-clock rule
+   (P-INC3-TEST-CLOCK-05). Contact liveness predicates in `identity/contacts.py` still use `now()`; they are outside the
+   H-21 file list, recorded as residual.
+2. **G-7 (audit correlation column)**: correlation keys are in worker logs and audit details, not in
+   `audit_events.correlation_id` (UUID). Populating the column needs a new guard function (migration), not done.
+
+## Dependencies outside Phase 3 engineering
+
+- **Phase 2 merge join (D-1c)**: Phase 2 remediation migrations `0044` and `0045` are not in this branch. Procedure in
+  `docs/PHASE3_MIGRATION_RECONCILIATION.md`; `0050` is not edited. `0051` depends on `0050` only and is unaffected.
+- **Phase 2 acceptance (D-1b)** and **Phase 1 acceptance (D-1e)**: not performed.
+- **D-2**: production outbox transport and ceremony login are configured by the worker; without them the steps are
+  reported as disabled. Belongs to the notification and outbox phase.
+- **D-4 / D-5**: production worker login provisioning and the process manager are deployment items.
+- **Shared cluster**: the shared PostgreSQL on `127.0.0.1:5433` still holds Phase 3 leftover role
+  `webdesk_authority_test_9c007c88774a` (no session attached). It is to be dropped only after Phase 2 releases that cluster.
+  The dedicated cluster has no leftover roles.
 
 ## What to re-test
 
-1. Migration `0050_durable_execution`: upgrade from the base, the downgrade to `0043`, re-upgrade, and the catalog
-   comparison (`tests/committed/test_migration_cycle.py`). Check the restored 0031 and 0030 function texts in the
-   downgrade.
-2. Lease and fencing: `tests/committed/test_durable_execution.py`. The stale-worker, reclaim and checkpoint tests are
-   the core of H-22 and the stale-worker requirement.
-3. Reaper (H-24): `committed.reap_expired` and `fn_worker_reap_expired`. Check the lock order and the audit rows.
-4. Lock order (H-25): the cancellation test with two connections.
-5. Crash and restart (H-27): subprocess kill tests; the graceful stop test (Windows break event on this host, SIGTERM
-   on POSIX).
-6. Clock (H-21): ceremony deadlines now use `clock_timestamp()` (`src/webdesk/ceremony/dbclock.py`); the injected
-   window is still a test duration.
-7. Worker maintenance (H-26): `src/webdesk/worker/maintenance.py`. The outbox and the sweep run only when their
-   configuration is complete; otherwise a `maintenance.disabled` event names the missing setting.
-8. Privilege audit (`tests/hardening/test_privilege_audit.py`): the reaper is pinned for `webdesk_worker` only.
+1. Lease and fence: `tests/committed/test_durable_execution.py` heartbeat tests (`test_the_heartbeat_*`, `test_a_hung_step_*`,
+   `test_renewal_and_step_fencing_race_*`, `test_a_step_that_starts_after_*`).
+2. Worker process: `test_the_worker_process_aborts_a_hung_step_and_its_lease_is_recovered` (exit 70); graceful stop (exit 0).
+3. Reaper, crash and exhaustion: three-crash test and `test_archive_succeeds_after_a_run_failed_by_attempt_exhaustion`.
+4. Stuck report: `test_the_stuck_report_command_exits_1_when_stuck_and_0_when_clear`.
+5. Authority isolation: run two test processes against one cluster; the first must still authenticate after the second
+   starts. Check no `webdesk_authority_test_*` role remains afterwards.
+6. Migration: `tests/committed/test_migration_cycle.py` (head, downgrade through `0051` and `0050` to `0043`, re-upgrade,
+   catalog comparison).
+7. Privilege audit: `tests/hardening/test_privilege_audit.py` (worker set includes the two 0051 functions).
 
 ## Known limitations (report, do not re-discover)
 
-- Phase 2 remediation is not in this branch. Its migrations `0044` and `0045` join the chain only through the
-  reconciliation procedure.
-- The base's committed-test clones do not re-apply the `TEMP` revocation of migration `0020`. The migration cycle test
-  applies it to its own clone. The Phase 2 branch fixes the general case.
-- The intermittent teardown leak seen in the Phase 2 chain (`LeakedSessionError`, a `webdesk_app_login` backend) has
-  been reported at namespace teardown. Its root cause is not established. Phase 3 uses fixed database names plus
-  per-test names, so it has no namespace teardown.
-- Checkpoint and resume: resume applies only to waiting-for-human runs, so a cancelled run cannot be resumed (tested).
-  Resume of a parked run is not a worker path.
-- Outbox and sweep run only when configured. Production delivery transport and login provisioning are deployment
-  dependencies (D-2, D-4).
-- The worker does not emit correlation identifiers; it logs job, run, owner, attempt and outcome.
-- Renewal is per committed step rather than on a 30-second timer. Each step renews, which is at least as frequent.
-- Stuck-job reporting is by reaper audit and logs only; no separate report was built.
+- The correlation key is not in the audit UUID column (G-7).
+- The heartbeat interval is measured by the worker's monotonic clock; each renewal stamps database time. The approved text
+  says "every 30 seconds of database time".
+- Durable-execution crash tests use a 2-second test lease and depend on process start-up time; one run timed out once on a
+  loaded machine and passed on rerun. Watch for this flakiness.
+- The dedicated cluster bootstrap is test-only and not committed. Its non-default settings (test-owner memberships with
+  SET, the hardening owner's objects owned by the integration owner, and the superuser bootstrap migration) are described
+  in the evidence report.
 
-## Commands to reproduce
+## Verdict
 
-```
-alembic upgrade head                      # on a fresh database (WEBDESK_DATABASE_URL)
-pytest tests/committed/test_durable_execution.py -s
-pytest tests/committed/test_migration_cycle.py
-pytest tests/hardening/test_privilege_audit.py
-mypy --strict src/webdesk
-ruff check src tests migrations
-```
+PHASE 3 ENGINEERING INCOMPLETE — BLOCKERS REMAIN. The blockers are listed above. This handoff is not an acceptance.
