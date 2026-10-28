@@ -573,5 +573,4 @@ def _revision(conn: Connection, user: uuid.UUID) -> int:
 
 
 def _box() -> Any:
-
     return ContactBox(base64.b64encode(b"\x07" * 32).decode("ascii"))

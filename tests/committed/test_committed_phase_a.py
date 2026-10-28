@@ -57,6 +57,8 @@ def admins(committed_admins: tuple[uuid.UUID, uuid.UUID]) -> tuple[uuid.UUID, uu
 def _active_user(engine: Engine, admins: tuple[uuid.UUID, uuid.UUID]) -> uuid.UUID:
     """An active account committed through the services (request, approval, activation)."""
     return committed_active_user(engine, admins[0], admins[1], "committed-active")
+
+
 def _count(engine: Engine, sql: str, params: dict[str, object]) -> int:
     with engine.connect() as conn:
         return int(conn.execute(text(sql), params).scalar_one())
@@ -254,6 +256,7 @@ def test_an_injected_failure_mid_approval_commits_nothing(
         raise RuntimeError("injected after the contact update")
 
     monkeypatch.setattr(contacts, "_audit", fail)
+
     def approve_as_application(conn: Connection) -> None:
         conn.execute(text("SET LOCAL ROLE webdesk_app"))
         contacts.approve_change(conn, approver, change, "proof-injected", contact_box=BOX)

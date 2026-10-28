@@ -193,5 +193,3 @@ def make_active_user(engine: Engine, world: dict[str, uuid.UUID]) -> uuid.UUID:
         contacts.approve_create(conn, second, approval, "proof-hardening")
     _activate_by_token(engine, user)
     return user
-
-

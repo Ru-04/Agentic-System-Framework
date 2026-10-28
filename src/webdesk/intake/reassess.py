@@ -99,9 +99,7 @@ def reassess_source_classification(
     # Only the guard-owner function applies the change. It re-checks the Administrator role,
     # the justification, the revision, the project floor and the restricted rule (H-03).
     conn.execute(
-        text(
-            "SELECT webdesk_guard.fn_reassess_classification(:a, :s, :c, :j, :rev)"
-        ),
+        text("SELECT webdesk_guard.fn_reassess_classification(:a, :s, :c, :j, :rev)"),
         {
             "a": actor,
             "s": source,
