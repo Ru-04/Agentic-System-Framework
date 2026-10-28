@@ -141,3 +141,10 @@ Source: WDS Authorized Approver, chat, 28 October 2026. Bound to engineering com
 - **Conditions open:** (1) PG personal independence and QA attestation evidence; (2) verify final CI against the accepted engineering SHA (verified: run #47 on `30243a3`); (3) approve the proposed acceptance-criteria reconciliation, not represented as the original frozen document; (4) preserve platform-documentation and capability-coverage limits; (5) real investigations only within separately approved boundaries; (6) Shopify 55-pair human relevance evaluation, 0 of 55, and other historical gates.
 - **Sprint 5:** readiness and transition preparation authorized. Formal commencement remains subject to the mandatory transition gates and a reconciled scope.
 - Standing: no live LLM; production blocked (QA-07); no source expansion; frozen four-milestone, nine-sprint baseline preserved.
+
+## First merge scope: R4 chain held out (28 October 2026, chat)
+Source: WDS Authorized Approver, chat, 28 October 2026.
+- **MERGE-SCOPE-01 APPROVED:** the R4 migration chain (`af37f7b` through `89634a8`, migrations `0020` to `0027`, Increment 3 Phase 1 R4 work) is held out of the first merge. Its handoff verdict remains "NOT READY FOR INDEPENDENT PHASE 1 REVIEW" with release-blocking findings open. Nothing in the R4 chain is accepted by this decision.
+- **Candidate for the first PR:** branch `claude/pr-candidate-m1-s4-no-r4` at `79c90bc`, the target `feature/increment-1-foundation` (`740b169`) plus 82 commits. CI run #49 on `79c90bc`: SUCCESS. Single migration head `0019`.
+- **Not merged:** no protected-branch merge has been executed. The PR is awaiting explicit approval.
+- **Open:** PG's personal review; Milestone 1 controls; R4 release-blocking findings for any later merge of the R4 chain.
