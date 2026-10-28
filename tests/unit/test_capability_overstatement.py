@@ -14,10 +14,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tests.support.authority import run_in_harness
+from tests.support.authority import retrieve_in_harness, run_in_harness
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Edition, Outcome, Page, investigate
-from webdesk.investigation.retrieval import FetchStatus, retrieve_approved_pages
+from webdesk.investigation.retrieval import FetchStatus
 from webdesk.investigation.specialists import (
     CATALOG,
     COVERAGE,
@@ -203,7 +203,7 @@ def test_http_200_not_found_body_is_excluded_from_evidence() -> None:
         b"<p>We could not find what you were looking for.</p>"
         b"<p>Each variation has its own price.</p></body></html>"
     )
-    outcome = retrieve_approved_pages(
+    outcome = retrieve_in_harness(
         platform="woocommerce",
         edition=Edition.NOT_APPLICABLE,
         urls=[WOO_URL],
@@ -296,7 +296,7 @@ def test_citation_carries_source_identity_retrieval_time_title_and_version() -> 
         def __call__(self, url: str, timeout: float) -> io.BytesIO:
             return io.BytesIO(body)
 
-    outcome = retrieve_approved_pages(
+    outcome = retrieve_in_harness(
         platform="woocommerce",
         edition=Edition.NOT_APPLICABLE,
         urls=[WOO_URL],

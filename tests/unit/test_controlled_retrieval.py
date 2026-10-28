@@ -14,10 +14,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tests.support.authority import run_in_harness
+from tests.support.authority import retrieve_in_harness, run_in_harness
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Capability, ClaimKind, Edition, Outcome, investigate
-from webdesk.investigation.retrieval import FetchStatus, retrieve_approved_pages
+from webdesk.investigation.retrieval import FetchStatus
 from webdesk.investigation.specialists import InvestigationProvider
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
@@ -60,7 +60,7 @@ def _activate(monkeypatch: pytest.MonkeyPatch) -> None:
 def _retrieve(
     urls: list[str], opener: Callable[[str, float], io.BytesIO] | None, version: str | None = "1.0"
 ):  # type: ignore[no-untyped-def]
-    return retrieve_approved_pages(
+    return retrieve_in_harness(
         platform="woocommerce",
         edition=Edition.NOT_APPLICABLE,
         urls=urls,
@@ -78,7 +78,7 @@ def _retrieve(
 def test_inactive_source_makes_no_request_even_with_a_transport() -> None:
     # Adobe Commerce is approved but not in the pilot, so it stays inactive.
     recorder = Recorder()
-    outcome = retrieve_approved_pages(
+    outcome = retrieve_in_harness(
         platform="adobe_commerce",
         edition=Edition.ADOBE_COMMERCE,
         urls=["https://developer.adobe.com/commerce/webapi/rest/"],
@@ -104,7 +104,7 @@ def test_active_source_without_a_transport_makes_no_request(
 
 def test_platform_without_a_boundary_is_inactive_and_makes_no_request() -> None:
     recorder = Recorder()
-    outcome = retrieve_approved_pages(
+    outcome = retrieve_in_harness(
         platform="shift4shop",
         edition=Edition.NOT_APPLICABLE,
         urls=["https://developer.3dcart.com/api/products"],
@@ -272,7 +272,7 @@ def test_fetched_record_carries_source_identifier_and_retrieval_timestamp(
 
 def test_naive_retrieval_timestamp_is_refused() -> None:
     with pytest.raises(ValueError):
-        retrieve_approved_pages(
+        retrieve_in_harness(
             platform="woocommerce",
             edition=Edition.NOT_APPLICABLE,
             urls=[APPROVED],

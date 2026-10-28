@@ -30,6 +30,7 @@ from webdesk.evidence.http_vendor import _LOOKS_LIKE_HTML, Opener, _text_from_ht
 from webdesk.evidence.untrusted import flag_instruction_like
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Edition, Page
+from webdesk.specialists.authorization import require_harness_scope
 
 TIMEOUT_SECONDS: Final[float] = 10.0
 MAX_BYTES: Final[int] = 2_000_000
@@ -78,7 +79,12 @@ def retrieve_approved_pages(
     source_id: str,
     now: datetime,
 ) -> RetrievalOutcome:
-    """Fetch approved pages, or record why each one was not fetched. Makes no request otherwise."""
+    """Fetch approved pages, or record why each one was not fetched. Makes no request otherwise.
+
+    QA-07: runs only inside the authorized harness scope. A direct call is refused before any
+    boundary check or transport call.
+    """
+    require_harness_scope()
     if now.tzinfo is None:
         raise ValueError("retrieval timestamp must be timezone-aware")
     if not source_id.strip():

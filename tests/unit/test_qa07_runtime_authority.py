@@ -409,3 +409,31 @@ def test_the_authorization_check_does_not_change_the_contract_error_codes() -> N
     values = {code.value for code in SpecialistErrorCode}
     assert "authorization_denied" in values
     assert {"input_invalid", "capability_denied", "workspace_mismatch"} <= values
+
+
+# --- evidence retrieval (QA-07 scope applies before any transport call) ------------------------
+
+
+def test_direct_evidence_retrieval_outside_the_harness_is_refused_before_any_request() -> None:
+    from webdesk.investigation.engine import Edition
+    from webdesk.investigation.retrieval import retrieve_approved_pages
+
+    requests: list[str] = []
+
+    def transport(url: str, timeout: float) -> Any:
+        requests.append(url)
+        raise AssertionError("transport must not be reached")
+
+    with pytest.raises(AuthorizationDenied) as caught:
+        retrieve_approved_pages(
+            platform="woocommerce",
+            edition=Edition.NOT_APPLICABLE,
+            urls=["https://developer.woocommerce.com/docs/products/variations"],
+            workspace_id=WS,
+            version="1.0",
+            opener=transport,
+            source_id="woocommerce_docs",
+            now=NOW,
+        )
+    assert caught.value.code is AuthzCode.NO_HARNESS_SCOPE
+    assert requests == []

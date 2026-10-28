@@ -121,3 +121,16 @@ def run_in_harness(provider: _harness.SpecialistProvider, request: Any) -> Mappi
 
     with harness_scope():
         return provider.run(request)
+
+
+def retrieve_in_harness(**kwargs: Any) -> Any:
+    """Call evidence retrieval inside the harness scope. For retrieval tests only.
+
+    Production code reaches retrieval only through the harness. These tests exercise the retrieval
+    rules themselves, so they enter the same scope the harness would.
+    """
+    from webdesk.investigation.retrieval import retrieve_approved_pages
+    from webdesk.specialists.authorization import harness_scope
+
+    with harness_scope():
+        return retrieve_approved_pages(**kwargs)

@@ -19,6 +19,7 @@ from typing import IO, Final, cast
 from webdesk.evidence.http_vendor import Opener, build_vendor_opener
 from webdesk.investigation.engine import Capability, ClaimKind, Edition, investigate
 from webdesk.investigation.retrieval import FetchRecord, retrieve_approved_pages
+from webdesk.specialists.authorization import harness_scope
 
 PILOT_WORKSPACE: Final[str] = "ws-pilot"
 # The pilot identifies itself. The default urllib agent is refused by a vendor (HTTP 403).
@@ -96,16 +97,19 @@ def run_pilot(opener: Opener, now: datetime) -> tuple[PilotResult, ...]:
     """Run each pilot case once. Returns one sanitized result per case."""
     results: list[PilotResult] = []
     for case in PILOT_CASES:
-        outcome = retrieve_approved_pages(
-            platform=case.platform,
-            edition=case.edition,
-            urls=[case.url],
-            workspace_id=PILOT_WORKSPACE,
-            version=case.page_version,
-            opener=opener,
-            source_id=case.source_id,
-            now=now,
-        )
+        # Documented exception (QA-07): the pilot is an operator-approved retrieval run, not a
+        # specialist run, so it enters the scope itself. A reviewer must confirm this exception.
+        with harness_scope():
+            outcome = retrieve_approved_pages(
+                platform=case.platform,
+                edition=case.edition,
+                urls=[case.url],
+                workspace_id=PILOT_WORKSPACE,
+                version=case.page_version,
+                opener=opener,
+                source_id=case.source_id,
+                now=now,
+            )
         finding = investigate(
             case.capability,
             outcome.pages,
