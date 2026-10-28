@@ -2,8 +2,19 @@
 
 Branch: `feature/foundation-phase-4`. Base: `46e0e14`. Sprint start: `85315a1`.
 
-**Status: ENGINEERING INCOMPLETE. Not accepted. Not merged. Not pushed.** Phase 4 is not declared complete. The
-remaining gaps are listed below.
+**Status (updated 2026-10-28): PHASE 4 ENGINEERING COMPLETE — READY FOR INDEPENDENT QA.** Not accepted by WDS. Not merged.
+Not pushed. Current evidence, commits and gate results are in `docs/PHASE4_CLOSURE_EVIDENCE.md`. The 2026-10-28 final
+gate: 13 steps, all passing except the documented format exceptions (step 12). Full regression: **739 passed, exit 0**.
+Commits: `cb93047` (defects D1 to D4, EML offsets) and `69aa9e8` (committed-row tests, `.gitignore`).
+
+Open items for QA and WDS, not closed by engineering: (1) the approver's identity, approval date and exact wording
+for the relayed governance decisions in `docs/GOVERNANCE_DECISION_REGISTER.md` (`P4-GOV-2026-10-28`) are not recorded;
+(2) H-DEC-3 numeric limits are provisional; (3) H-DEC-4 Windows memory containment is accepted for non-production only;
+(4) merge dependencies on Phase 3 (`0050`, lease) and Phase 2 remediation (`0044`, `0045`), recorded in §9 of the closure
+evidence, are not integrated.
+
+The earlier status below (ENGINEERING INCOMPLETE, 714 passed) describes the superseded `a3f39d6` baseline. It is kept
+for history.
 
 ## Final verification (this sprint)
 
