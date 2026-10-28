@@ -1,3 +1,21 @@
+# M2 Sprint 4: management acceptance status (updated 28 October 2026)
+
+**Status: MANAGEMENT ACCEPTED WITH CONDITIONS (S4-MGMT-ACCEPT-01). Formal gate closure is NOT claimed.**
+Bound to engineering commit `30243a3` (CI run #47, SUCCESS). Earlier conditional engineering acceptance (`58d1a39`, CI #36) is preserved.
+
+| Condition | Owner | Closure criterion | State |
+|---|---|---|---|
+| 1. PG independence declaration, detailed review record, attestation | PG | PG's own signed record in the repository | PENDING |
+| 2. Final CI against the accepted SHA | Engineering | Passing run on the bound commit | VERIFIED for `30243a3` (run #47) |
+| 3. Acceptance-criteria reconciliation approved | WDS | Explicit WDS approval recorded; labelled proposed, not original | PENDING WDS APPROVAL |
+| 4. Platform-documentation and coverage limits | Engineering | Limits recorded in coverage report | RECORDED (`REAL_EVIDENCE_COVERAGE_2026-10-28.md`) |
+| 5. Real investigations within approved boundaries | Engineering and WDS | Each source separately approved and activated | PARTIAL: WooCommerce and BigCommerce pilot only |
+| 6. Shopify 55-pair human relevance evaluation | Independent qualified reviewer named by WDS | 55 genuine labels | 0 OF 55, OPEN |
+
+Remediation: NO DEFECT REMEDIATION REQUIRED based on the reported QA findings. Independent closure pending verification of PG's actual record.
+
+---
+
 # M2 Sprint 4: engineering acceptance with conditions (28 October 2026)
 
 **Status: ENGINEERING ACCEPTED WITH CONDITIONS. FORMAL GATE CLOSURE PENDING.**

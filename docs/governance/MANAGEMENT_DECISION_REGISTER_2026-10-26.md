@@ -131,3 +131,13 @@ Source: WDS Authorized Approver, chat, 28 October 2026. Pilot engineering commit
 - **Decision B APPROVED (WooCommerce):** Store API products page retained within the pilot boundary. Version applicability: UNKNOWN. No version inferred from another page. Variation pricing not reported as verified. The Page Not Found response (HTTP 200) is excluded from evidence.
 - **Activation:** only WooCommerce docs and the BigCommerce product page are active. No boundary was expanded.
 - **Not granted:** PG review, frozen acceptance criteria, Shopify human labels, live LLM use, production integration.
+
+## M2 Sprint 4 management acceptance with conditions (28 October 2026, chat)
+Source: WDS Authorized Approver, chat, 28 October 2026. Bound to engineering commit `30243a3`, CI run #47 (`specialist-ci`, SUCCESS on `30243a3`). Prior CI: run #46 SUCCESS on `5e07783`, run #45 SUCCESS on `8c65b88`.
+- **S4-MGMT-ACCEPT-01 APPROVED:** M2 Sprint 4 formally accepted by management with conditions. Scope: shared investigation engine; seven-specialist adapter integration and conformance; specialist specification packages and knowledge assets; controlled retrieval infrastructure; approved WooCommerce and BigCommerce pilot; source-boundary and workspace enforcement; deterministic clarification, unknown and refusal handling; capability-scoped evidence; passage-level citations and provenance metadata; regression, security and conformance tests.
+- **Status recorded:** M2 SPRINT 4 — MANAGEMENT ACCEPTED WITH CONDITIONS.
+- **S4-QA-02 (management-confirmed, not PG's personal record):** PG reported successful functionality and no defects. WDS management confirms the report. PG personal independence declaration, detailed review record and attestation: NOT IN REPOSITORY, PENDING.
+- **Remediation:** NO DEFECT REMEDIATION REQUIRED based on the reported QA findings. Independent closure pending verification of PG's actual record.
+- **Conditions open:** (1) PG personal independence and QA attestation evidence; (2) verify final CI against the accepted engineering SHA (verified: run #47 on `30243a3`); (3) approve the proposed acceptance-criteria reconciliation, not represented as the original frozen document; (4) preserve platform-documentation and capability-coverage limits; (5) real investigations only within separately approved boundaries; (6) Shopify 55-pair human relevance evaluation, 0 of 55, and other historical gates.
+- **Sprint 5:** readiness and transition preparation authorized. Formal commencement remains subject to the mandatory transition gates and a reconciled scope.
+- Standing: no live LLM; production blocked (QA-07); no source expansion; frozen four-milestone, nine-sprint baseline preserved.
