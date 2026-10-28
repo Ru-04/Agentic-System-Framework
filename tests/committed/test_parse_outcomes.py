@@ -15,7 +15,9 @@ Uses the session database and administrators from conftest.py. The rows are comm
 from __future__ import annotations
 
 import json
+import struct
 import uuid
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -458,3 +460,138 @@ def test_an_upload_one_byte_above_the_maximum_is_refused_at_admission_with_413(
             data=b"x" * (limits.MAX_INPUT_BYTES + 1),
         )
     assert (refused.value.status, refused.value.reason) == (413, "too_large")
+
+
+def _pdf_with_objects(objects: dict[int, bytes]) -> bytes:
+    """Classic-xref PDF for committed fixtures: nested forms and expanding inputs (QA-05, QA-06)."""
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: dict[int, int] = {}
+    for number in sorted(objects):
+        offsets[number] = len(out)
+        out += f"{number} 0 obj\n".encode() + objects[number] + b"\nendobj\n"
+    xref = len(out)
+    size = max(objects) + 1
+    out += f"xref\n0 {size}\n0000000000 65535 f \n".encode()
+    for number in range(1, size):
+        out += (
+            f"{offsets[number]:010d} 00000 n \n".encode()
+            if number in offsets
+            else b"0000000000 65535 f \n"
+        )
+    out += f"trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
+
+
+def _nested_form_pdf(extra_page_text: bool) -> bytes:
+    """A page calling form 6, which calls form 7, which holds text. Optionally with page text."""
+    page_text = b"BT /F1 12 Tf (page text) Tj ET " if extra_page_text else b""
+    form_inner = b"BT (nested hidden text) Tj ET"
+    return _pdf_with_objects(
+        {
+            1: b"<< /Type /Catalog /Pages 2 0 R >>",
+            2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            3: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            b"/Resources << /XObject << /Fm0 6 0 R >> /Font << /F1 5 0 R >> >> >>",
+            4: b"<< /Length %d >>\nstream\n" % len(b"q /Fm0 Do Q " + page_text)
+            + b"q /Fm0 Do Q "
+            + page_text
+            + b"\nendstream",
+            5: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            6: b"<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] "
+            b"/Resources << /XObject << /Fm1 7 0 R >> >> /Length 7 >>\nstream\n/Fm1 Do\nendstream",
+            7: b"<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length %d >>\n"
+            b"stream\n%s\nendstream" % (len(form_inner), form_inner),
+        }
+    )
+
+
+def test_qa06_a_committed_nested_form_text_is_unsupported_with_its_region_as_metadata(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    """QA-06 on committed rows: text two levels inside forms is never dropped. The page is flagged,
+    and zero committed segments give unsupported with the region kept as metadata, never partial."""
+    _admin, analyst, project, store = setup
+    _, version = _upload(
+        committed_engine,
+        store,
+        analyst,
+        project,
+        mime=PDF,
+        filename="nested.pdf",
+        data=_nested_form_pdf(extra_page_text=False),
+    )
+    assert _parse(committed_engine, store, version) == "unsupported"
+    assert _committed_state(committed_engine, version) == {
+        "status": "unsupported",
+        "error": {"class": "unsupported", "unextractable_regions": ["pdf_page:1"]},
+        "segments": 0,
+    }
+
+
+def test_qa06_a_committed_mixed_page_is_partial_with_its_segment_and_its_flag(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    _admin, analyst, project, store = setup
+    _, version = _upload(
+        committed_engine,
+        store,
+        analyst,
+        project,
+        mime=PDF,
+        filename="mixed.pdf",
+        data=_nested_form_pdf(extra_page_text=True),
+    )
+    assert _parse(committed_engine, store, version) == "partial"
+    state = _committed_state(committed_engine, version)
+    assert state["status"] == "partial"
+    assert state["error"] == {"class": "partial", "flagged_regions": ["pdf_page:1"]}
+    assert state["segments"] == 1
+
+
+def _xref_stream_bomb(padding: int) -> bytes:
+    """A file whose cross-reference stream expands by ``padding`` bytes on open."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
+    ]
+    out = bytearray(b"%PDF-1.5\n")
+    offsets: dict[int, int] = {}
+    for index, obj in enumerate(objects, start=1):
+        offsets[index] = len(out)
+        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    content = b"BT ET"
+    offsets[4] = len(out)
+    out += (
+        f"4 0 obj\n<< /Length {len(content)} >>\nstream\n".encode()
+        + content
+        + b"\nendstream\nendobj\n"
+    )
+    rows = b"".join(
+        [struct.pack(">BIH", 0, 0, 65535)]
+        + [struct.pack(">BIH", 1, offsets[index], 0) for index in (1, 2, 3, 4)]
+    )
+    xref_offset = len(out)
+    rows += struct.pack(">BIH", 1, xref_offset, 0)
+    compressed = zlib.compress(rows + b" " * padding, 9)
+    out += (
+        b"5 0 obj\n<< /Type /XRef /Size 6 /W [1 4 2] /Root 1 0 R /Filter /FlateDecode "
+        b"/Length %d >>\nstream\n" % len(compressed)
+    )
+    out += compressed + b"\nendstream\nendobj\n"
+    out += b"startxref\n%d\n%%%%EOF\n" % xref_offset
+    return bytes(out)
+
+
+def test_qa05_a_committed_expanding_pdf_is_refused_at_admission_before_any_parse(
+    committed_engine: Engine, setup: Setup
+) -> None:
+    """Admission opens the file under the same meter, so the expansion is refused there.
+    No source version is created for it."""
+    _admin, analyst, project, store = setup
+    bomb = _xref_stream_bomb(60 * 1024 * 1024)
+    assert len(bomb) < 200 * 1024
+    with pytest.raises(IngestError) as refused:
+        _upload(committed_engine, store, analyst, project, mime=PDF, filename="bomb.pdf", data=bomb)
+    assert refused.value.status == 422
+    assert refused.value.reason in ("archive_ratio_limit", "archive_size_limit")
