@@ -19,6 +19,7 @@ the refusal list and never cited.
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -119,6 +120,8 @@ class Citation:
     version: str | None
     digest: str
     shared: bool
+    # Hash of the one passage (sentence) that contains every required term. Empty if not set.
+    passage_digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -158,9 +161,17 @@ def _authorization_violation(
     return None
 
 
-def _contains_all(text: str, terms: Sequence[str]) -> bool:
-    lowered = text.lower()
-    return all(term.lower() in lowered for term in terms)
+def _matching_passage(text: str, terms: Sequence[str]) -> str | None:
+    """The first sentence that contains every required term, or None.
+
+    Terms must share one sentence. Terms spread across a page (for example "variation" in one
+    paragraph and "price" in another) do not support a capability claim.
+    """
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        lowered = sentence.lower()
+        if sentence.strip() and all(term.lower() in lowered for term in terms):
+            return sentence.strip()
+    return None
 
 
 def investigate(
@@ -240,7 +251,8 @@ def investigate(
         if page.version != requested_version:
             version_mismatch = True
             continue
-        if not _contains_all(page.text, capability.required_terms):
+        passage = _matching_passage(page.text, capability.required_terms)
+        if passage is None:
             continue
         if not page.synthetic and key not in ACTIVE_BOUNDARIES:
             refusals.append("evidence-backed retrieval is not active for this source")
@@ -252,6 +264,7 @@ def investigate(
                 version=page.version,
                 digest=page.digest(),
                 shared=page.edition is Edition.SHARED,
+                passage_digest=hashlib.sha256(passage.encode("utf-8")).hexdigest(),
             )
         )
 

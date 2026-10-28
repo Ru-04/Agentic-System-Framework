@@ -116,6 +116,33 @@ PROVIDER_ACTIONS: Final[frozenset[str]] = frozenset(
 FEASIBILITY_UNKNOWN: Final = "feasibility is not determined by this specialist"
 
 
+@dataclass(frozen=True)
+class Coverage:
+    """What an approved source establishes for a capability, and what it does not.
+
+    A narrow finding must never be reported as blanket capability support. ``verified_scope``
+    is the only claim a cited finding may make. ``partial`` and ``unknown`` are reported alongside.
+    """
+
+    verified_scope: str
+    partial: str
+    unknown: tuple[str, ...]
+
+
+# Decision S4-PILOT-EVIDENCE-01 (28 Oct 2026). The capability definition in CATALOG is unchanged.
+COVERAGE: Final[dict[tuple[SpecialistId, str], Coverage]] = {
+    (SpecialistId.BIGCOMMERCE, "product catalog read"): Coverage(
+        verified_scope=(
+            "verified by approved pilot evidence only for single-product retrieval through the "
+            "documented v3 product endpoint"
+        ),
+        partial="broader product catalog reading is partially verified; only single-product "
+        "retrieval is established",
+        unknown=("product listing and searching", "other catalog operations"),
+    ),
+}
+
+
 class Decision(StrEnum):
     """Outcome of the requirement check. Each is a deterministic rule, not a confidence score."""
 
@@ -247,20 +274,32 @@ class InvestigationProvider:
             elif result.outcome is Outcome.VERIFIED_SUPPORT:
                 # Only an activated boundary reaches this branch. The citation names the approved
                 # page and its content hash, so the claim can be checked against the page.
+                coverage = COVERAGE.get((self.specialist, capability.name))
                 for citation in result.citations:
+                    # A finding states only what the cited passage establishes (scope limits apply).
+                    scope = (
+                        coverage.verified_scope
+                        if coverage
+                        else "supported by an approved official page for the stated version"
+                    )
                     findings.append(
                         {
-                            "statement": f"{capability.name}: supported by an approved official "
-                            "page for the stated version.",
+                            "statement": f"{capability.name}: {scope}.",
                             "evidence_status": "cited",
                             "evidence_refs": [
                                 {
                                     "workspace_id": request.workspace_id,
                                     "source_id": f"approved:{citation.url}",
-                                    "locator": citation.digest,
+                                    "locator": citation.passage_digest or citation.digest,
                                 }
                             ],
                         }
+                    )
+                if coverage:
+                    unknowns.append(f"[PARTIAL] {capability.name}: {coverage.partial}")
+                    unknowns.extend(
+                        f"[UNKNOWN] {capability.name}: {item} not established"
+                        for item in coverage.unknown
                     )
             elif result.outcome is Outcome.REFUSED:
                 # Sanitized: the refused source, URL and page text are never echoed back.

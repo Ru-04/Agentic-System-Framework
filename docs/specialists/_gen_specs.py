@@ -142,7 +142,7 @@ SPECS: dict[SpecialistId, dict[str, object]] = {
         ),
         overview=(
             "WordPress core: no approved source. WooCommerce: approved boundary "
-            "developer.woocommerce.com /docs/* and /guides/* (inactive)."
+            "developer.woocommerce.com /docs/* and /guides/* (pilot-active since 28 Oct 2026). The Store API products page is retrieved, states no version, and has no single sentence with both variation and price, so variation pricing is UNKNOWN from it."
         ),
         arch=P + " Plugin and theme architecture: WordPress core documentation is not approved.",
         ecosystem=P,
@@ -186,14 +186,14 @@ SPECS: dict[SpecialistId, dict[str, object]] = {
         ),
         overview=(
             "Approved boundary: docs.bigcommerce.com /developer/docs/* and one exact product-catalog "
-            "page (inactive)."
+            "page (pilot-active since 28 Oct 2026). Pilot status (S4-PILOT-EVIDENCE-01): single-product retrieval through the v3 product endpoint VERIFIED BY APPROVED PILOT EVIDENCE; broader product catalog reading PARTIALLY VERIFIED; product listing and searching UNKNOWN; other catalog operations UNKNOWN."
         ),
         arch=P,
         ecosystem=P,
         extension=P,
         apis=(
-            "Single product read on the approved exact page. List endpoint: " + U + " until its "
-            "page is approved. API version shown on the page: v3 (per the scenarios document)."
+            "Single-product retrieval through the v3 product endpoint: VERIFIED BY APPROVED PILOT EVIDENCE only. Listing and searching: " + U + ". "
+            "API version shown on the page: v3."
         ),
         data=P,
         integrations=P,

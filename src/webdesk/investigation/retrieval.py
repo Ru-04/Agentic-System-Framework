@@ -103,6 +103,10 @@ def retrieve_approved_pages(
         if raw is None:
             continue
         text = _text_from_html(raw) if _LOOKS_LIKE_HTML.search(raw) else raw
+        if _is_not_found(text):
+            # A 200 response whose body is a not-found page is not documentation. Excluded.
+            records.append(FetchRecord(FetchStatus.UNAVAILABLE, "page not found; not usable"))
+            continue
         if flag_instruction_like(text):
             records.append(
                 FetchRecord(FetchStatus.QUARANTINED, "instruction-like content was quarantined")
@@ -162,3 +166,15 @@ def _decode(body: bytes, records: list[FetchRecord]) -> str | None:
     except UnicodeDecodeError:
         records.append(FetchRecord(FetchStatus.REFUSED, "document is not valid UTF-8"))
         return None
+
+
+# Not-found bodies that some vendors return with HTTP 200. Matched case-insensitively.
+_NOT_FOUND_MARKERS: Final[tuple[str, ...]] = (
+    "page not found",
+    "we could not find what you were looking for",
+)
+
+
+def _is_not_found(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in _NOT_FOUND_MARKERS)
