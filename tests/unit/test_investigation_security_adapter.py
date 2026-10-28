@@ -17,7 +17,12 @@ MAGENTO_NOTES = (
 )
 
 
-def _request(specialist: SpecialistId, *, workspace: str = WS) -> AdapterRequest:
+def _request(
+    specialist: SpecialistId,
+    *,
+    workspace: str = WS,
+    task: str = "product variation pricing for the store",
+) -> AdapterRequest:
     return AdapterRequest.model_validate(
         {
             "adapter_contract_version": "0.2",
@@ -28,7 +33,7 @@ def _request(specialist: SpecialistId, *, workspace: str = WS) -> AdapterRequest
             "capability_id": canonical_capability(specialist),
             "requirement_ids": ["REQ-SYN-1"],
             "evidence_refs": [],
-            "task": "product variation pricing for the store",
+            "task": task,
             "allowed_actions": ["read_evidence"],
             "operator_confirmed": True,
         }
@@ -57,9 +62,15 @@ def _page(
     )
 
 
-def _run(specialist: SpecialistId, pages: tuple[Page, ...], workspace: str = WS) -> AdapterResponse:
+def _run(
+    specialist: SpecialistId,
+    pages: tuple[Page, ...],
+    workspace: str = WS,
+    task: str = "product variation pricing for the store",
+) -> AdapterResponse:
     return call_adapter(
-        InvestigationProvider(specialist, pages, "1.0"), _request(specialist, workspace=workspace)
+        InvestigationProvider(specialist, pages, "1.0"),
+        _request(specialist, workspace=workspace, task=task),
     )
 
 
@@ -85,7 +96,9 @@ def test_redirect_from_a_magento_devdocs_page_is_not_cited() -> None:
         edition=Edition.MAGENTO_OPEN_SOURCE,
         final_url="https://developer.adobe.com/commerce/",
     )
-    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (page,))
+    response = _run(
+        SpecialistId.MAGENTO_ADOBE_COMMERCE, (page,), task="release history for this version"
+    )
     assert all("release history" not in f.statement for f in response.findings)
 
 
@@ -99,7 +112,9 @@ def test_magento_release_notes_never_support_a_feature_claim_through_the_adapter
         platform="magento_open_source",
         edition=Edition.MAGENTO_OPEN_SOURCE,
     )
-    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (page,))
+    response = _run(
+        SpecialistId.MAGENTO_ADOBE_COMMERCE, (page,), task="release history catalog import"
+    )
     assert all("catalog import" not in f.statement for f in response.findings)
     assert any(
         "catalog import" in unknown and "unsupported_source" in unknown
@@ -165,7 +180,7 @@ def test_version_mismatch_is_reported_as_unknown_not_as_support() -> None:
 def test_shift4shop_source_unavailable_is_an_explicit_unknown_with_reason() -> None:
     response = call_adapter(
         InvestigationProvider(SpecialistId.SHIFT4SHOP, (), "1.0"),
-        _request(SpecialistId.SHIFT4SHOP),
+        _request(SpecialistId.SHIFT4SHOP, task="product read API"),
     )
     assert response.status == "incomplete"
     assert response.findings == ()
@@ -173,15 +188,19 @@ def test_shift4shop_source_unavailable_is_an_explicit_unknown_with_reason() -> N
 
 
 def test_technology_neutral_specialists_have_no_platform_source_and_no_claims() -> None:
-    for specialist in (SpecialistId.STANDALONE_APPLICATIONS, SpecialistId.MIDDLEWARE_APPLICATIONS):
+    named_tasks = (
+        (SpecialistId.STANDALONE_APPLICATIONS, "application architecture selection"),
+        (SpecialistId.MIDDLEWARE_APPLICATIONS, "webhook delivery retry"),
+    )
+    for specialist, task in named_tasks:
         page = _page(
             "https://developer.woocommerce.com/docs/products/variations",
             "webhook delivery retry architecture catalog",
             platform="woocommerce",
         )
-        response = _run(specialist, (page,))
+        response = _run(specialist, (page,), task=task)
         assert response.findings == ()
-        assert any("feasibility is not determined" in u for u in response.unknowns)
+        assert any("unsupported_source" in u for u in response.unknowns)
 
 
 def test_every_catalog_capability_is_complete_enough_to_investigate() -> None:
