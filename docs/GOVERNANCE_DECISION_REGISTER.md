@@ -502,3 +502,58 @@ by any item in this entry.
 - The decisions above take effect for non-production engineering only. QA and any production review use this
   register, not the Phase 4 handoff, as the source for these decisions.
 - Formal WDS acceptance and production readiness are **not** claimed by this entry.
+
+## WDS-QA02-RULING-2026-10-28: partial, unsupported and failed classes (ruling recorded 2026-10-28)
+
+**Provenance.** The ruling below was relayed to the Phase 4 engineering session on 2026-10-28 in the Claude Code chat, in
+an instruction pasted by the account that holds the sales address. The approver's name, role, approval date as WDS
+records it, channel, and signature are **not recorded here and are not supplied by this entry**. The entry records the
+relayed text as the approved interpretation for engineering. It does not establish a formal WDS signature. Management must
+confirm the approver identity and date in the WDS record before formal acceptance.
+
+**Ruling (as relayed).**
+
+- A `partial` parse must contain at least one valid committed source segment and one or more flagged regions.
+- A zero-segment result must never be classified as `partial`.
+- Image-only PDF documents with no extractable text must remain `unsupported`, as ARCHITECTURE.md and EVAL-F14b(c) require.
+- HTML-only EML documents with no usable extracted segments follow the approved unsupported or extraction classification.
+- Unextractable-region diagnostics are preserved through a schema-compliant failure or metadata representation, not by
+  redefining `partial`.
+- The authoritative specification takes precedence over any conflicting implementation test or provisional decision
+  entry.
+
+**Source of the requirement.** REQUIREMENT_SCHEMA.md section 4 (the partial definition, line 105), ARCHITECTURE.md section 13
+(image-only PDF, line 260), and EVAL-F14b in EVALUATION_PLAN.md.
+
+**Implementation (commit `8d5b039`).**
+
+- `partial` only when at least one committed segment and at least one flagged region exist.
+- Zero segments: `unsupported`. Flagged regions are kept as `parse_error = {"class": "unsupported",
+  "unextractable_regions": [...]}`. The key is different from `flagged_regions` so no reader can take it for partial.
+- `failed` is raised as `ParserFailure` and never returned as a status.
+
+**Supersedes** the wording of P4-GOV-2026-10-28, H-DEC-6, "retaining flagged-region details even where no text segment is
+produced" as a `partial` result. The region is retained as `unsupported` metadata.
+
+## P4-GOV-2026-10-28 amendments (2026-10-28)
+
+- **EML and TXT offsets:** the approved schema field names are `start_offset` and `end_offset`
+  (REQUIREMENT_SCHEMA.md section 4.2). Earlier `char_start`/`char_end` keys are replaced. The semantics are unchanged:
+  zero-based, end-exclusive code points, relative to the normalized text (NFC, surrounding whitespace removed).
+- **H-DEC-3, input limit:** the parser input limit is the approved upload maximum of 20 MiB (ARCHITECTURE.md section 13),
+  the same unit and boundary as upload (`storage.MAX_BYTES`). The earlier proposed 25 MiB is withdrawn. Migration 0007 also
+  bounds `file_size_bytes` to 1..20971520.
+- **H-DEC-3, PDF expansion (new provisional application of H-31, QA-05):** before a PDF reader opens a file, every zlib-coded
+  stream is decoded with an output bound. The total decoded size is limited to `MAX_ARCHIVE_UNCOMPRESSED_BYTES` (100 MiB) and
+  the ratio to file size to `MAX_ARCHIVE_RATIO` (100). LZW and RunLength filters are refused. These values are provisional,
+  like the other H-DEC-3 values. This bounds decoded size. It does not provide a memory cap on Windows (H-DEC-4).
+- **H-DEC-4:** unchanged. Non-production containment only. Production requires a separate decision.
+- **H-DEC-5:** unchanged (table-cell extension). Nested tables remain flagged, not extracted.
+- **H-DEC-6:** amended as stated above. HTML-only email with no subject: `unsupported` with `unextractable_regions`.
+  HTML-only email with a subject: `partial`, beside the subject segment.
+
+## Corrections of earlier wording (2026-10-28)
+
+- The plan status line in `docs/INCREMENT_3_HARDENING_PLAN.md` said "Approved as the non-production engineering baseline".
+  That overstated the record. It now states that the approval is relayed and its provenance is incomplete.
+- The 120 s parser-timeout lease reference cites Phase 3 material that is not on this branch. It is unverified here (QA-07).

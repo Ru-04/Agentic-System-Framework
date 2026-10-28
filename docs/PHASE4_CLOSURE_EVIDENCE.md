@@ -1,5 +1,7 @@
 # Phase 4 closure evidence (2026-10-28)
 
+> Superseded in part on 2026-10-28 by `docs/PHASE4_QA_REMEDIATION.md` (commit `8d5b039`). Partial status, offset names, input limit and expansion checks are updated there. Earlier text below is kept for history.
+
 Branch `feature/foundation-phase-4`. Baseline `a3f39d6`. Defect and offset commit `cb93047`. Committed-row tests and
 `.gitignore` commit `69aa9e8`. This document is engineering evidence. It is not formal WDS acceptance and not a
 production-readiness claim.

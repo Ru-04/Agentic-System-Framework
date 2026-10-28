@@ -2,7 +2,7 @@
 
 Branch: `feature/foundation-phase-4`. Base: `46e0e14`. Sprint start: `85315a1`.
 
-**Status (updated 2026-10-28): PHASE 4 ENGINEERING COMPLETE — READY FOR INDEPENDENT QA.** Not accepted by WDS. Not merged.
+**Status (updated 2026-10-28, after QA remediation): PHASE 4 REMEDIATION COMPLETE — PENDING INDEPENDENT QA RE-TEST.** Remediation record: `docs/PHASE4_QA_REMEDIATION.md` (commit `8d5b039`). Not accepted by WDS. Not merged.
 Not pushed. Current evidence, commits and gate results are in `docs/PHASE4_CLOSURE_EVIDENCE.md`. The 2026-10-28 final
 gate: 13 steps, all passing except the documented format exceptions (step 12). Full regression: **739 passed, exit 0**.
 Commits: `cb93047` (defects D1 to D4, EML offsets) and `69aa9e8` (committed-row tests, `.gitignore`).

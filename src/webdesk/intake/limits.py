@@ -4,8 +4,9 @@ The numeric values are proposals under H-DEC-3 and await WDS selection. They are
 any change is visible in review. Each breach fails the version with the stable class named here; a
 breach never produces partial text.
 
-``PARSER_TIMEOUT_SECONDS`` must stay below the Phase 3 job lease (120 s; not merged on this
-branch, see docs/PHASE4_DEPENDENCY_REGISTER.md) so that a parser cannot outlive its claim.
+``PARSER_TIMEOUT_SECONDS`` must stay below the Phase 3 job lease. That lease is cited as 120 s in
+Phase 3 material not on this branch, so the ordering is unverified (QA-07). See
+docs/PHASE4_DEPENDENCY_REGISTER.md. A parser must not outlive its claim.
 ``MEMORY_CAP_ENFORCED`` records the platform fact behind H-DEC-4: the address-space cap applies on
 POSIX only. On Windows the process timeout and the file-size pre-check are the only enforced bounds
 (approved for non-production under P4-GOV-2026-10-28; a separate decision is needed for production).
