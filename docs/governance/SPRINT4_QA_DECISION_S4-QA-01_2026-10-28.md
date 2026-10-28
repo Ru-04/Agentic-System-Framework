@@ -26,3 +26,9 @@
 3. PG's personal attestation.
 4. Documented delivery of the QA package to PG.
 5. Real-investigation and source-activation gates in the acceptance request.
+
+## Update (28 October 2026): management acceptance with conditions
+
+- WDS management confirms that PG reported successful functionality and no defects (S4-QA-02). This is management's confirmation of PG's reported outcome. It is not PG's signature, independence declaration or authenticated QA record.
+- PG personal independence declaration, detailed review record and attestation: PENDING, not in the repository. Not fabricated.
+- Remediation: NO DEFECT REMEDIATION REQUIRED based on the reported findings. Independent closure pending verification.
