@@ -1,0 +1,44 @@
+{
+  "run_at": "2026-10-28T11:40:18.232228+00:00",
+  "approval": "WDS pilot approval, 28 Oct 2026 (chat)",
+  "user_agent": "WebDesk-pilot/1.0 (read-only; WDS approval 28 Oct 2026)",
+  "results": [
+    {
+      "case": "woocommerce_store_api_products",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "content_sha256": "d64e161a84a71edbeda10dda9901131262176e2fa3dcbdd4fea53fa29e13a65e",
+          "source_id": "woocommerce_docs",
+          "retrieved_at": "2026-10-28T11:40:18.232228+00:00"
+        }
+      ],
+      "outcome": "unknown_support",
+      "citations": [],
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "bigcommerce_get_product",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "content_sha256": "f321bcd66ab6378c0ae93d02820169377c93efbfca9a1708459dddb34eb19559",
+          "source_id": "bigcommerce_docs_product_page",
+          "retrieved_at": "2026-10-28T11:40:18.232228+00:00"
+        }
+      ],
+      "outcome": "verified_support",
+      "citations": [
+        "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product"
+      ],
+      "unknowns": [],
+      "refusals": []
+    }
+  ]
+}

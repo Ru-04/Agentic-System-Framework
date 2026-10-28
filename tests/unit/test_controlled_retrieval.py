@@ -75,8 +75,18 @@ def _retrieve(
 
 
 def test_inactive_source_makes_no_request_even_with_a_transport() -> None:
+    # Adobe Commerce is approved but not in the pilot, so it stays inactive.
     recorder = Recorder()
-    outcome = _retrieve([APPROVED], recorder)
+    outcome = retrieve_approved_pages(
+        platform="adobe_commerce",
+        edition=Edition.ADOBE_COMMERCE,
+        urls=["https://developer.adobe.com/commerce/webapi/rest/"],
+        workspace_id=WS,
+        version="1.0",
+        opener=recorder,
+        source_id="adobe_commerce_exact_pages",
+        now=NOW,
+    )
     assert recorder.calls == []
     assert outcome.pages == ()
     assert outcome.count(FetchStatus.INACTIVE) == 1

@@ -116,3 +116,11 @@ Source: WDS Authorized Approver, chat, 28 October 2026. Bound to engineering com
 - **S4-QA-01 (cross-reference):** PG QA reported PASS, no defects, confirmed by WDS management. PG personal evidence PENDING VERIFICATION.
 - **Sprint 5:** WDS authorizes preparation for M2 Sprint 5 — Specialist Evaluations. Formal Sprint 5 commencement is not claimed until the applicable transition gates are satisfied.
 - Standing: no live LLM; production blocked (QA-07); no unapproved retrieval; no source active; no protected-branch merge.
+
+## S4-SOURCE-OWNERSHIP-01 and controlled retrieval pilot (28 October 2026, chat)
+Source: WDS Authorized Approver, chat, 28 October 2026.
+- **S4-SOURCE-OWNERSHIP-01 APPROVED:** read-only, browser-based publisher-control checks of WooCommerce, BigCommerce, Adobe Commerce exact pages and the Magento Open Source release notes. Recorded in `SOURCE_OWNERSHIP_VERIFICATION_2026-10-28.md`. Result: publisher control shown for WooCommerce, BigCommerce and Magento release notes, and for one Adobe page. No owner statement found.
+- **PILOT APPROVED:** controlled read-only retrieval pilot for two sources only: WooCommerce docs (`/docs/*`, within the approved boundary) and the BigCommerce exact product page. Activated in `ACTIVE_BOUNDARIES`. Results in `SOURCE_PILOT_RESULTS_2026-10-28.json`.
+- **Pilot outcome, recorded as observed:** WooCommerce Store API products page fetched; outcome UNKNOWN (no version stated on the page). BigCommerce product page fetched; outcome VERIFIED for "product catalog read" as a single-product read, version `v3` taken from the page path.
+- **Not activated:** Adobe Commerce, Magento Open Source release notes, shared PHP, Shopify, Shift4Shop, WordPress core, Standalone, Middleware.
+- **Not granted:** PG review, frozen acceptance criteria, Shopify human labels, any expansion of approved boundaries.
