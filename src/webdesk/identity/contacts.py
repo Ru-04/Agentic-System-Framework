@@ -7,7 +7,8 @@ Administrator, withdrawal and contact-transition rules.
 
 Deliberately not in this module:
 - replacement create requests for an existing ``pending_contact_approval`` user;
-- automatic expiry sweeps (expiry is enforced at approval time by ``expires_at > now()``);
+- automatic expiry sweeps (expiry is enforced at approval time by
+  ``expires_at > clock_timestamp()``; migration 0053, F-2);
 - token issuance (T9) and login (T10).
 """
 
@@ -148,7 +149,8 @@ def request_replacement_create(
                               WHERE a.user_id = u.user_id AND a.status = 'approved') AS approved,
                       EXISTS (SELECT 1 FROM user_contact_approvals a
                               WHERE a.user_id = u.user_id AND a.request_type = 'create'
-                                AND a.status = 'pending' AND a.expires_at > now()) AS live
+                                AND a.status = 'pending'
+                                AND a.expires_at > clock_timestamp()) AS live
                FROM users u WHERE user_id = :u"""
         ),
         {"u": user_id},
@@ -187,7 +189,7 @@ def _pending_approval(
         conn.execute(
             text(
                 """SELECT user_id, requested_by_user_id, status, request_type,
-                          expires_at > now() AS live
+                          expires_at > clock_timestamp() AS live
                    FROM user_contact_approvals WHERE approval_id = :a"""
             ),
             {"a": approval_id},
