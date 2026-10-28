@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import install_administrators, new_active_user
 from tests.support.proofs import ProofNotIssued, prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
@@ -28,11 +29,6 @@ pytestmark = pytest.mark.integration
 _URL = os.environ.get("WEBDESK_TEST_DATABASE_URL")
 if _URL is None:
     pytest.skip("WEBDESK_TEST_DATABASE_URL is not set", allow_module_level=True)
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 @pytest.fixture
@@ -56,6 +52,7 @@ def _install(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref="OWNER-T11",
             owner_identity_ref="owner:test",
             authorization_digest="d" * 64,
@@ -63,7 +60,6 @@ def _install(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
         ),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
     return result.user_ids[0], result.user_ids[1], result.approval_ids[1]
@@ -110,6 +106,7 @@ def _recovery_appointment(
     result = apply_recovery(
         conn,
         RecoveryRequest(
+            authorization_expires_at=FAR_FUTURE,
             request_type="appointment",
             email=_email_of(conn, target),
             display_name="",
@@ -118,7 +115,6 @@ def _recovery_appointment(
             authorization_digest="e" * 64,
         ),
         operator_id="op-recover",
-        clock=clock if clock is not None else SystemClock(),
     )
     conn.execute(text("SET LOCAL ROLE webdesk_app"))
     return result.approval_id
@@ -187,6 +183,7 @@ def test_recovery_is_refused_with_coverage_sufficient_and_audited(conn: Connecti
         apply_recovery(
             conn,
             RecoveryRequest(
+                authorization_expires_at=FAR_FUTURE,
                 request_type="appointment",
                 email=_email_of(conn, staff),
                 display_name="",
@@ -195,7 +192,6 @@ def test_recovery_is_refused_with_coverage_sufficient_and_audited(conn: Connecti
                 authorization_digest="r" * 64,
             ),
             operator_id="op-r3",
-            clock=SystemClock(),
         )
     assert exc.value.reason == "coverage_sufficient"
     conn.execute(text("SET LOCAL ROLE NONE"))

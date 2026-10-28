@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import ProofNotIssued, prove
@@ -44,11 +45,6 @@ if _URL is None:
     pytest.skip("WEBDESK_TEST_DATABASE_URL is not set", allow_module_level=True)
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 def _email() -> str:
@@ -76,6 +72,7 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref="OWNER-GAPS",
             owner_identity_ref="owner:test",
             authorization_digest="g" * 64,
@@ -83,7 +80,6 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
         ),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
     activate_user(conn, result.user_ids[0])

@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from tests.support.activation import LIMITS, activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import _email, install_two_contacts_with_window
 from tests.support.proofs import prove
 from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
@@ -52,6 +53,7 @@ def _recover(engine: Engine, target: uuid.UUID, window: timedelta) -> uuid.UUID:
         result = apply_recovery(
             conn,
             RecoveryRequest(
+                authorization_expires_at=FAR_FUTURE,
                 request_type="appointment",
                 email=str(email),
                 display_name="",
@@ -60,7 +62,6 @@ def _recover(engine: Engine, target: uuid.UUID, window: timedelta) -> uuid.UUID:
                 authorization_digest="e" * 64,
             ),
             operator_id="op-deadline",
-            clock=_Clock(),
             activation_window=window,
         )
         return result.approval_id
@@ -191,6 +192,7 @@ def test_second_recovery_is_refused_while_a_replacement_is_reserved(
             apply_recovery(
                 conn,
                 RecoveryRequest(
+                    authorization_expires_at=FAR_FUTURE,
                     request_type="appointment",
                     email=str(email),
                     display_name="",
@@ -199,7 +201,6 @@ def test_second_recovery_is_refused_while_a_replacement_is_reserved(
                     authorization_digest="h" * 64,
                 ),
                 operator_id="op-deadline",
-                clock=_Clock(),
             )
     assert exc.value.reason == "replacement_reserved"
 
@@ -217,6 +218,7 @@ def test_replacement_recovery_creates_a_pending_activation_contact_with_an_appoi
         result = apply_recovery(
             conn,
             RecoveryRequest(
+                authorization_expires_at=FAR_FUTURE,
                 request_type="replacement",
                 email=new_email,
                 display_name="Replacement",
@@ -225,7 +227,6 @@ def test_replacement_recovery_creates_a_pending_activation_contact_with_an_appoi
                 authorization_digest="i" * 64,
             ),
             operator_id="op-deadline",
-            clock=_Clock(),
         )
     with committed_engine.begin() as conn:
         status = conn.execute(

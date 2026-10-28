@@ -10,12 +10,13 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import reserve_contact_fixture
 from webdesk.ceremony.install import InstallationError, PreparedInstall, apply_install
 
@@ -24,11 +25,6 @@ pytestmark = pytest.mark.integration
 _URL = os.environ.get("WEBDESK_TEST_DATABASE_URL")
 if _URL is None:
     pytest.skip("WEBDESK_TEST_DATABASE_URL is not set", allow_module_level=True)
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 @pytest.fixture
@@ -45,6 +41,7 @@ def conn() -> Iterator[Connection]:
 
 def _prepared(first: str, second: str) -> PreparedInstall:
     return PreparedInstall(
+        authorization_expires_at=FAR_FUTURE,
         owner_approval_ref="OWNER-APR-TEST",
         owner_identity_ref="owner:test",
         authorization_digest="a" * 64,
@@ -68,7 +65,6 @@ def test_install_creates_two_pending_activation_contacts_and_one_bootstrap_grant
         _prepared(first, second),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
 
     statuses = conn.execute(
@@ -125,7 +121,6 @@ def test_install_is_recorded_in_the_audit_log(conn: Connection) -> None:
         _prepared(first, second),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
     conn.execute(text("SET LOCAL ROLE NONE"))
     count = conn.execute(
@@ -141,9 +136,7 @@ def test_install_is_recorded_in_the_audit_log(conn: Connection) -> None:
 
 def test_second_install_is_refused_once_closed(conn: Connection) -> None:
     first, second = _fresh_emails()
-    apply_install(
-        conn, _prepared(first, second), operator_id="op-1", verifier_id="v", clock=SystemClock()
-    )
+    apply_install(conn, _prepared(first, second), operator_id="op-1", verifier_id="v")
     other_first, other_second = _fresh_emails()
     with pytest.raises(InstallationError) as exc:
         apply_install(
@@ -151,7 +144,6 @@ def test_second_install_is_refused_once_closed(conn: Connection) -> None:
             _prepared(other_first, other_second),
             operator_id="op-1",
             verifier_id="v",
-            clock=SystemClock(),
         )
     assert exc.value.reason == "install_already_closed"
 
@@ -166,16 +158,13 @@ def test_reserved_contact_refuses_the_whole_install(conn: Connection) -> None:
             _prepared(taken, free),
             operator_id="op-1",
             verifier_id="v",
-            clock=SystemClock(),
         )
     assert exc.value.reason == "database_refused"
 
 
 def test_activation_deadline_is_24_hours_after_contact_approval(conn: Connection) -> None:
     first, second = _fresh_emails()
-    result = apply_install(
-        conn, _prepared(first, second), operator_id="op-1", verifier_id="v", clock=SystemClock()
-    )
+    result = apply_install(conn, _prepared(first, second), operator_id="op-1", verifier_id="v")
     window, approvals_expire_at_deadline = conn.execute(
         text(
             """SELECT c.activation_deadline - c.started_at,

@@ -34,6 +34,7 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import NullPool
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.rbac.assign import assign_role
@@ -156,6 +157,7 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
         result = apply_install(
             conn,
             PreparedInstall(
+                authorization_expires_at=FAR_FUTURE,
                 owner_approval_ref=f"OWNER-{uuid.uuid4().hex[:8]}",
                 owner_identity_ref="owner:test",
                 authorization_digest="s" * 64,
@@ -163,7 +165,6 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
             ),
             operator_id="op-committed",
             verifier_id="verifier-committed",
-            clock=_Clock(),
         )
         conn.execute(text("RESET ROLE"))
         activate_user(conn, result.user_ids[0])

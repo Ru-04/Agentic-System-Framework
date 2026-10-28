@@ -8,7 +8,6 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +17,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import active_user
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
@@ -35,11 +35,6 @@ pytestmark = pytest.mark.integration
 _URL = os.environ.get("WEBDESK_TEST_DATABASE_URL")
 if _URL is None:
     pytest.skip("WEBDESK_TEST_DATABASE_URL is not set", allow_module_level=True)
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 def _email() -> str:
@@ -67,6 +62,7 @@ def _setup(conn: Connection, project_class: str = "internal") -> dict[str, uuid.
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref="OWNER-F02",
             owner_identity_ref="owner:test",
             authorization_digest="f" * 64,
@@ -74,7 +70,6 @@ def _setup(conn: Connection, project_class: str = "internal") -> dict[str, uuid.
         ),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
     activate_user(conn, result.user_ids[0])
@@ -187,9 +182,7 @@ def test_an_analyst_cannot_reassess_and_the_refusal_is_audited(
         )
     assert exc.value.reason == "proof_permission_not_held"
     denied = conn.execute(
-        text(
-            "SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'"
-        )
+        text("SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'")
     ).scalar_one()
     assert denied == 1
 

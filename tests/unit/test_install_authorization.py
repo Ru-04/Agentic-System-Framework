@@ -27,11 +27,6 @@ from webdesk.config import Settings
 NOW = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
 
 
-class FixedClock:
-    def now(self) -> datetime:
-        return NOW
-
-
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
@@ -98,7 +93,7 @@ def test_valid_authorization_prepares_two_normalized_contacts(
 ) -> None:
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
-    prepared = prepare_install(_settings(public), path, FixedClock())
+    prepared = prepare_install(_settings(public), path)
     assert prepared.contacts == (
         ("ada@wds-test.example", "Ada"),
         ("grace@wds-test.example", "Grace"),
@@ -115,7 +110,7 @@ def test_tampered_payload_is_refused(
     document["payload"]["contacts"][1]["email"] = "mallory@wds-test.example"
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        prepare_install(_settings(public), path)
     assert exc.value.reason == "signature_invalid"
 
 
@@ -126,19 +121,21 @@ def test_signature_from_another_key_is_refused(
     impostor = Ed25519PrivateKey.generate()
     path = _write(tmp_path, impostor, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        prepare_install(_settings(public), path)
     assert exc.value.reason == "signature_invalid"
 
 
-def test_expired_authorization_is_refused(
+def test_preparation_reads_the_signed_expiry_but_does_not_decide_it(
     tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path]
 ) -> None:
+    """D-3: the expiry decision is taken by the database clock inside the installation transaction
+    (tests/committed/test_authorization_expiry.py). Preparation never refuses on an application
+    clock."""
     private, public = owner_key
     stale = _payload(expires_at=(NOW - timedelta(minutes=1)).isoformat())
     path = _write(tmp_path, private, stale)
-    with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
-    assert exc.value.reason == "authorization_expired"
+    prepared = prepare_install(_settings(public), path)
+    assert prepared.authorization_expires_at == NOW - timedelta(minutes=1)
 
 
 def test_identical_contacts_are_refused(
@@ -151,7 +148,7 @@ def test_identical_contacts_are_refused(
     ]
     path = _write(tmp_path, private, _payload(contacts=same))
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        prepare_install(_settings(public), path)
     assert exc.value.reason == "contacts_not_distinct"
 
 
@@ -161,7 +158,7 @@ def test_exactly_two_contacts_are_required(
     private, public = owner_key
     path = _write(tmp_path, private, _payload(contacts=[{"email": "ada@wds-test.example"}]))
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        prepare_install(_settings(public), path)
     assert exc.value.reason == "exactly_two_contacts_required"
 
 
@@ -177,16 +174,14 @@ def test_contact_outside_allowlist_is_refused(
     )
     path = _write(tmp_path, private, bad)
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        prepare_install(_settings(public), path)
     assert exc.value.reason == "contact_refused:domain_not_allowed"
 
 
 def test_missing_owner_key_fails_closed_before_reading_anything(tmp_path: Path) -> None:
     path = tmp_path / "does-not-matter.json"
     with pytest.raises(InstallationError) as exc:
-        prepare_install(
-            _settings(tmp_path / "absent.pem", owner_public_key_path=None), path, FixedClock()
-        )
+        prepare_install(_settings(tmp_path / "absent.pem", owner_public_key_path=None), path)
     assert exc.value.reason.startswith("configuration_incomplete")
     assert "WEBDESK_OWNER_PUBLIC_KEY_PATH" in exc.value.reason
 
@@ -197,7 +192,7 @@ def test_missing_allowlist_fails_closed(
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public, email_domain_allowlist=None), path, FixedClock())
+        prepare_install(_settings(public, email_domain_allowlist=None), path)
     assert "WEBDESK_EMAIL_DOMAIN_ALLOWLIST" in exc.value.reason
 
 
