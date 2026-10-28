@@ -261,6 +261,27 @@ def test_segment_text_over_the_contract_limit_is_refused() -> None:
         client.segments(VERSION)
 
 
+def test_a_segment_page_naming_another_source_version_is_refused() -> None:
+    other_version = "55555555-5555-4555-8555-555555555555"
+    page = {
+        "contract": "ai-read/v1",
+        "source_version_id": other_version,
+        "items": [],
+        "next_cursor": None,
+    }
+    client, _ = client_for({f"{BASE}/source-versions/{VERSION}/segments": ok(page)})
+    with pytest.raises(AiReadRefused, match="different source version"):
+        client.segments(VERSION)
+
+
+def test_an_expired_or_revoked_credential_is_refused_even_with_a_contract_body() -> None:
+    # A 401 must never be read as data, whatever body accompanies it (contract section 9).
+    body = json.dumps(run_payload()).encode("utf-8")
+    client, _ = client_for({f"{BASE}": AiReadResponse(401, CONTRACT_HEADERS, body)})
+    with pytest.raises(AiReadRefused, match="credential is not valid"):
+        client.run()
+
+
 def test_a_malformed_cursor_is_refused_before_any_request() -> None:
     client, transport = client_for({})
     with pytest.raises(AiReadRefused, match="cursor is malformed"):

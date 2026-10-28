@@ -13,7 +13,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `412b9e5742bc27fa1dc3cda18469c9893d9cabdc136bcce0b203ff8bc9fa3469`
+  `abe066d9d702a89d2b0c1df3ad6739262bc35fb3345d0b27afe7e3822cec6822`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
@@ -58,12 +58,12 @@ number.
 
 | Count | Value | Source |
 |---|---|---|
-| Development worktree: passed | 1785 | full suite on `integration-baseline` at 020e951 |
+| Development worktree: passed | 1787 | full suite on `integration-baseline` at 020e951 |
 | Development worktree: skipped | 3 | the three Foundation tests (lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`) |
 | Development worktree: failed | 0 | |
 | Untracked Foundation tests (collected) | 67 | `test_ai_s02_s04_acceptance_distinctions.py` (18), `_boundaries.py` (43), `_integration.py` (6) |
 | Untracked Foundation tests: passed / skipped | 64 / 3 | same files |
-| Committed tree: passed | 1721 | measured in the clean export of 020e951; development passed (1785) minus the untracked Foundation passes (64); re-measure in clean export of the Stage 3 commit |
+| Committed tree: passed | 1723 | measured in the clean export of 020e951; development passed (1787) minus the untracked Foundation passes (64); re-measure in clean export of the Stage 3 commit |
 | Committed tree: expected skipped | 0 | the skipped tests are untracked |
 | Collected but not run | 0 | no collected test is excluded from the run |
 | External integration criteria not executed | 12 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |

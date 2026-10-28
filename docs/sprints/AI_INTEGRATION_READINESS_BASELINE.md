@@ -107,3 +107,17 @@ These are recorded for WDS integration decisions. None is treated as accepted en
 - `docs/AI_FOUNDATION_READ_CONTRACT_AND_READINESS_2026-10-26.md`, `docs/AI_S02_S04_FOUNDATION_ADAPTER_GAP_AND_DESIGN_PROPOSAL.md`.
 - `docs/sprints/AI_S05_ENGINEERING_CLOSURE_RECORD.md`, `AI_S05_S10_MASTER_SPRINT_PLAN.md`, `AI_S06_HANDOFF_FROM_AI_S05.md`.
 - `docs/sprints/AI_S10_EVALUATION_ACCEPTANCE_SPRINT_SPEC.md` (governing spec; untracked; amended in place 2026-10-28).
+
+## 9. Governance-fingerprint gap (FP-01, added at QA re-review of `3f6f66d`)
+
+- Gap: an estimate with no `governance_fingerprint` is still used as authoritative by the draft SOW, supplies
+  values, and raises no integrity finding. B-1 (`4d28648`) closed only the case where the fingerprint names a
+  different governance review.
+- Evaluation: `FP-01` is an **open limitation** (`fp01_null_fingerprint_is_authoritative`). It passes only while the
+  gap is present. When the gap is closed, the scenario reports FAIL and must be reclassified; it is not a PASS.
+- Required live behaviour (WDS confirmed): an estimate without an authoritative fingerprint must not be treated as
+  current or authoritative in a draft SOW; it may be kept only as provisional or diagnostic data with explicit
+  unresolved status.
+- Status: **not fixed**. Live integration acceptance stays blocked until enforcement is independently demonstrated.
+  Smallest compatible upstream correction: the AI-S09 SOW path must withhold authoritative values when the estimate
+  has no fingerprint, and raise an integrity finding. Requires WDS approval because it changes AI-S08/AI-S09 behaviour.
