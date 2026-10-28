@@ -234,3 +234,25 @@ def test_knowledge_checklist_is_present_and_non_empty(sid: SpecialistId) -> None
     assert doc["clarification_rules"]
     assert doc["unsupported_behavior"]
     assert doc["estimation_factors"] in ALLOWED_LABELS
+
+
+def test_knowledge_coverage_matches_the_code_coverage_table() -> None:
+    from webdesk.investigation.specialists import COVERAGE
+
+    doc = _load(KNOWLEDGE / "bigcommerce.json")
+    assert isinstance(doc, dict)
+    recorded = {
+        (row["capability"], row["verified_scope"], row["partial"]) for row in doc["coverage"]
+    }
+    expected = {
+        (name, cov.verified_scope, cov.partial)
+        for (specialist, name), cov in COVERAGE.items()
+        if specialist is SpecialistId.BIGCOMMERCE
+    }
+    assert recorded == expected
+
+
+def test_no_knowledge_statement_marks_a_narrow_capability_as_fully_verified() -> None:
+    for path in KNOWLEDGE.glob("*.json"):
+        text = path.read_text(encoding="utf-8")
+        assert "product catalog reading is verified" not in text, path.name

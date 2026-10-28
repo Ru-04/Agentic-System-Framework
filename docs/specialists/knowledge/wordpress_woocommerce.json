@@ -78,5 +78,14 @@
     "No capability is marked verified without a retrieved and checked page.",
     "Edition and version constraints are stated wherever a claim depends on them.",
     "Unsupported and refused outcomes are labelled unknowns, never findings."
+  ],
+  "passage_checks": [
+    {
+      "url": "https://developer.woocommerce.com/docs/apis/store-api/resources-endpoints/products/",
+      "pilot": "retrieved 28 Oct 2026",
+      "version_stated": false,
+      "single_sentence_with_variation_and_price": false,
+      "result": "UNKNOWN. The page states no version, and no single sentence contains both variation and price. Variation pricing is not reported as verified."
+    }
   ]
 }

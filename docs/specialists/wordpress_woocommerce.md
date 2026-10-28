@@ -15,7 +15,7 @@
 - Ownership of this specification: engineering draft, pending WDS review. Platform ownership: see sources.json.
 
 ## 2. Platform overview
-WordPress core: no approved source. WooCommerce: approved boundary developer.woocommerce.com /docs/* and /guides/* (inactive).
+WordPress core: no approved source. WooCommerce: approved boundary developer.woocommerce.com /docs/* and /guides/* (pilot-active since 28 Oct 2026). The Store API products page is retrieved, states no version, and has no single sentence with both variation and price, so variation pricing is UNKNOWN from it.
 
 ## 3. Architecture and deployment models
 PENDING OFFICIAL EVIDENCE Plugin and theme architecture: WordPress core documentation is not approved.

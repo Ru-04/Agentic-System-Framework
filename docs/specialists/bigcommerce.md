@@ -15,7 +15,7 @@
 - Ownership of this specification: engineering draft, pending WDS review. Platform ownership: see sources.json.
 
 ## 2. Platform overview
-Approved boundary: docs.bigcommerce.com /developer/docs/* and one exact product-catalog page (inactive).
+Approved boundary: docs.bigcommerce.com /developer/docs/* and one exact product-catalog page (pilot-active since 28 Oct 2026). Pilot status (S4-PILOT-EVIDENCE-01): single-product retrieval through the v3 product endpoint VERIFIED BY APPROVED PILOT EVIDENCE; broader product catalog reading PARTIALLY VERIFIED; product listing and searching UNKNOWN; other catalog operations UNKNOWN.
 
 ## 3. Architecture and deployment models
 PENDING OFFICIAL EVIDENCE
@@ -34,7 +34,7 @@ Canonical ID: `CAP-BIGCOMMERCE`. The knowledge file and the code are checked aga
 PENDING OFFICIAL EVIDENCE
 
 ## 7. APIs and authentication
-Single product read on the approved exact page. List endpoint: UNKNOWN until its page is approved. API version shown on the page: v3 (per the scenarios document).
+Single-product retrieval through the v3 product endpoint: VERIFIED BY APPROVED PILOT EVIDENCE only. Listing and searching: UNKNOWN. API version shown on the page: v3.
 
 ## 8. Data models and business entities
 PENDING OFFICIAL EVIDENCE

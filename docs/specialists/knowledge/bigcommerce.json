@@ -50,5 +50,24 @@
     "No capability is marked verified without a retrieved and checked page.",
     "Edition and version constraints are stated wherever a claim depends on them.",
     "Unsupported and refused outcomes are labelled unknowns, never findings."
+  ],
+  "coverage": [
+    {
+      "capability": "product catalog read",
+      "pilot_evidence": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product (approved exact page; pilot 28 Oct 2026)",
+      "verified_scope": "verified by approved pilot evidence only for single-product retrieval through the documented v3 product endpoint",
+      "partial": "broader product catalog reading is partially verified; only single-product retrieval is established",
+      "unknown": [
+        "product listing and searching",
+        "other catalog operations"
+      ]
+    }
+  ],
+  "verified_capability_statements": [
+    {
+      "statement": "Single-product retrieval through the documented v3 product endpoint.",
+      "status": "VERIFIED BY APPROVED PILOT EVIDENCE",
+      "version": "v3 (path shown on the page)"
+    }
   ]
 }

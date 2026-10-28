@@ -124,3 +124,10 @@ Source: WDS Authorized Approver, chat, 28 October 2026.
 - **Pilot outcome, recorded as observed:** WooCommerce Store API products page fetched; outcome UNKNOWN (no version stated on the page). BigCommerce product page fetched; outcome VERIFIED for "product catalog read" as a single-product read, version `v3` taken from the page path.
 - **Not activated:** Adobe Commerce, Magento Open Source release notes, shared PHP, Shopify, Shift4Shop, WordPress core, Standalone, Middleware.
 - **Not granted:** PG review, frozen acceptance criteria, Shopify human labels, any expansion of approved boundaries.
+
+## S4-PILOT-EVIDENCE-01 (28 October 2026, chat)
+Source: WDS Authorized Approver, chat, 28 October 2026. Pilot engineering commit `8c65b88` (CI run #45, SUCCESS). Implementation of the decision: see the report and the commit that records this entry.
+- **Decision A APPROVED (BigCommerce coverage):** capability `CAP-BIGCOMMERCE` and its definition are preserved. Single-product retrieval through the documented v3 product endpoint: VERIFIED BY APPROVED PILOT EVIDENCE. Broader product catalog reading: PARTIALLY VERIFIED. Product listing and searching: UNKNOWN. Other catalog operations: UNKNOWN. Engine and provider scope cited statements to the verified operation; regression tests added.
+- **Decision B APPROVED (WooCommerce):** Store API products page retained within the pilot boundary. Version applicability: UNKNOWN. No version inferred from another page. Variation pricing not reported as verified. The Page Not Found response (HTTP 200) is excluded from evidence.
+- **Activation:** only WooCommerce docs and the BigCommerce product page are active. No boundary was expanded.
+- **Not granted:** PG review, frozen acceptance criteria, Shopify human labels, live LLM use, production integration.
