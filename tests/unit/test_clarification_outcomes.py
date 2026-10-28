@@ -190,3 +190,13 @@ def test_every_specialist_has_a_capability_that_its_own_terms_can_match() -> Non
         for capability in capabilities:
             task = " ".join(capability.required_terms)
             assert capability in matched_capabilities(specialist, task), (specialist, capability)
+
+
+def test_stem_matching_does_not_match_unrelated_words() -> None:
+    # "prickly" begins with "prick", not "price"; it must not classify a cactus requirement as a
+    # WooCommerce price capability, even with the word "variation" present.
+    assert matched_capabilities(WOO, "variation of prickly pear cactus") == ()
+    assert matched_capabilities(WOO, "price list for the office") == ()
+    assert [c.name for c in matched_capabilities(WOO, "variation pricing")] == [
+        "product variation pricing"
+    ]

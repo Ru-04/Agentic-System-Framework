@@ -118,7 +118,7 @@ def test_page_outside_the_boundary_is_refused() -> None:
     finding = investigate(
         WOO_VARIATIONS, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert finding.outcome is Outcome.REFUSED
     assert finding.citations == ()
 
 
@@ -132,7 +132,7 @@ def test_redirect_to_an_unapproved_host_is_refused() -> None:
     finding = investigate(
         WOO_VARIATIONS, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert finding.outcome is Outcome.REFUSED
     assert any("redirect" in r for r in finding.refusals)
 
 
@@ -146,6 +146,7 @@ def test_other_workspace_page_is_excluded_and_not_cited() -> None:
     finding = investigate(
         WOO_VARIATIONS, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
+    assert finding.outcome is Outcome.REFUSED
     assert finding.citations == ()
     assert any("another workspace" in r for r in finding.refusals)
 
@@ -210,7 +211,7 @@ def test_bigcommerce_sibling_page_is_refused() -> None:
     finding = investigate(
         BC_READ, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert finding.outcome is Outcome.REFUSED
 
 
 def test_bigcommerce_old_host_is_refused() -> None:
@@ -222,7 +223,7 @@ def test_bigcommerce_old_host_is_refused() -> None:
     finding = investigate(
         BC_READ, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert finding.outcome is Outcome.REFUSED
 
 
 # --- Adobe Commerce and Magento Open Source: edition separation -------------------------------
@@ -356,7 +357,7 @@ def test_magento_devdocs_redirect_is_not_a_boundary() -> None:
     finding = investigate(
         feature, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert finding.outcome is Outcome.REFUSED
 
 
 def test_unknown_platform_has_no_approved_source() -> None:
