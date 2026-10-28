@@ -1,0 +1,54 @@
+{
+  "specialist_id": "shopify",
+  "registry_capability_id": "CAP-ECOMMERCE",
+  "registry_entry_name": "Shopify Specialist",
+  "registry_status": "proposed",
+  "registry_source": "WebDesk_Agentic_Requirement_Platform_Specs/AGENT_REGISTRY.yaml",
+  "capabilities": [
+    {
+      "name": "plan feature availability",
+      "platform": "shopify",
+      "edition": "not_applicable",
+      "claim_kind": "feature",
+      "required_terms": [
+        "plan",
+        "feature"
+      ],
+      "source_ids": [
+        "shopify_docs"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    }
+  ],
+  "clarification_rules": [
+    "No recognisable capability or objective in the requirement: CLARIFY, no investigation run.",
+    "Requested version not stated: INVESTIGATE_WITH_UNKNOWNS; version applicability stays unknown.",
+    "Operator confirmation missing: REFUSE before any evidence is read.",
+    "Shopify plan is not stated and a plan-dependent feature is asked: ask for it before any plan claim."
+  ],
+  "unsupported_behavior": [
+    "Feature claim from Magento Open Source release notes: UNSUPPORTED_SOURCE (MAGENTO-01).",
+    "Any page outside the approved boundary, or a redirect leaving it: REFUSED, no evidence used.",
+    "Any inactive or unapproved source: UNSUPPORTED_SOURCE, no request made."
+  ],
+  "feasibility_rules": {
+    "status": "PROPOSED, NOT APPROVED. The current specialist contract declares feasibility not determined.",
+    "classes": [
+      "supported_with_cited_evidence",
+      "unknown",
+      "unsupported_source",
+      "clarification_needed",
+      "refused"
+    ],
+    "rule": "A class follows only from each capability's investigation outcome. No class is assigned from confidence."
+  },
+  "estimation_factors": "REQUIRES PROJECT-SPECIFIC INPUT",
+  "evaluation_scenarios_ref": "docs/governance/SPRINT5_EVALUATION_SCENARIOS_DRAFT_2026-10-28.md",
+  "qa_acceptance_checklist": [
+    "Registry ID matches AGENT_REGISTRY.yaml and specialists/catalog.py.",
+    "Every capability's source_id exists in docs/specialists/knowledge/sources.json.",
+    "No capability is marked verified without a retrieved and checked page.",
+    "Edition and version constraints are stated wherever a claim depends on them.",
+    "Unsupported and refused outcomes are labelled unknowns, never findings."
+  ]
+}
