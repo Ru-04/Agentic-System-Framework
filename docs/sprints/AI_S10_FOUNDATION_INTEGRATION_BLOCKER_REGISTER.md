@@ -7,7 +7,7 @@ Foundation, a real database, or a real service. Synthetic outcomes cannot establ
 |---|---|---|---|---|---|
 | FND-1 | `EXT-05` | Authoritative requirement and evidence reads are not available to the engine | Foundation read API, contract and approval | Blocked | WDS and Foundation |
 | FND-2 | `EXT-06` (R-2) | Operator confirmations are unsigned in-process records; Foundation-issued authorisation not implemented | Foundation-issued, verifiable authorisation; gate re-binding | Blocked | Engineering with WDS |
-| FND-3 | `EXT-07` | Three Foundation integration tests skipped in the development worktree | Foundation test environment and approval | Skipped, not passed | WDS |
+| FND-3 | `EXT-07` | Three Foundation integration tests skipped in the development worktree | Foundation test environment and approval | Blocked (tests skipped in the worktree; not passed) | WDS |
 | FND-4 | `SEC-18` | No durable, tamper-evident audit of runs, confirmations and refusals | Foundation audit and run-state persistence | Blocked | Engineering with WDS |
 | FND-5 | `TRC-02` | No integrated adapter path from a Foundation-fed requirement to a SOW; the offline pipeline uses synthetic fixtures | Foundation adapter implementation and approval | Blocked | Engineering with WDS |
 

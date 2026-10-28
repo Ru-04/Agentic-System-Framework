@@ -102,7 +102,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`.
+  `eaadbbd963b55ad1577f5e1b2ec7fb3f6742b1f8a0624a57c6e0878352c17573`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.

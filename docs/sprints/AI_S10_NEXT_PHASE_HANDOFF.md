@@ -7,7 +7,7 @@ Status: the Stage 3 remediation is ready for the Stage 2 re-review. Nothing was 
 - Branch: `integration/ai-s01-s02-s03` in the `integration-baseline` worktree. Base commit: `211d308`.
 - Remediation commit: the full SHA is recorded in the Stage 4 acceptance packet (a commit cannot name its own SHA).
 - Candidate source digest (engine source and AI-S10 test package):
-  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`.
+  `eaadbbd963b55ad1577f5e1b2ec7fb3f6742b1f8a0624a57c6e0878352c17573`.
 - Engine source (`ai_engine/src`): unchanged from `211d308`.
 - The session checkout `webdesk-ai-s02` (`feature/ai-s02`) does **not** contain AI-S06 to AI-S09 code. Do not run
   the AI-S10 gates there.

@@ -1,6 +1,6 @@
 # AI-S10 Governance Policy Decision Register (Stage 3)
 
-Status: every decision below is **open**. AI-S10 does not decide any of them. Where code applies a fail-closed
+Status: every decision below is **open** except STL-05, which WDS decided on 2026-10-28 (see its row). AI-S10 does not decide any of them. Where code applies a fail-closed
 default, that is a technical control, not a recorded decision. The IDs are as used in the AI-S07 to AI-S09
 records and the AI-engine governance documents in `docs/`.
 

@@ -1326,7 +1326,14 @@ def stl05_policy_flag_exclude_track() -> Check:
     )
     draft = estimate(est_request(tasks, requirements=(_snapshot(R1, revision=2),)))
     line = draft.lines[0]
-    no_numbers = line.likely is None and draft.project.complete is False
+    # No low, likely or high value from the stale line; the project total is marked incomplete and
+    # the stale line contributes nothing to it (its total is 0.0 only because it is incomplete).
+    no_numbers = (
+        line.low is None
+        and line.likely is None
+        and line.high is None
+        and draft.project.complete is False
+    )
     traced = R1 in line.requirement_ids and any(
         "TSK-001" in issue and "stale" in issue for issue in line.issues
     )

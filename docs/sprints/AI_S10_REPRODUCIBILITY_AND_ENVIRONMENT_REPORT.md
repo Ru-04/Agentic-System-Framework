@@ -6,13 +6,14 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 
 ## 1. Candidate identity
 
+- Remediation chain on branch `integration/ai-s01-s02-s03`: `211d308` (Stage 1 checkpoint), `e274cf4` (Stage 3 remediation), `7476ffa` (corrective), `7528c53` (WDS-authorised stale-input policy). Each commit's message states its own digest; the digest changed with later source edits, so only the candidate digest below is current.
 - Base commit: `211d308` (`AI-S10: integrated evaluation checkpoint (synthetic, Stage 1)`), branch
   `integration/ai-s01-s02-s03`.
 - Engine source (`ai_engine/src`): unchanged from the base commit.
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `1503258279f1438b83242d867c0452d6d0dc40b2c5636fb719f38f712d61adac`
+  `eaadbbd963b55ad1577f5e1b2ec7fb3f6742b1f8a0624a57c6e0878352c17573`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
