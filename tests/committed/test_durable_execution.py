@@ -1348,3 +1348,49 @@ def test_a_stale_worker_writes_no_audit_row_under_the_lost_claim(
     assert stale.correlation_uuid != successor.correlation_uuid
     assert _audit_correlations(committed_engine, "run.parked", run_fixture.run) == []
     assert _audit_correlations(committed_engine, "job.requeued", run_fixture.run) == []
+
+
+def test_maintenance_orchestration_runs_the_sweep_and_outbox_with_the_test_capture_sink(
+    committed_engine: Engine, committed_url: str, run_fixture: Fixture
+) -> None:
+    """H-26 (non-production behaviour): with a complete test-profile configuration, the loop runs
+    the expiry sweep and the outbox worker between job iterations.
+
+    Delivery uses the capture sink, which is refused outside the test profile. No production
+    transport or credential is involved."""
+    import base64
+
+    from webdesk.worker.loop import WorkerLoop
+    from webdesk.worker.maintenance import maintenance_from_env
+
+    driver_url = committed_url.replace("postgresql://", "postgresql+psycopg://")
+    env = {
+        "WEBDESK_ENV": "test",
+        "WEBDESK_CEREMONY_DATABASE_URL": driver_url,
+        "WEBDESK_OUTBOX_DATABASE_URL": driver_url,
+        "WEBDESK_OUTBOX_DEAD_LETTER_THRESHOLD": "5",
+        "WEBDESK_OUTBOX_ENCRYPTION_KEY": base64.b64encode(b"\x07" * 32).decode("ascii"),
+        "WEBDESK_RESET_DELIVERY": "capture",
+    }
+    events: list[dict[str, object]] = []
+    steps, closers = maintenance_from_env(env, "w-orchestra", events.append)
+    try:
+        assert [name for name, _step, _every in steps] == ["sweep", "outbox"]
+        assert not [e for e in events if e["event"] == "maintenance.disabled"]
+        loop = WorkerLoop(
+            committed_engine,
+            ContentStore(run_fixture.store_root),
+            "w-orchestra",
+            lease=60,
+            emit=events.append,
+            maintenance=steps,
+        )
+        result = loop.run(once=True)
+    finally:
+        for close in closers:
+            close()
+    assert result.processed == 1
+    ran = [str(e["step"]) for e in events if e["event"] == "maintenance.ran"]
+    assert ran == ["sweep", "outbox"]
+    assert not [e for e in events if e["event"] == "maintenance.failed"]
+    assert _job(committed_engine, run_fixture.run)["status"] == "completed"
