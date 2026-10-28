@@ -64,3 +64,34 @@
 - Stage 1 revision (this commit): ruff check, ruff format and strict mypy clean locally. **Local pytest could not run in this session:** Windows Application Control (error 4551) blocked the pytest executable. Pytest was not rerun by another route. The CI run on the pushed SHA is the test record for this revision.
 - Run-start path (`src/webdesk/runs/service.py` `start_run`): calls `authorize(RUN_START)` with the project, and audits denials. Nothing under `src/webdesk/runs` or `src/webdesk/api` imports `webdesk.specialists`, so **specialist execution is not reachable from the run-start workflow today.** That is why the specialist gate is not on a live path yet.
 - CI: see the QA-07 merge package for the run bound to the final SHA.
+
+## Final engineering record (bound to 8304d2c)
+
+- **Exact CI commit:** `8304d2ca536cd57bf4e9616205f293ebae66066e`, branch `claude/qa07-validation`.
+- **CI run:** #57 (run id 40727000038), workflow `specialist-ci`, conclusion **success**. Jobs: `lint-type-unit` success (format, lint, mypy strict, unit and specialist contract tests); `postgres-tests` success (integration, committed and hardening tests, both migrations).
+- **Earlier failure:** run #56 on `3930a69` failed in `lint-type-unit`, step "Unit and specialist contract tests". The job log is admin-only (HTTP 403), so the failing test name is not recorded. The only change between `3930a69` and `8304d2c` is one assertion in `tests/unit/test_pilot.py`, which now expects one audit entry per pilot case. Run #57 passed with that change. This is strong correlation, not a proven cause.
+- **Audit contract (corrected assertion):** each pilot retrieval is its own verified operation, so each allowed case writes one `allowed` audit entry. A missing decision writes no entry and makes no request. A duplicate or missing entry changes the count and fails the assertion. No test asserts the exact cause of run #56.
+- **Target ancestry:** `feature/increment-1-foundation` (`740b169`) is an ancestor of `8304d2c`. A fast-forward is possible. 88 commits ahead.
+- **R4 exclusion:** migrations 0020 to 0027 are absent. No file named for R4 is present.
+- **Migrations:** 19 migration files; the latest is `0019_least_privilege_intake_and_workflow.py`. No migration differs from the target. The single-head check was not re-run here; CI migrated the database to head successfully.
+- **Dependencies:** `pyproject.toml` and `uv.lock` are unchanged against the target.
+- **Cumulative diff vs target:** 183 files, 18,780 insertions, 6 deletions. The 6 deletions are in `src/webdesk/intake/reassess.py` and two test files; they come from the earlier format-only commit `79c90bc`, whose AST-identity claim was not re-verified in this session.
+
+## Re-evaluation of QA-07 requirements
+
+| Requirement | Status | Basis and gap |
+|---|---|---|
+| Trusted authorization established outside protected components | Partial | Verification runs in the harness before providers. The decision store is in memory, and no trusted issuer exists. The pilot takes caller authority and cannot create it. |
+| Authoritative RBAC verification | Partial | `rbac_permission_check` calls `rbac.engine.authorize`. Tests use an in-memory store with the same protocol. The SQL store is not exercised with this check. |
+| Analyst role and active project membership | Implemented (unit) | RBAC matrix `run.start: {Analyst: ASSIGNED}`. Refusal tests cover non-Analyst, inactive membership, inactive user and no roles. |
+| `run.start` enforcement | Implemented (unit) | Same as above. `RUN_PERMISSION` equals `Permission.RUN_START`. |
+| Actor, workspace, specialist, capability, request binding | Implemented (unit) | Mismatch tests for each field. Workspace and actor must be UUIDs for RBAC. Current investigation test identifiers (`ws-*`) would be refused in production, which fails closed. |
+| Expiry and revocation | Implemented (unit) | Expired and revoked refusals. Revocation is an in-memory flag, not visible across processes. |
+| Direct provider and retrieval refusal | Implemented (unit) | `require_harness_scope` in each provider and in retrieval. Refusal tests call providers and retrieval directly. In-process code can still import and enter the scope (known limit 1). |
+| Pilot self-authorization prevention | Implemented (unit) | `run_pilot` no longer enters the scope. Six self-authorization cases make zero requests. `harness_scope` remains public, so in-process code can still enter it (known limit 1). |
+| Asynchronous execution safety | Partial | A thread-boundary test exists. `asyncio` tasks copy the context at creation, so a task created inside a verified scope inherits it. No asyncio test exists. No specialist asynchronous path exists today. |
+| Sanitized errors and audit records | Implemented (unit) | Fixed error text; audit holds identifiers and outcome only. |
+| Fail-closed behaviour | Implemented (unit) | Missing verifier, missing decision, naive timestamp, and missing scope all refuse before any protected action. |
+| Production-only limitations | Documented | `QA07_CONTROL_MATRIX_2026-10-28.md`, classes B and C. |
+
+**QA-07 is not complete on this evidence.** The pilot test passing is not the basis for this assessment. The open items are the in-memory store, the unexercised SQL RBAC check, the asyncio gap, the in-process limit, and PG's independent review.
