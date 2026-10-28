@@ -36,12 +36,20 @@ PURPOSES = frozenset({"activate", "reset"})
 
 
 class TokenError(Exception):
-    """A neutral refusal. ``reason`` is shown to the caller; ``internal`` is audited only."""
+    """A neutral refusal. ``reason`` is shown to the caller; ``internal`` is audited.
 
-    def __init__(self, reason: str, internal: str | None = None) -> None:
+    ``user_id`` is set only when the presented token matched a stored token. It is
+    the account the token belongs to, not an identity proof, so it is recorded as
+    a reference and never as the actor (QA F-08).
+    """
+
+    def __init__(
+        self, reason: str, internal: str | None = None, user_id: uuid.UUID | None = None
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
         self.internal = internal or reason
+        self.user_id = user_id
 
 
 def _approval_is_live(conn: Connection, user_id: uuid.UUID) -> bool:
@@ -290,7 +298,7 @@ def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
                 raise TokenError("invalid_token", internal="invalid")
             user_id = uuid.UUID(str(row[1]))
             if purpose == "activate" and not _approval_is_live(conn, user_id):
-                raise TokenError("invalid_token", internal="approval_not_live")
+                raise TokenError("invalid_token", internal="approval_not_live", user_id=user_id)
     except TokenError as exc:
         _audit(
             conn,
@@ -299,6 +307,7 @@ def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
             event="token.consume.denied",
             outcome="denied",
             error_class=exc.internal,
+            record_refs=[] if exc.user_id is None else [str(exc.user_id)],
         )
         raise
     _audit(

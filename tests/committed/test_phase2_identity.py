@@ -227,3 +227,16 @@ def test_an_activation_refused_after_its_approval_lapses_is_audited_through_acti
         run_in_transaction(app, attempt)
     assert _count(committed_engine, "token.consume.denied", "approval_not_live") == 1
     assert _unconsumed(committed_engine, second) == 1
+    # QA F-08: the denial names the account the token belongs to, as a reference.
+    # It is never the actor, and it never records the token value.
+    with committed_engine.connect() as conn:
+        actor, refs, details = conn.execute(
+            text(
+                """SELECT actor_id_or_service, record_refs::text, redacted_details::text
+                   FROM audit_events WHERE event_type = 'token.consume.denied'
+                     AND error_class = 'approval_not_live'"""
+            )
+        ).one()
+    assert actor == "anonymous"
+    assert str(second) in refs
+    assert token not in refs and token not in details
