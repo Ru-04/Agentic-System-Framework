@@ -31,7 +31,7 @@ show that no other defect exists. Each class lists the cases that exist, not a s
 | Missing requirement revision | `STL-03` | pass | none (flagged) | Reported; the SOW is still produced |
 | Flagged stale input treated as approved | `STL-06` | pass | none | Approval pending; draft not approved; totals incomplete |
 | Stale input excluded from authoritative use (approved policy) | `STL-05` | pass | none (flagged) | Stale estimate gives no numbers; stale evidence does not back; SOW names the stale requirement; approval pending |
-| Upstream fingerprint mismatch undetected | `UD-01` | **open limitation** | — | Defect in AI-S09; not fixed |
+| Estimate tied to a different governance review | `UD-01` | pass | none (integrity finding) | B-1 corrected under WDS authorisation: finding reported; values excluded; SOW not complete or approved |
 | Cross-project evidence access | `XP-01` | pass | none (filtered) | No outcome cites a record of the other project |
 | Cross-project citation by the reviewer | `XP-02` | pass | none (finding) | `CROSS_PROJECT_CITATION` flagged; requirement not backed |
 | Foreign governance into estimate | `XP-03` | pass | `estimate` | Exact reason |
@@ -75,14 +75,13 @@ passes. Each is required to fail or to stay non-pass. See `tests/test_ai_s10_eva
 
 ## 3. Summary
 
-- Class A scenarios: 113 pass, 0 fail; 5 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`, `UD-01`);
+- Class A scenarios: 115 pass, 0 fail; 4 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`);
   3 delegated; 0 blocked in class A.
 - Classes B to F: 12 blocked. None is counted as a pass.
 
 ## 4. Limitations of this matrix
 
 - Fixed hand-written cases, one or two per class. No fuzzing, property-based generation, load or concurrency tests.
-- Mutation coverage is the ledger `consume` and the verification gate. The inline stale-revision check and the
-  upstream fingerprint gap are not mutation-tested.
+- Mutation coverage: the ledger `consume`, the verification gate, the served-record check, the inline stale-revision check, the project-total leak and the B-1 fingerprint comparison.
 - Lexical checks (`EVID-16`) are the current evidence screen; semantic adequacy is not tested.
 - `REC-03` and `C-15` remain unresolved policy; the scenario records the condition, it does not decide it.

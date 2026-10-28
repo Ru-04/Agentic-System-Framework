@@ -110,7 +110,8 @@ def test_frozen_expectation_for_rec03_is_the_acceptance_contract_not_the_observa
     assert "C-15" in rec03.references
 
 
-def test_upstream_defect_is_recorded_as_an_open_limitation_not_fixed_silently() -> None:
+def test_b1_fingerprint_defect_is_executed_as_a_regression_test() -> None:
+    """B-1 is corrected under WDS authorisation: the scenario executes, not an open limitation."""
     by_id = {s.scenario_id: s for s in CATALOG}
-    assert by_id["UD-01"].status is Status.OPEN_LIMITATION
-    assert "UPSTREAM DEFECT" in by_id["UD-01"].dependency
+    assert by_id["UD-01"].status is Status.EXECUTED
+    assert by_id["UD-01"].executor == "ud01_fingerprint_mismatch_detected"

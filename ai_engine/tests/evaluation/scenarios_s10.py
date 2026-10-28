@@ -655,25 +655,25 @@ def stl_stale_operator_selection_rejected() -> Check:
     )
 
 
-def ud01_fingerprint_mismatch_undetected() -> Check:
-    """UPSTREAM DEFECT (AI-S09): the SOW does not compare the estimate's governance fingerprint with
-    the governance review's. Passes only while the mismatch is still undetected."""
-    base = sow_request(estimate_draft=sow_estimate())
-    matched = generate(base)
-    control = not any("fingerprint" in i for i in matched.integrity_issues)
-    assert base.governance is not None
-    mismatched_request = base.model_copy(
-        update={"governance": base.governance.model_copy(update={"input_fingerprint": "e" * 64})}
-    )
-    mismatched = generate(mismatched_request)
-    undetected = not any("fingerprint" in i for i in mismatched.integrity_issues)
+def ud01_fingerprint_mismatch_detected() -> Check:
+    """B-1 (WDS-authorised AI-S09 correction): a draft SOW detects an estimate tied to a different
+    governance review, reports it, and excludes the estimate's values from authoritative use. The
+    matched request is the positive control."""
+    matched_request = sow_request(estimate_draft=sow_estimate())
+    matched = generate(matched_request)
+    matched_clean = not any("different governance review" in i for i in matched.integrity_issues)
+    mismatched_estimate = sow_estimate().model_copy(update={"governance_fingerprint": "e" * 64})
+    mismatched = generate(sow_request(estimate_draft=mismatched_estimate))
+    flagged = any("different governance review" in i for i in mismatched.integrity_issues)
+    excluded = not any(d.estimate_likely is not None for d in mismatched.deliverables)
+    not_complete = mismatched.resources.project_complete is not True
+    approval_pending = mismatched.approval.state == "pending_human_approval"
+    ok = matched_clean and flagged and excluded and not_complete and approval_pending
     return Check(
-        control and undetected,
-        f"matched control clean={control}; mismatch flagged={not undetected}",
+        ok,
+        f"matched clean={matched_clean}; mismatch flagged={flagged}; values excluded={excluded}; "
+        f"not complete={not_complete}; approval pending={approval_pending}",
     )
-
-
-# ----------------------------------------------------------------- cross-project (QA-6 C)
 
 
 def xp01_specialist_foreign_evidence_invisible() -> Check:
@@ -1435,7 +1435,7 @@ EXECUTORS: dict[str, Any] = {
     "stl_missing_revision_handled": stl_missing_revision_handled,
     "stl_no_false_completion": stl_no_false_completion,
     "stl_stale_operator_selection_rejected": stl_stale_operator_selection_rejected,
-    "ud01_fingerprint_mismatch_undetected": ud01_fingerprint_mismatch_undetected,
+    "ud01_fingerprint_mismatch_detected": ud01_fingerprint_mismatch_detected,
     "xp01_specialist_foreign_evidence_invisible": xp01_specialist_foreign_evidence_invisible,
     "xp02_reviewer_foreign_citation_refused": xp02_reviewer_foreign_citation_refused,
     "xp03_estimate_foreign_governance_refused": xp03_estimate_foreign_governance_refused,

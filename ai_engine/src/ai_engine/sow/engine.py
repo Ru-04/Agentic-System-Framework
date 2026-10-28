@@ -277,16 +277,30 @@ def generate(request: SowRequest) -> DraftSow:
         _require_known(m.depends_on, milestones, "milestone")
     _check_cycles({m.milestone_id: m.depends_on for m in milestones.values()}, "milestone")
 
-    lines = estimate.lines if estimate is not None else ()
+    # An estimate tied to a different governance review is not authoritative for this SOW: its
+    # values are excluded from numbers and readiness. The estimate itself stays in the
+    # traceability fields and in the revision checks below.
+    estimate_fingerprint = estimate.governance_fingerprint if estimate is not None else None
+    estimate_tied_elsewhere = (
+        estimate_fingerprint is not None and estimate_fingerprint != governance.input_fingerprint
+    )
+    authoritative = None if estimate_tied_elsewhere else estimate
+    lines = authoritative.lines if authoritative is not None else ()
     task_to_lines: dict[str, list[str]] = defaultdict(list)
     for line in lines:
         for task_id in line.task_ids:
             task_to_lines[task_id].append(line.line_id)
     line_by_id = {line.line_id: line for line in lines}
     known_tasks = set(task_to_lines)
-    has_estimate = estimate is not None
+    has_estimate = authoritative is not None
 
     issues: list[str] = []
+    if estimate_tied_elsewhere and estimate_fingerprint is not None:
+        issues.append(
+            "estimate is tied to a different governance review (estimate "
+            f"{estimate_fingerprint[:12]}, SOW governance {governance.input_fingerprint[:12]}): "
+            "estimate values are excluded from authoritative use"
+        )
     foreign_line_ids = {
         line.line_id for line in lines if any(rid not in reqs for rid in line.requirement_ids)
     }
@@ -413,7 +427,7 @@ def generate(request: SowRequest) -> DraftSow:
     )
     issues = sorted(set(issues))
 
-    readiness_of = {rid: _combined_readiness(rid, estimate, governance) for rid in reqs}
+    readiness_of = {rid: _combined_readiness(rid, authoritative, governance) for rid in reqs}
     status_of = governance.requirement_status
 
     overview_items: list[SowItem] = []
@@ -797,7 +811,7 @@ def generate(request: SowRequest) -> DraftSow:
                 label="open_question",
             )
         )
-    if estimate is not None:
+    if authoritative is not None:
         for line in lines:
             if line.status is EstimateStatus.NEEDS_INPUTS:
                 risk_items.append(
@@ -812,7 +826,7 @@ def generate(request: SowRequest) -> DraftSow:
     for issue in issues:
         risk_items.append(SowItem(text=f"Integrity: {issue}", refs=(), label="integrity"))
 
-    resources, resource_items = _resources(estimate, foreign_line_ids)
+    resources, resource_items = _resources(authoritative, foreign_line_ids)
 
     change_items = [
         SowItem(

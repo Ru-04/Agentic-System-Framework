@@ -13,7 +13,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b`
+  `37a5fd03d575c7ecd822712a4b439afe0da511f933beb8ed712aea29dffe8658`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
@@ -73,10 +73,10 @@ figures of the remediation commit are recorded in the Stage 4 acceptance packet.
 
 ## 6. Scenario catalogue counts (regenerated from source)
 
-- Total: 133 scenarios.
-- Class A (isolated synthetic): 113 pass, 0 fail, 5 open limitations, 3 delegated, 0 blocked.
+- Total: 134 scenarios.
+- Class A (isolated synthetic): 115 pass, 0 fail, 4 open limitations, 3 delegated, 0 blocked.
 - Class B to F (external): 12 blocked, none passed.
-- Outcomes: pass 113, open_limitation 5, delegated 3, blocked 12, fail 0.
+- Outcomes: pass 115, open_limitation 4, delegated 3, blocked 12, fail 0.
 - No cross-class percentage is computed.
 
 ## 7. Metric definitions

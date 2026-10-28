@@ -33,14 +33,14 @@ From `ai_engine` in the `integration-baseline` worktree (see the reproducibility
 6. Test-count reproducibility: the committed-tree clean export against the expected 1681 passed, 0 skipped.
 7. Specification provenance: the sprint spec and master plan are untracked and cited as such.
 8. AI-S01 coverage, requirement extraction, cross-project isolation and pipeline traceability.
-9. `UD-01`: the upstream fingerprint gap is recorded and must not be presented as a pass.
+9. `UD-01` (B-1): the SOW fingerprint comparison, its positive control, and its regression and mutation tests.
 10. Readiness classifications and every number in the documents against the regenerated output.
 
 ## 4. Decisions WDS must make (not made here)
 
 - **`STL-05`:** resolved by the WDS stale-input policy decision of 2026-10-28. No open decision remains on this item.
 - **C-15:** envelope semantics for `succeeded` with `evidence_unavailable` (`REC-03`).
-- **`UD-01`:** correct the AI-S09 SOW through the permitted upstream process, or accept the limitation.
+- **`UD-01`:** corrected under the WDS B-1 authorisation; no further decision is pending on it.
 - **R-1 and R-2:** the gate bypass and the unsigned confirmations, before any Foundation integration.
 - The governance decisions in `AI_S10_GOVERNANCE_POLICY_DECISION_REGISTER.md`.
 - Numerical release thresholds (WDS Technical Lead).

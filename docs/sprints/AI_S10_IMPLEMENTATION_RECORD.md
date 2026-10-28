@@ -171,23 +171,19 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 6. Catalogue after remediation
 
-- 133 scenarios. Class A: 113 executed and passing, 0 failing; 5 open limitations (`SEC-09`, `EVID-16`,
-  `EXT-08`, `REC-03`, `UD-01`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 0 blocked in class A.
+- 134 scenarios. Class A: 115 executed and passing, 0 failing; 4 open limitations (`SEC-09`, `EVID-16`,
+  `EXT-08`, `REC-03`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 0 blocked in class A.
 - Class B: 5 blocked (`EXT-05`, `EXT-06`, `EXT-07`, `SEC-18`, `TRC-02`). Class C: 1 (`EXT-01`).
   Class D: 2 (`EXT-02`, `SPEC-15`). Class E: 3 (`EXT-03`, `SOW-13`, `SPEC-16`). Class F: 1 (`EXT-04`).
-- Outcomes: pass 113, open_limitation 5, delegated 3, blocked 12, fail 0.
+- Outcomes: pass 115, open_limitation 4, delegated 3, blocked 12, fail 0.
 
 ## 7. Upstream defect recorded, not fixed
 
-- **UD-01 (AI-S09, open limitation):** the SOW does not compare the estimate's governance fingerprint with the
-  governance review's. A mismatched estimate is accepted with no integrity issue. The fix is an additive
-  integrity check in the accepted AI-S09 engine, outside AI-S10 scope. It needs the permitted upstream change
-  and renewed verification. Recorded as `UD-01`; the test asserts the defect is still present.
+- **UD-01 (B-1, AI-S09) corrected under WDS authorisation.** The draft SOW now compares the estimate's governance fingerprint with the SOW's governance review. A mismatch is reported as an integrity finding, the estimate's values are excluded from authoritative use, and the SOW is not complete or approved. Matching fingerprints are the positive control. Regression tests: `tests/test_ai_s10_b1_fingerprint.py` (7 tests); scenario `UD-01` (executed). Mutation: removing the comparison fails the three mismatch tests and `UD-01`.
 
 ## 8. Limits of this remediation (stated, not hidden)
 
-- Mutation coverage is two controls: the ledger `consume` and the verification gate. The inline stale-revision
-  check and the upstream fingerprint gap are not mutation-tested. `UD-01` shows the gap by observation.
+- Mutation coverage: the ledger `consume`, the verification gate, the served-record check, the inline stale-revision check, the project-total leak and the B-1 fingerprint comparison. Other controls are checked by review and by static tests only.
 - The stale-input rule was decided by WDS on 2026-10-28 (flag, exclude, carry as findings). See the policy decision record.
 - `REC-03` and `C-15` remain unresolved policy; the scenario shows the condition rather than resolving it.
 - AI-S01 wrapper denials (`S01-02`, `S01-03`) are status-based, not exception-based; their enforcement point is

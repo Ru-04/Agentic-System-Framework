@@ -23,7 +23,7 @@ records and the AI-engine governance documents in `docs/`.
 | DEC-09 | Real-data use | `synthetic: false` refused: fixture ingestion raises `ValueError` ('real data is refused') | Not run; no real data used | WDS |
 | D-02 | Source-access matrix and per-vendor allowlist | None granted | `SPEC-15` blocked | WDS |
 | **STL-05** | Stale-input rule (spec section 8) | Ratified by WDS on 2026-10-28: stale inputs are flagged, excluded from authoritative use and carried as integrity findings; stale or replayed operator authorisations are rejected | `STL-05` executed (pass); `STL-04` proves rejection for stale operator selections | **Decided by WDS** (`AI_S10_STALE_INPUT_POLICY_DECISION.md`) | WDS (decided) |
-| **UD-01** | **Upstream defect (AI-S09)**: the SOW does not compare the estimate's governance fingerprint with the governance review's | A mismatched estimate is accepted with no integrity issue | `UD-01` **open limitation**; the fix is outside AI-S10 scope and needs the permitted upstream change | **Engineering with WDS (new in Stage 3)** |
+| **UD-01 (B-1)** | **Upstream defect (AI-S09)**: the SOW did not compare the estimate's governance fingerprint with the governance review's | Corrected under the WDS B-1 authorisation: the SOW reports the mismatch and excludes the estimate's values | `UD-01` executed (pass) | **Decided and corrected by WDS authorisation** | WDS (decided) |
 | — | Numerical release thresholds | **PENDING WDS Technical Lead** (spec section 7); not set | Counts only | WDS Technical Lead |
 
 ## Limits of this register

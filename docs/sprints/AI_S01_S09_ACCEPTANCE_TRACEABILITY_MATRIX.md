@@ -18,10 +18,10 @@ How the columns were produced:
 | AI-S03 | Evidence index, retrieval, security, specialist | `test_ai_s03_*`: 222 | 1 delegated (`PIPE-05`) | Earlier sprint record; not re-verified | Retrieval is delegated, not re-executed |
 | AI-S04 | Specialist ports for four platforms | `test_ai_s04_*`: 67 | 3 pass (`SPEC-01`, `SPEC-02`, `SPEC-12`); 4 blocked (`EXT-02`, `EXT-05`, `EXT-07`, `SPEC-15`) | Earlier sprint record; not re-verified | Real-platform and vendor checks blocked |
 | AI-S05 | Application specialists | `test_ai_s05_application_specialists.py`: 130 | 2 pass (`SPEC-01`, `SPEC-12`) | Earlier sprint record | **Thin catalogue coverage** for 130 tests (recorded, not closed) |
-| AI-S06 | Orchestration: propose, confirm, execute | `test_ai_s06_orchestration.py`: 58 | 31 pass (incl. replay `RPL-01`..`RPL-07`, `SEC-06`, negative controls, `REC-01`, `REC-02`, `REC-04`, `REC-05`); 1 delegated (`SPEC-14`); 1 open (`REC-03`, C-15); 2 blocked (`SEC-18`, `TRC-02`) | Earlier sprint record; not re-verified | Replay ledger enforcement proven by mutation (Stage 3) |
+| AI-S06 | Orchestration: propose, confirm, execute | `test_ai_s06_orchestration.py`: 58 | 32 pass (incl. replay `RPL-01`..`RPL-07`, `SEC-06`, negative controls, `REC-01`, `REC-02`, `REC-04`, `REC-05`); 1 delegated (`SPEC-14`); 1 open (`REC-03`, C-15); 2 blocked (`SEC-18`, `TRC-02`) | Earlier sprint record; not re-verified | Replay ledger enforcement proven by mutation (Stage 3) |
 | AI-S07 | Governance reviewer | `test_ai_s07_governance.py`: 66 | 29 pass (incl. `XP-02`, `STL-05`); 2 open (`EVID-16`, `REC-03`) | WDS accepted for isolated engineering (per sprint record) | Lexical sufficiency is an open limitation (`EVID-16`) |
-| AI-S08 | Resource-wise estimation | `test_ai_s08_estimation.py`: 65 | 29 pass (incl. `XP-03`, `XP-04`, `STL-02`, `STL-05`); 1 open (`UD-01`, which cites AI-S08 and AI-S09) | WDS accepted for isolated offline engineering (per sprint record) | Stale requirement handling is flagged, not rejected (`STL-05`, governance decision) |
-| AI-S09 | Draft SOW | `test_ai_s09_sow.py`: 72 | 29 pass (incl. `XP-05`, `XP-06`, `STL-05`, `STL-06`); 1 open (`UD-01`, upstream fingerprint gap); 1 blocked (`TRC-02`) | WDS accepted for isolated offline engineering; qualified QA history (per sprint record) | **Upstream defect `UD-01`** (fingerprint not compared); house template blocked (`SOW-13`) |
+| AI-S08 | Resource-wise estimation | `test_ai_s08_estimation.py`: 65 | 30 pass (incl. `XP-03`, `XP-04`, `STL-02`, `STL-05`, `UD-01`) | WDS accepted for isolated offline engineering (per sprint record) | Stale requirement handling is flagged, not rejected (`STL-05`, governance decision) |
+| AI-S09 | Draft SOW | `test_ai_s09_sow.py`: 72 | 30 pass (incl. `XP-05`, `XP-06`, `STL-05`, `STL-06`, `UD-01`); 1 blocked (`TRC-02`) | WDS accepted for isolated offline engineering; qualified QA history (per sprint record) | **Upstream defect `UD-01`** (fingerprint not compared); house template blocked (`SOW-13`) |
 | AI-S10 | Integrated evaluation (this sprint) | `test_ai_s10_evaluation.py` (16), `_evaluator_rules.py` (9), `_mutations.py` (4), `_consistency.py` (3): 32 | Self-tests of the runner, rules, mutations and consistency | Stage 3 remediation; Stage 2 re-review pending | Stage 2 re-review; Stage 4 packet |
 
 Shared or earlier files not mapped to a sprint: `test_adapter_registry.py`, `test_ai41_contracts.py`,
@@ -36,7 +36,6 @@ Shared or earlier files not mapped to a sprint: `test_adapter_registry.py`, `tes
    Requirement extraction in general is covered by the deterministic agent (`REQ-01`..`REQ-08`); the sprint of
    record for that deterministic agent is not stated in its test file, so it is cited as `requirement_analysis`.
 3. **AI-S05 remains thin**: 130 accepted tests, 2 catalogue references. Recorded as a limit; not closed here.
-4. **AI-S09 carries an upstream defect (`UD-01`)**: the SOW does not compare fingerprints. Recorded as an open
-   limitation; not fixed, because AI-S09 is accepted and the fix needs the permitted upstream change.
+4. **AI-S09 defect `UD-01` (B-1) corrected** under the WDS authorisation: the SOW now reports an estimate tied to a different governance review and excludes its values. Regression tests are in `tests/test_ai_s10_b1_fingerprint.py`.
 5. Every executed scenario of AI-S06 to AI-S09 passes. None of these passes is evidence of real-provider,
    real-platform or Foundation behaviour.

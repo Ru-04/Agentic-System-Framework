@@ -31,16 +31,16 @@ move this register to PASS. The author's self-checks are not an independent verd
 | QA-10 | Three executors corrected after the first run; a misplaced duplicate evaluation package exists in the session worktree. | The corrections are recorded in the implementation record. **The duplicate remains and must be deleted by the user** (`webdesk-ai-s02\ai_engine\ai_engine`); the removal was refused by a safety check. |
 | — | EVID-16 would still report open if the lexical screen were removed entirely. | Accepted as stated: EVID-16 is an open limitation whose check passes only while the limitation is present. Semantic adequacy remains untested. |
 
-## 3. New finding recorded by Stage 3 (upstream, not fixed)
+## 3. New finding recorded by Stage 3 (B-1, now corrected under WDS authorisation)
 
 | ID | Class | Finding | Disposition |
 |---|---|---|---|
-| UD-01 | Upstream defect (AI-S09), open limitation | The SOW does not compare the estimate's governance fingerprint with the governance review's. A mismatched estimate is accepted with no integrity issue. | **Recorded.** Outside AI-S10 scope; fixing it changes accepted AI-S09 output and needs the permitted upstream change and renewed verification. Test asserts the defect is still present. |
+| UD-01 (B-1) | Upstream defect (AI-S09) | The SOW did not compare the estimate's governance fingerprint with the governance review's; a mismatched estimate was accepted with no integrity finding. | **Corrected under WDS authorisation.** Mismatch reported as an integrity finding; estimate values excluded; SOW not complete or approved. Regression tests `tests/test_ai_s10_b1_fingerprint.py`; scenario `UD-01`. |
 
 ## 4. Known limits that remain (not hidden)
 
 - Mutation coverage is two controls (ledger `consume`; verification gate). The inline stale-revision check and
-  the upstream fingerprint gap are not mutation-tested.
+  the fingerprint comparison is covered by the B-1 mutation (removing it fails the B-1 tests).
 - `STL-05` is executed under the stale-input policy ratified by WDS on 2026-10-28; no open decision remains on it.
 - `REC-03` / `C-15` remain unresolved policy.
 - AI-S01 wrapper denials are status-based; their enforcement point is recorded as none.

@@ -1,14 +1,14 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b`
+Candidate: `base 211d308; evaluated source sha256 37a5fd03d575c7ecd822712a4b439afe0da511f933beb8ed712aea29dffe8658`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
 ## Summary
 
 - Total scenarios: 134
-- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 5, 'pass': 114}
-- Synthetic (A) executed: 114; passed 114; failed 0
+- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 4, 'pass': 115}
+- Synthetic (A) executed: 115; passed 115; failed 0
 
 ## Results
 
@@ -141,7 +141,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | STL-06 | A-isolated-synthetic | pass | critical | - | approval stays pending_human_approval; the draft is not approved; project totals stay incomplete | approval pending_human_approval; draft draft_not_approved; project complete False |
 | TRC-01 | A-isolated-synthetic | pass | critical | - | specialist outcomes, estimate revisions and the governance fingerprint agree | specialist covers requirements=True; estimate covers=True; fingerprint carried=True |
 | TRC-02 | B-foundation-integration | blocked | major | - | a Foundation-fed run reaches a SOW through the integrated adapter | no integrated Foundation adapter path exists; the offline pipeline uses synthetic fixtures; Foundation approval required |
-| UD-01 | A-isolated-synthetic | open_limitation | critical | - | the fingerprint mismatch is reported as an integrity issue | matched control clean=True; mismatch flagged=False |
+| UD-01 | A-isolated-synthetic | pass | critical | - | matched fingerprints give no finding; a mismatched estimate is reported as an integrity finding, its values are excluded, and the SOW is not complete or approved | matched clean=True; mismatch flagged=True; values excluded=True; not complete=True; approval pending=True |
 | XP-01 | A-isolated-synthetic | pass | critical | - | no outcome cites a record of the other project | evidence used 14; foreign-project records used 0 |
 | XP-02 | A-isolated-synthetic | pass | critical | - | CROSS_PROJECT_CITATION is reported and the requirement is not backed | cross-project citation flagged=True; status not backed=True |
 | XP-03 | A-isolated-synthetic | pass | critical | estimate | refused with 'governance review belongs to another project' at estimate | refused 'governance review belongs to another project' enforced by estimate |

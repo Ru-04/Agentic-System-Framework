@@ -19,7 +19,7 @@ this document unless the scenario column says it is proven offline.
 | FG-10 | Inferred requirement acceptance not defined | D-07; `REQ-08` | Major | Open (never accepted) | Decision |
 | FG-11 | Execution envelope may read as complete when evidence is unavailable | C-15; `REC-03` open limitation | Major | Open | Envelope semantics decision |
 | FG-12 | **Stale-input rule (spec section 8)** | Ratified 2026-10-28 (flag, exclude, carry as findings); `STL-05` executed; `STL-04` rejects stale operator selections | Major | Closed by WDS policy decision | None; reopen only if WDS changes the policy |
-| FG-13 | **Upstream: SOW does not compare governance fingerprints** | `UD-01` open limitation (AI-S09) | Major | Open: upstream | Permitted upstream correction and re-verification |
+| FG-13 | **Upstream: SOW did not compare governance fingerprints** | `UD-01` (B-1), corrected under WDS authorisation | Major | Corrected; pending independent QA | Independent verification of the correction |
 | FG-14 | Requirement extraction against a live model | `EXT-01` | Major | Open | Real-provider evaluation |
 | FG-15 | AI-S05 breadth: 130 accepted tests, 2 catalogue scenarios | Traceability matrix | Minor | Open | Extend catalogue |
 
@@ -45,5 +45,5 @@ extraction (`REQ-01`..`REQ-08`); LLM-backed intake offline (`LLM-01`..`LLM-03`);
 ## 3. What is not claimed
 
 - No functional or production completeness. The MVP is not production-ready.
-- No security control is claimed as passed where a limitation remains (R-1, R-2, EVID-16, C-15, UD-01).
+- No security control is claimed as passed where a limitation remains (R-1, R-2, EVID-16, C-15).
 - No Foundation, real-provider, real-platform or human evaluation has run.

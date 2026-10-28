@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b",
+    "commit": "base 211d308; evaluated source sha256 37a5fd03d575c7ecd822712a4b439afe0da511f933beb8ed712aea29dffe8658",
     "python": "3.12.10"
   },
   "results": [
@@ -1956,20 +1956,20 @@
       "title": "Foundation-fed requirement-to-SOW path (no integrated adapter)"
     },
     {
-      "actual": "matched control clean=True; mismatch flagged=False",
+      "actual": "matched clean=True; mismatch flagged=True; values excluded=True; not complete=True; approval pending=True",
       "classification": "A-isolated-synthetic",
-      "dependency": "UPSTREAM DEFECT (AI-S09): the SOW does not compare the estimate's governance fingerprint with the governance review's. A compatible correction is required",
+      "dependency": "none (isolated synthetic)",
       "enforced_by": null,
       "enforcement": null,
-      "expected": "the fingerprint mismatch is reported as an integrity issue",
-      "outcome": "open_limitation",
+      "expected": "matched fingerprints give no finding; a mismatched estimate is reported as an integrity finding, its values are excluded, and the SOW is not complete or approved",
+      "outcome": "pass",
       "references": [
         "AI-S09",
         "AI-S08"
       ],
       "scenario_id": "UD-01",
       "severity": "critical",
-      "title": "SOW does not detect an estimate built against a different governance review"
+      "title": "SOW detects an estimate tied to a different governance review (B-1, AI-S09 correction)"
     },
     {
       "actual": "evidence used 14; foreign-project records used 0",
@@ -2066,8 +2066,8 @@
     "by_classification": {
       "A-isolated-synthetic": {
         "delegated": 3,
-        "open_limitation": 5,
-        "pass": 114
+        "open_limitation": 4,
+        "pass": 115
       },
       "B-foundation-integration": {
         "blocked": 5
@@ -2088,12 +2088,12 @@
     "by_outcome": {
       "blocked": 12,
       "delegated": 3,
-      "open_limitation": 5,
-      "pass": 114
+      "open_limitation": 4,
+      "pass": 115
     },
-    "synthetic_executed": 114,
+    "synthetic_executed": 115,
     "synthetic_failed": 0,
-    "synthetic_passed": 114,
+    "synthetic_passed": 115,
     "total_scenarios": 134
   }
 }

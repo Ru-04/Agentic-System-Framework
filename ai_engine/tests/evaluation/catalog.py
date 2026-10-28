@@ -1354,15 +1354,17 @@ def _remediation_rows() -> list[Scenario]:
             "critical",
             "stl_no_false_completion",
         ),
-        _limitation(
+        _ex(
             "UD-01",
-            "SOW does not detect an estimate built against a different governance review",
+            "SOW detects an estimate tied to a different governance review (B-1, AI-S09 "
+            "correction)",
             "upstream",
             ("AI-S09", "AI-S08"),
-            "the fingerprint mismatch is reported as an integrity issue",
-            "UPSTREAM DEFECT (AI-S09): the SOW does not compare the estimate's governance "
-            "fingerprint with the governance review's. A compatible correction is required",
-            "ud01_fingerprint_mismatch_undetected",
+            "synthetic SOW request with matched and mismatched estimate governance fingerprints",
+            "matched fingerprints give no finding; a mismatched estimate is reported as an "
+            "integrity finding, its values are excluded, and the SOW is not complete or approved",
+            "critical",
+            "ud01_fingerprint_mismatch_detected",
         ),
         _ex(
             "XP-01",
