@@ -26,6 +26,7 @@ authority login.
 from __future__ import annotations
 
 import atexit
+import re
 import secrets
 from dataclasses import dataclass
 
@@ -105,3 +106,83 @@ def _drop_worker_test_login() -> None:
         print(f"worker test login {_login.name} kept: {type(exc).__name__}", flush=True)
     finally:
         engine.dispose()
+
+
+# F-4: cleanup of logins left by a hard-killed test process. Only exact test identities qualify.
+_TEST_LOGIN_NAME = re.compile(r"^webdesk_intake_test_[0-9a-f]{12}$")
+
+
+def find_orphan_worker_test_logins(admin_url: str) -> list[str]:
+    """Test worker logins that are safe to remove.
+
+    A login is a candidate only if all of the following hold: its name matches the exact test-login
+    pattern; its only membership is ``webdesk_worker``; it has no active session on this cluster;
+    and it is not this process's own login.
+    """
+    engine = create_engine(_cluster_admin_url(admin_url))
+    try:
+        with engine.connect() as conn:
+            names = (
+                conn.execute(
+                    text(
+                        """SELECT r.rolname FROM pg_roles r
+                       WHERE r.rolname ~ '^webdesk_intake_test_[0-9a-f]{12}$' AND r.rolcanlogin"""
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            candidates: list[str] = []
+            for name in names:
+                if not _TEST_LOGIN_NAME.match(name):
+                    continue
+                if _login is not None and name == _login.name:
+                    continue
+                memberships = (
+                    conn.execute(
+                        text(
+                            """SELECT g.rolname FROM pg_auth_members a
+                           JOIN pg_roles g ON g.oid = a.roleid JOIN pg_roles m ON m.oid = a.member
+                           WHERE m.rolname = :n"""
+                        ),
+                        {"n": name},
+                    )
+                    .scalars()
+                    .all()
+                )
+                if sorted(memberships) != [WORKER_ROLE]:
+                    continue
+                active = conn.execute(
+                    text("SELECT count(*) FROM pg_stat_activity WHERE usename = :n"), {"n": name}
+                ).scalar_one()
+                if int(active) == 0:
+                    candidates.append(str(name))
+            return candidates
+    finally:
+        engine.dispose()
+
+
+def purge_orphan_worker_test_logins(admin_url: str, *, dry_run: bool = True) -> list[str]:
+    """Remove orphan test worker logins found by ``find_orphan_worker_test_logins``.
+
+    Dry run is the default and changes nothing; it returns the names that would be removed. Pass
+    ``dry_run=False`` only on a cluster the operator has authorized for test cleanup. A login that
+    gains a session between the check and the drop is refused by PostgreSQL's DROP ROLE, and the
+    error is reported, never forced. Logins that do not match the exact identity are never touched.
+    """
+    candidates = find_orphan_worker_test_logins(admin_url)
+    if dry_run:
+        return candidates
+    removed: list[str] = []
+    engine = create_engine(_cluster_admin_url(admin_url), isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            for name in candidates:
+                try:
+                    conn.execute(text(f"DROP ROLE {name}"))
+                    removed.append(name)
+                except Exception as exc:  # reported, never forced
+                    print(f"orphan worker test login {name} kept: {type(exc).__name__}", flush=True)
+    finally:
+        engine.dispose()
+    return removed

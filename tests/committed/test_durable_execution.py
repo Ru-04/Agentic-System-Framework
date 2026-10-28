@@ -1386,3 +1386,45 @@ def test_maintenance_orchestration_runs_the_sweep_and_outbox_with_the_test_captu
     assert ran == ["sweep", "outbox"]
     assert not [e for e in events if e["event"] == "maintenance.failed"]
     assert _job(committed_engine, run_fixture.run)["status"] == "completed"
+
+
+# --- Heartbeat scheduling and fence (governance ruling, 29 Oct 2026) ------------------------------
+
+
+def test_a_delayed_renewal_after_expiry_is_refused_without_any_reclaim(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    """Monotonic scheduling may run late. A renewal attempted after the database lease has expired
+    is refused although nothing has reclaimed the job. A late tick cannot revive a lost lease."""
+    claim = _claim(committed_engine, "w-late-renew", 1)
+    time.sleep(1.5)  # the lease is over on the database clock; no other worker has claimed the job
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+        assert jobs.renew(conn, claim.job_id, "w-late-renew", 60) is False
+    with pytest.raises(jobs.LeaseLost):
+        with committed_engine.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_worker"))
+            jobs.hold(conn, claim, "w-late-renew")
+
+
+# --- F-3: the step fence blocks reclaim, deterministically (independent of the race test) ---
+
+
+def test_the_step_fence_blocks_reclaim_while_a_step_holds_the_job_after_its_lease_expired(
+    committed_engine: Engine, run_fixture: Fixture
+) -> None:
+    """While a step's transaction holds the KEY SHARE fence, another worker cannot reclaim the job,
+    even after the lease has expired on the database clock. Without the fence, the rival would take
+    the job. The test is deterministic (no thread race): the holder's transaction stays open across
+    the expiry."""
+    claim = _claim(committed_engine, "w-fence-holder", 2)
+    with committed_engine.connect() as holder:
+        tx = holder.begin()
+        holder.execute(text("SET LOCAL ROLE webdesk_worker"))
+        jobs.hold(holder, claim, "w-fence-holder")  # the lease is live when the fence is taken
+        time.sleep(2.5)  # the lease expires while the step's transaction is still open
+        assert committed.claim_and_commit(committed_engine, "w-fence-rival", lease=30) is None
+        tx.rollback()
+    # Once the step's transaction ends, the expired job is reclaimable again.
+    rival = committed.claim_and_commit(committed_engine, "w-fence-rival", lease=30)
+    assert rival is not None and rival.attempts == 2

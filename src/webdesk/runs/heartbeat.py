@@ -1,11 +1,14 @@
 """Lease heartbeat for a claimed job (Phase 3, H-22).
 
-While a worker holds a job, a background thread renews the lease every ``HEARTBEAT_SECONDS`` (30
-seconds, the approved interval). The renewal stamps the database clock (``clock_timestamp()``), so a
-long step cannot let the lease lapse while its worker is alive. The step itself is fenced
-separately: each step proves ownership at its start (``jobs.hold``) and holds a KEY SHARE lock until
-its transaction ends. Reclaim cannot take the job during a step, and a renewal does not conflict
-with that lock.
+While a worker holds a job, a background thread schedules a renewal attempt at a nominal
+``HEARTBEAT_SECONDS`` (30 seconds, the approved interval), measured on the worker's monotonic clock.
+WDS ruling (29 October 2026): scheduling may run late. PostgreSQL is authoritative for lease expiry,
+lease ownership, renewal timestamps, stale-worker fencing and reclaim eligibility. A late tick is
+therefore harmless: a renewal stamps the database clock and succeeds only for the caller's own live
+lease, so a lease that has already expired cannot be renewed, and a stale worker is fenced at the
+next step. The step itself is fenced separately: each step proves ownership at its start
+(``jobs.hold``) and holds a KEY SHARE lock until its transaction ends. Reclaim cannot take the job
+during a step, and a renewal does not conflict with that lock.
 
 Rules the heartbeat enforces:
 
