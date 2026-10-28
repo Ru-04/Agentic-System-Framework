@@ -36,8 +36,9 @@ from webdesk.ratelimit.limiter import Limit, subject_hash
 from webdesk.tokens import service as tokens
 from webdesk.tokens.service import TokenLimits, token_hash
 
-APP_URL = os.environ.get("WEBDESK_HARDENING_APP_URL")
-OWNER_URL = os.environ.get("WEBDESK_HARDENING_OWNER_URL")
+# Database URLs are read when a fixture runs, not at import. This conftest is imported before
+# the run namespace is created (tests/conftest.py ``pytest_configure``), so an import-time read
+# would see the shared names.
 PASSWORD = "CHANGE_ME_TEST_PASSWORD_12"  # test-only; never a production credential
 
 POLICY = ContactEmailPolicy(
@@ -60,9 +61,11 @@ def _email() -> str:
 
 
 def _require_urls() -> tuple[str, str]:
-    if not APP_URL or not OWNER_URL:
+    app_url = os.environ.get("WEBDESK_HARDENING_APP_URL")
+    owner_url = os.environ.get("WEBDESK_HARDENING_OWNER_URL")
+    if not app_url or not owner_url:
         pytest.skip("hardening database is not configured (see .env.hardening.local)")
-    return APP_URL, OWNER_URL
+    return app_url, owner_url
 
 
 @pytest.fixture(scope="session")
@@ -132,27 +135,29 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     Administrator with its install appointment. Protected steps run as the login role."""
     _, owner_url = _require_urls()
     owner = create_engine(owner_url)
-    with owner.begin() as conn:
-        conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
-        installed = conn.execute(
-            text("SELECT 1 FROM setup_trust_ceremonies WHERE kind = 'install'")
-        ).first()
-        if installed is None:
-            result = apply_install(
-                conn,
-                PreparedInstall(
-                    owner_approval_ref="OWNER-HARDENING",
-                    owner_identity_ref="owner:test",
-                    authorization_digest="x" * 64,
-                    contacts=((_email(), "A"), (_email(), "B")),
-                ),
-                operator_id="op-hardening",
-                verifier_id="verifier-hardening",
-                clock=SystemClock(),
-            )
-            first, second = result.user_ids[0], result.user_ids[1]
-            appointment = result.approval_ids[1]
-    owner.dispose()
+    try:
+        with owner.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+            installed = conn.execute(
+                text("SELECT 1 FROM setup_trust_ceremonies WHERE kind = 'install'")
+            ).first()
+            if installed is None:
+                result = apply_install(
+                    conn,
+                    PreparedInstall(
+                        owner_approval_ref="OWNER-HARDENING",
+                        owner_identity_ref="owner:test",
+                        authorization_digest="x" * 64,
+                        contacts=((_email(), "A"), (_email(), "B")),
+                    ),
+                    operator_id="op-hardening",
+                    verifier_id="verifier-hardening",
+                    clock=SystemClock(),
+                )
+                first, second = result.user_ids[0], result.user_ids[1]
+                appointment = result.approval_ids[1]
+    finally:
+        owner.dispose()
 
     with app_engine.connect() as conn:
         if installed is not None:
@@ -196,16 +201,18 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
         # The appointment is the install-time bootstrap (ceremony role), not an application write.
         _, owner_url = _require_urls()
         appointing = create_engine(owner_url)
-        with appointing.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
-            conn.execute(
-                text(
-                    """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
-                    appointment_approval_id) VALUES (:b, 'Administrator', :a, :approval)"""
-                ),
-                {"b": second, "a": first, "approval": appointment},
-            )
-        appointing.dispose()
+        try:
+            with appointing.begin() as conn:
+                conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+                conn.execute(
+                    text(
+                        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+                        appointment_approval_id) VALUES (:b, 'Administrator', :a, :approval)"""
+                    ),
+                    {"b": second, "a": first, "approval": appointment},
+                )
+        finally:
+            appointing.dispose()
     return {"admin": first, "second": second}
 
 
