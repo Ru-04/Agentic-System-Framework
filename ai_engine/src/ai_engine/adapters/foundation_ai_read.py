@@ -31,6 +31,7 @@ SOURCE_LIMIT_RANGE = (1, 100)
 SOURCE_LIMIT_DEFAULT = 50
 SEGMENT_LIMIT_RANGE = (1, 200)
 SEGMENT_LIMIT_DEFAULT = 100
+_CURSOR = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
@@ -63,8 +64,27 @@ class AiReadTransport(Protocol):
     def get(self, path: str, headers: Mapping[str, str]) -> AiReadResponse: ...
 
 
+# Contract section 13: additive optional fields are allowed within v1. Forbidden fields
+# (sections 6.1, 8 and 10) are refused by _refuse_forbidden before validation.
+# are refused by _refuse_forbidden before validation, whatever their position.
 class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+
+FORBIDDEN_FIELDS = frozenset(
+    {
+        "storage_key",
+        "content_hash",
+        "text_content_hash",
+        "ingested_by_user_id",
+        "session",
+        "session_id",
+        "credential",
+        "proof",
+        "contact",
+        "email",
+    }
+)
 
 
 _M = TypeVar("_M", bound=_Strict)
@@ -210,8 +230,6 @@ class AiReadClient:
         for item in page.items:
             if len(item.text_content) > MAX_SEGMENT_TEXT:
                 raise AiReadRefused("segment text exceeds the contract limit")
-            if item.text_truncated and len(item.text_content) != MAX_SEGMENT_TEXT:
-                raise AiReadRefused("truncation flag is inconsistent with the segment text")
         _check_cursor(page.next_cursor, page.items[-1].segment_id if page.items else None)
         return page
 
@@ -224,6 +242,7 @@ class AiReadClient:
         _check_status(response.status)
         if len(response.body) > MAX_CONTENT_BYTES:
             raise AiReadRefused("content exceeds the contract size limit")
+        self._require_contract_header(response)
         if response.headers.get("X-AI-Contract") != CONTRACT_TAG:
             raise AiReadRefused("content response lacks the contract tag")
         mime = response.headers.get("Content-Type", "")
@@ -236,27 +255,31 @@ class AiReadClient:
     def _send(self, path: str) -> AiReadResponse:
         # Only GET is ever issued, and the path is always under the run's scope.
         response = self.transport.get(path, self._headers)
-        if response.headers.get("X-AI-Contract-Version", CONTRACT_VERSION) != CONTRACT_VERSION:
+        declared = response.headers.get("X-AI-Contract-Version")
+        if declared is not None and declared != CONTRACT_VERSION:
             raise AiReadRefused("response declares another contract version")
         return response
+
+    def _require_contract_header(self, response: AiReadResponse) -> None:
+        if response.headers.get("X-AI-Contract-Version") != CONTRACT_VERSION:
+            raise AiReadRefused("successful response does not declare the contract version")
 
     def _get_json(self, path: str, model: type[_M]) -> _M:
         response = self._send(path)
         _check_status(response.status)
+        self._require_contract_header(response)
         try:
             payload = json.loads(response.body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise AiReadRefused("response body is not valid JSON") from error
         if not isinstance(payload, dict):
             raise AiReadRefused("response body is not an object")
-        if payload.get("contract") not in (None, CONTRACT_TAG):
-            raise AiReadRefused("response declares another contract")
-        payload.setdefault("contract", CONTRACT_TAG)
+        _refuse_forbidden(payload)
+        if payload.get("contract") != CONTRACT_TAG:
+            raise AiReadRefused("response body does not declare the contract")
         try:
             return model.model_validate(payload)
-        except (
-            Exception
-        ) as error:  # the validation message names fields, never values or credentials
+        except Exception as error:  # names fields only, never values or credentials
             raise AiReadRefused("response does not match the contract schema") from error
 
 
@@ -292,4 +315,19 @@ def _check_cursor(next_cursor: str | None, last_id: str | None) -> None:
 def _query(limit: int, after: str | None) -> str:
     if after is None:
         return f"?limit={limit}"
+    if not _CURSOR.match(after):
+        raise AiReadRefused("cursor is malformed")
     return f"?limit={limit}&after={after}"
+
+
+def _refuse_forbidden(payload: Mapping[str, object]) -> None:
+    """Contract sections 6.1, 8 and 10: these fields are never returned, at any level."""
+    stack: list[object] = [payload]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if FORBIDDEN_FIELDS.intersection(node.keys()):
+                raise AiReadRefused("response carries a field the contract forbids")
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)

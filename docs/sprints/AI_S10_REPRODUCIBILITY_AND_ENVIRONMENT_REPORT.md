@@ -13,7 +13,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694`
+  `412b9e5742bc27fa1dc3cda18469c9893d9cabdc136bcce0b203ff8bc9fa3469`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce
@@ -58,12 +58,12 @@ number.
 
 | Count | Value | Source |
 |---|---|---|
-| Development worktree: passed | 1745 | full suite on `integration-baseline` at 020e951 |
+| Development worktree: passed | 1785 | full suite on `integration-baseline` at 020e951 |
 | Development worktree: skipped | 3 | the three Foundation tests (lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`) |
 | Development worktree: failed | 0 | |
 | Untracked Foundation tests (collected) | 67 | `test_ai_s02_s04_acceptance_distinctions.py` (18), `_boundaries.py` (43), `_integration.py` (6) |
 | Untracked Foundation tests: passed / skipped | 64 / 3 | same files |
-| Committed tree: passed | 1681 | measured in the clean export of 020e951; development passed (1745) minus the untracked Foundation passes (64) |
+| Committed tree: passed | 1721 | measured in the clean export of 020e951; development passed (1785) minus the untracked Foundation passes (64); re-measure in clean export of the Stage 3 commit |
 | Committed tree: expected skipped | 0 | the skipped tests are untracked |
 | Collected but not run | 0 | no collected test is excluded from the run |
 | External integration criteria not executed | 12 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |
@@ -74,7 +74,7 @@ figures of the remediation commit are recorded in the Stage 4 acceptance packet.
 ## 6. Scenario catalogue counts (regenerated from source)
 
 - Total: 135 scenarios.
-- Class A (isolated synthetic): 116 pass, 0 fail, 4 open limitations, 3 delegated, 0 blocked.
+- Class A (isolated synthetic): 116 pass, 0 fail, 5 open limitations, 3 delegated, 0 blocked.
 - Class B to F (external): 12 blocked, none passed.
 - Outcomes: pass 116, open_limitation 4, delegated 3, blocked 12, fail 0.
 - No cross-class percentage is computed.

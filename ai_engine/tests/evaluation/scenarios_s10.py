@@ -374,7 +374,8 @@ def sec_r1_present() -> Check:
         registry=captured["registry"],
         clock=captured["clock"],
     )
-    ran = execution.status in set(AgentExecutionStatus)
+    # The agent ran and produced a successful execution: the gate is not on this path.
+    ran = execution.status is AgentExecutionStatus.SUCCEEDED and execution.output is not None
     return Check(
         ran,
         f"direct call with no confirmation, actor or proposal returned {execution.status.value}",
@@ -1425,7 +1426,22 @@ def rag01_project_filter_index_boundary() -> Check:
     return Check(ok, f"project A returned {ids_a}; project B returned {ids_b}")
 
 
+def fp01_null_fingerprint_is_authoritative() -> Check:
+    """Open limitation (AI-S09 live-readiness gap): an estimate with no governance fingerprint is
+    still used as authoritative. Passes only while the gap is present.
+    B-1 closed the tied case only."""
+    untied = sow_estimate().model_copy(update={"governance_fingerprint": None})
+    sow = generate(sow_request(estimate_draft=untied))
+    values_present = any(d.estimate_likely is not None for d in sow.deliverables)
+    no_finding = not any("different governance review" in i for i in sow.integrity_issues)
+    return Check(
+        values_present and no_finding,
+        f"values without a fingerprint={values_present}; no fingerprint finding={no_finding}",
+    )
+
+
 EXECUTORS: dict[str, Any] = {
+    "fp01_null_fingerprint_is_authoritative": fp01_null_fingerprint_is_authoritative,
     "rag01_project_filter_index_boundary": rag01_project_filter_index_boundary,
     "sec_categories_not_proposed": sec_categories_not_proposed,
     "stl05_policy_flag_exclude_track": stl05_policy_flag_exclude_track,

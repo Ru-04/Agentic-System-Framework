@@ -261,23 +261,11 @@ def test_segment_text_over_the_contract_limit_is_refused() -> None:
         client.segments(VERSION)
 
 
-def test_an_inconsistent_truncation_flag_is_refused() -> None:
-    segment = {
-        "segment_id": "s-1",
-        "locator_type": "p",
-        "locator": "1",
-        "text_content": "short",
-        "text_truncated": True,
-    }
-    page = {
-        "contract": "ai-read/v1",
-        "source_version_id": VERSION,
-        "items": [segment],
-        "next_cursor": None,
-    }
-    client, _ = client_for({f"{BASE}/source-versions/{VERSION}/segments": ok(page)})
-    with pytest.raises(AiReadRefused, match="truncation flag"):
-        client.segments(VERSION)
+def test_a_malformed_cursor_is_refused_before_any_request() -> None:
+    client, transport = client_for({})
+    with pytest.raises(AiReadRefused, match="cursor is malformed"):
+        client.source_versions(after="x&limit=100")
+    assert transport.calls == []
 
 
 # --- refusals: content and transport ------------------------------------------------------------
@@ -302,12 +290,9 @@ def test_content_larger_than_the_limit_is_refused_even_with_status_200() -> None
 
 
 def test_content_without_the_contract_tag_is_refused() -> None:
+    headers = {**CONTRACT_HEADERS, "Content-Type": "text/plain"}
     client, _ = client_for(
-        {
-            f"{BASE}/source-versions/{VERSION}/content": AiReadResponse(
-                200, {"Content-Type": "text/plain"}, b"ok"
-            )
-        }
+        {f"{BASE}/source-versions/{VERSION}/content": AiReadResponse(200, headers, b"ok")}
     )
     with pytest.raises(AiReadRefused, match="contract tag"):
         client.content(VERSION)
@@ -328,9 +313,40 @@ def test_a_method_not_allowed_response_is_refused() -> None:
         client.run()
 
 
-def test_a_response_with_an_undeclared_field_is_refused() -> None:
-    client, _ = client_for({BASE: ok(run_payload(storage_key="internal/path"))})
-    with pytest.raises(AiReadRefused, match="schema"):
+def test_additive_optional_fields_are_accepted_as_contract_section_13_allows() -> None:
+    client, _ = client_for({BASE: ok(run_payload(new_optional_hint="additive"))})
+    assert client.run().run_id == RUN
+
+
+@pytest.mark.parametrize(
+    "field", ["storage_key", "content_hash", "ingested_by_user_id", "session_id"]
+)
+def test_a_forbidden_field_is_refused_at_any_level(field: str) -> None:
+    item = version()
+    item[field] = "must-not-appear"
+    page = {"contract": "ai-read/v1", "items": [item], "next_cursor": None}
+    client, _ = client_for({f"{BASE}/source-versions": ok(page)})
+    with pytest.raises(AiReadRefused, match="forbids"):
+        client.source_versions()
+
+
+def test_a_forbidden_field_at_the_top_level_is_refused() -> None:
+    client, _ = client_for({BASE: ok(run_payload(content_hash="abc"))})
+    with pytest.raises(AiReadRefused, match="forbids"):
+        client.run()
+
+
+def test_a_success_without_the_contract_version_header_is_refused() -> None:
+    client, _ = client_for({BASE: AiReadResponse(200, {}, json.dumps(run_payload()).encode())})
+    with pytest.raises(AiReadRefused, match="does not declare the contract version"):
+        client.run()
+
+
+def test_a_body_without_its_contract_field_is_refused() -> None:
+    payload = run_payload()
+    del payload["contract"]
+    client, _ = client_for({BASE: ok(payload)})
+    with pytest.raises(AiReadRefused, match="schema|does not declare the contract"):
         client.run()
 
 

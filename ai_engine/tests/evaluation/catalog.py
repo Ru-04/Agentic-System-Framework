@@ -1628,6 +1628,15 @@ def _remediation_rows() -> list[Scenario]:
             "critical",
             "rag01_project_filter_index_boundary",
         ),
+        _limitation(
+            "FP-01",
+            "Estimate with no governance fingerprint is used as authoritative (AI-S09 gap)",
+            "upstream",
+            ("AI-S09", "AI-S10 integration readiness"),
+            "a null-fingerprint estimate supplies values with no fingerprint finding; gap present",
+            "OPEN: live integration must tie each estimate to a governance review; no decision yet",
+            "fp01_null_fingerprint_is_authoritative",
+        ),
         _ex(
             "TRC-01",
             "Requirement identifiers stay correlated through specialist, estimate and governance",

@@ -102,7 +102,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694`.
+  `412b9e5742bc27fa1dc3cda18469c9893d9cabdc136bcce0b203ff8bc9fa3469`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.
@@ -162,7 +162,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 5. Gates (development worktree, after remediation)
 
-- Full suite (development worktree): **1745 passed, 3 skipped**; committed tree 1681 passed. The 3 skips are the Foundation tests at
+- Full suite (development worktree): **1785 passed, 3 skipped**; committed tree 1681 passed. The 3 skips are the Foundation tests at
   `test_ai_s02_s04_acceptance_distinctions.py` lines 357, 362 and 367, not run offline.
 - AI-S10 files: 32 passed (`test_ai_s10_evaluation`, `_evaluator_rules`, `_mutations`, `_consistency`) on the
   final catalogue, plus the full suite above.
@@ -171,11 +171,11 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 6. Catalogue after remediation
 
-- 135 scenarios. Class A: 116 executed and passing, 0 failing; 4 open limitations (`SEC-09`, `EVID-16`,
+- 136 scenarios. Class A: 116 executed and passing, 0 failing; 5 open limitations (`SEC-09`, `EVID-16`, `FP-01`,
   `EXT-08`, `REC-03`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 0 blocked in class A.
 - Class B: 5 blocked (`EXT-05`, `EXT-06`, `EXT-07`, `SEC-18`, `TRC-02`). Class C: 1 (`EXT-01`).
   Class D: 2 (`EXT-02`, `SPEC-15`). Class E: 3 (`EXT-03`, `SOW-13`, `SPEC-16`). Class F: 1 (`EXT-04`).
-- Outcomes: pass 116, open_limitation 4, delegated 3, blocked 12, fail 0.
+- Outcomes: pass 116, open_limitation 5, delegated 3, blocked 12, fail 0.
 
 ## 7. Upstream defect recorded, not fixed
 

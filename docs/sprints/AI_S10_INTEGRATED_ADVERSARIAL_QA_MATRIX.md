@@ -75,7 +75,7 @@ passes. Each is required to fail or to stay non-pass. See `tests/test_ai_s10_eva
 
 ## 3. Summary
 
-- Class A scenarios: 116 pass, 0 fail; 4 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`);
+- Class A scenarios: 116 pass, 0 fail; 5 open limitations (`SEC-09`, `EVID-16`, `EXT-08`, `REC-03`, `FP-01`);
   3 delegated; 0 blocked in class A.
 - Classes B to F: 12 blocked. None is counted as a pass.
 

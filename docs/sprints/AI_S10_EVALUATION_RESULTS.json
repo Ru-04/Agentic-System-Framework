@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694",
+    "commit": "base 211d308; evaluated source sha256 412b9e5742bc27fa1dc3cda18469c9893d9cabdc136bcce0b203ff8bc9fa3469",
     "python": "3.12.10"
   },
   "results": [
@@ -525,6 +525,22 @@
       "scenario_id": "EXT-08",
       "severity": "critical",
       "title": "Governance decisions still open (A-4, C-15, GP-1, D-05, D-06/D-07)"
+    },
+    {
+      "actual": "values without a fingerprint=True; no fingerprint finding=True",
+      "classification": "A-isolated-synthetic",
+      "dependency": "OPEN: live integration must tie each estimate to a governance review; no decision yet",
+      "enforced_by": null,
+      "enforcement": null,
+      "expected": "a null-fingerprint estimate supplies values with no fingerprint finding; gap present",
+      "outcome": "open_limitation",
+      "references": [
+        "AI-S09",
+        "AI-S10 integration readiness"
+      ],
+      "scenario_id": "FP-01",
+      "severity": "critical",
+      "title": "Estimate with no governance fingerprint is used as authoritative (AI-S09 gap)"
     },
     {
       "actual": "status accepted; call success",
@@ -2081,7 +2097,7 @@
     "by_classification": {
       "A-isolated-synthetic": {
         "delegated": 3,
-        "open_limitation": 4,
+        "open_limitation": 5,
         "pass": 116
       },
       "B-foundation-integration": {
@@ -2103,12 +2119,12 @@
     "by_outcome": {
       "blocked": 12,
       "delegated": 3,
-      "open_limitation": 4,
+      "open_limitation": 5,
       "pass": 116
     },
     "synthetic_executed": 116,
     "synthetic_failed": 0,
     "synthetic_passed": 116,
-    "total_scenarios": 135
+    "total_scenarios": 136
   }
 }

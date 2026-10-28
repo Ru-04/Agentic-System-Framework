@@ -1,13 +1,13 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694`
+Candidate: `base 211d308; evaluated source sha256 412b9e5742bc27fa1dc3cda18469c9893d9cabdc136bcce0b203ff8bc9fa3469`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
 ## Summary
 
-- Total scenarios: 135
-- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 4, 'pass': 116}
+- Total scenarios: 136
+- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 5, 'pass': 116}
 - Synthetic (A) executed: 116; passed 116; failed 0
 
 ## Results
@@ -48,6 +48,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | EXT-06 | B-foundation-integration | blocked | major | - | confirmations issued by a Foundation operator session | Foundation-issued operator authorisation not implemented |
 | EXT-07 | B-foundation-integration | blocked | major | - | three tests pass in the Foundation environment | Foundation test environment and approval; tests are skipped, not passed |
 | EXT-08 | A-isolated-synthetic | open_limitation | critical | - | each decision is recorded as open in the governance register | WDS decisions |
+| FP-01 | A-isolated-synthetic | open_limitation | critical | - | a null-fingerprint estimate supplies values with no fingerprint finding; gap present | values without a fingerprint=True; no fingerprint finding=True |
 | LLM-01 | A-isolated-synthetic | pass | major | - | status accepted with a successful call | status accepted; call success |
 | LLM-02 | A-isolated-synthetic | pass | critical | - | status failed; no result; call INVALID_REPLY_EXHAUSTED; no segment analysed | status failed; call invalid_reply_exhausted; segments not analysed 3 of 3 |
 | LLM-03 | A-isolated-synthetic | pass | critical | - | no segment text in the system prompt; the system prompt is the registered prompt | segments leaked into the system prompt: [] |
