@@ -110,7 +110,7 @@ def test_pv_04_an_owner_reset_request_issues_no_token_when_delivery_is_disabled(
         before = conn.execute(
             text(
                 "SELECT count(*) FROM account_activation_tokens "
-            "WHERE user_id = :u AND purpose = 'reset'"
+                "WHERE user_id = :u AND purpose = 'reset'"
             ),
             {"u": target},
         ).scalar_one()
@@ -119,7 +119,7 @@ def test_pv_04_an_owner_reset_request_issues_no_token_when_delivery_is_disabled(
         after = conn.execute(
             text(
                 "SELECT count(*) FROM account_activation_tokens "
-            "WHERE user_id = :u AND purpose = 'reset'"
+                "WHERE user_id = :u AND purpose = 'reset'"
             ),
             {"u": target},
         ).scalar_one()

@@ -96,6 +96,7 @@ APP_EXECUTE = frozenset(
         "fn_issue_activation_with_proof",
         "fn_ai_get_project",
         "fn_reject_change_with_proof",
+        "fn_expire_stale_change_for_email",
         "fn_revoke_project_access_with_proof",
         "fn_revoke_restricted_grant_with_proof",
         "fn_ai_context",
