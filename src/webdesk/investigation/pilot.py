@@ -14,14 +14,19 @@ from __future__ import annotations
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from functools import partial
 from typing import IO, Final, cast
 
 from webdesk.evidence.http_vendor import Opener, build_vendor_opener
 from webdesk.investigation.engine import Capability, ClaimKind, Edition, investigate
-from webdesk.investigation.retrieval import FetchRecord, retrieve_approved_pages
-from webdesk.specialists.authorization import harness_scope
+from webdesk.investigation.retrieval import FetchRecord, RetrievalOutcome, retrieve_approved_pages
+from webdesk.specialists.authorization import AuthorityContext, execute_verified
 
 PILOT_WORKSPACE: Final[str] = "ws-pilot"
+PILOT_SPECIALIST_ID: Final[str] = "pilot-retrieval"
+# One pilot run is one request, so one operator decision covers both cases.
+PILOT_REQUEST_ID: Final[str] = "pilot-run-2026-10-28"
+PILOT_ACTIONS: Final[frozenset[str]] = frozenset({"read_evidence"})
 # The pilot identifies itself. The default urllib agent is refused by a vendor (HTTP 403).
 PILOT_USER_AGENT: Final[str] = "WebDesk-pilot/1.0 (read-only; WDS approval 28 Oct 2026)"
 
@@ -93,23 +98,23 @@ class PilotResult:
     refusals: tuple[str, ...]
 
 
-def run_pilot(opener: Opener, now: datetime) -> tuple[PilotResult, ...]:
-    """Run each pilot case once. Returns one sanitized result per case."""
+def run_pilot(opener: Opener, authority: AuthorityContext) -> tuple[PilotResult, ...]:
+    """Run each pilot case once, each under a verified operator decision.
+
+    The pilot never creates authority. ``authority`` is supplied by the trusted operator workflow,
+    and each case's retrieval runs only through ``execute_verified``. A missing, expired, revoked or
+    mismatched decision raises ``AuthorizationDenied`` before any request is made.
+    """
     results: list[PilotResult] = []
     for case in PILOT_CASES:
-        # Documented exception (QA-07): the pilot is an operator-approved retrieval run, not a
-        # specialist run, so it enters the scope itself. A reviewer must confirm this exception.
-        with harness_scope():
-            outcome = retrieve_approved_pages(
-                platform=case.platform,
-                edition=case.edition,
-                urls=[case.url],
-                workspace_id=PILOT_WORKSPACE,
-                version=case.page_version,
-                opener=opener,
-                source_id=case.source_id,
-                now=now,
-            )
+        outcome = execute_verified(
+            authority,
+            workspace_id=PILOT_WORKSPACE,
+            specialist_id=PILOT_SPECIALIST_ID,
+            request_id=PILOT_REQUEST_ID,
+            requested_actions=PILOT_ACTIONS,
+            operation=partial(_retrieve, case, opener, authority.now),
+        )
         finding = investigate(
             case.capability,
             outcome.pages,
@@ -128,6 +133,20 @@ def run_pilot(opener: Opener, now: datetime) -> tuple[PilotResult, ...]:
             )
         )
     return tuple(results)
+
+
+def _retrieve(case: PilotCase, opener: Opener, now: datetime) -> RetrievalOutcome:
+    """The retrieval call. It runs only inside ``execute_verified``."""
+    return retrieve_approved_pages(
+        platform=case.platform,
+        edition=case.edition,
+        urls=[case.url],
+        workspace_id=PILOT_WORKSPACE,
+        version=case.page_version,
+        opener=opener,
+        source_id=case.source_id,
+        now=now,
+    )
 
 
 def _fetch_dict(record: FetchRecord) -> dict[str, object]:

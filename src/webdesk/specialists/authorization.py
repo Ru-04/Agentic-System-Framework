@@ -20,13 +20,18 @@ Errors carry a code only. They never echo a decision id, actor, workspace or sou
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Final, Protocol
+from typing import Final, Protocol, TypeVar
+
+from webdesk.rbac.engine import AuthorizationStore, ResourceRef, authorize
+
+T = TypeVar("T")
 
 # Must equal webdesk.rbac.matrix.Permission.RUN_START. A test asserts the equality.
 RUN_PERMISSION: Final[str] = "run.start"
@@ -52,10 +57,12 @@ class AuthzCode(StrEnum):
     NOT_PERMITTED = "not_permitted"
     ACTION_NOT_GRANTED = "action_not_granted"
     NO_HARNESS_SCOPE = "no_harness_scope"
+    VERIFIER_MISSING = "verifier_missing"
 
 
 # Static, sanitized messages. Nothing from the request is echoed.
 _MESSAGES: Final[Mapping[AuthzCode, str]] = {
+    AuthzCode.VERIFIER_MISSING: "no trusted permission verifier is configured",
     AuthzCode.MISSING: "no operator decision was supplied",
     AuthzCode.REVOKED: "operator decision has been revoked",
     AuthzCode.EXPIRED: "operator decision has expired",
@@ -114,14 +121,36 @@ class InMemoryDecisionStore:
 PermissionCheck = Callable[[str, str, str], bool]
 
 
+def rbac_permission_check(store: AuthorizationStore) -> PermissionCheck:
+    """Trusted verifier: the existing RBAC engine decides ``run.start`` (C-1).
+
+    The workspace is the project. Role, active membership and user activity are read from the
+    authoritative store. A workspace or actor that is not a UUID is refused.
+    """
+
+    def check(actor_id: str, permission: str, workspace_id: str) -> bool:
+        try:
+            actor = uuid.UUID(actor_id)
+            project = uuid.UUID(workspace_id)
+        except ValueError:
+            return False
+        return authorize(store, actor, permission, ResourceRef(project_id=project)).allowed
+
+    return check
+
+
 @dataclass(frozen=True)
 class AuthorityContext:
-    """Everything the harness needs to verify one invocation before the provider runs."""
+    """Everything the harness needs to verify one invocation before the provider runs.
+
+    ``permission_check`` is None only when no trusted verifier is configured. Verification then
+    refuses, so an unconfigured context can never run a protected operation.
+    """
 
     decision_id: str
     actor_id: str
     store: DecisionStore
-    permission_check: PermissionCheck
+    permission_check: PermissionCheck | None
     now: datetime
     capability_id: str = ""
     audit: list[dict[str, str]] | None = None
@@ -136,6 +165,9 @@ def verify_operator_decision(
     requested_actions: frozenset[str],
 ) -> OperatorDecision:
     """Return the decision if every check passes. Otherwise raise AuthorizationDenied."""
+    permission_check = context.permission_check
+    if permission_check is None:
+        raise AuthorizationDenied(AuthzCode.VERIFIER_MISSING)
     if not context.decision_id.strip():
         raise AuthorizationDenied(AuthzCode.MISSING)
     decision = context.store.get(context.decision_id)
@@ -159,9 +191,58 @@ def verify_operator_decision(
         raise AuthorizationDenied(AuthzCode.MISMATCH)
     if not requested_actions <= decision.granted_actions or requested_actions & FORBIDDEN_GRANTS:
         raise AuthorizationDenied(AuthzCode.ACTION_NOT_GRANTED)
-    if not context.permission_check(decision.actor_id, RUN_PERMISSION, workspace_id):
+    if not permission_check(decision.actor_id, RUN_PERMISSION, workspace_id):
         raise AuthorizationDenied(AuthzCode.NOT_PERMITTED)
     return decision
+
+
+def execute_verified(
+    context: AuthorityContext,
+    *,
+    workspace_id: str,
+    specialist_id: str,
+    request_id: str,
+    requested_actions: frozenset[str],
+    operation: Callable[[], T],
+) -> T:
+    """The only entry to a protected operation outside a specialist run (e.g. the pilot).
+
+    The operation runs only after the decision verifies. The caller supplies the authority; this
+    function never creates or widens it. Each outcome is audited when ``context.audit`` is set.
+    """
+    try:
+        verify_operator_decision(
+            context,
+            workspace_id=workspace_id,
+            specialist_id=specialist_id,
+            request_id=request_id,
+            requested_actions=requested_actions,
+        )
+    except AuthorizationDenied as exc:
+        if context.audit is not None:
+            context.audit.append(
+                audit_entry(
+                    decision_id=context.decision_id,
+                    workspace_id=workspace_id,
+                    specialist_id=specialist_id,
+                    request_id=request_id,
+                    outcome="denied",
+                    code=exc.code.value,
+                )
+            )
+        raise
+    if context.audit is not None:
+        context.audit.append(
+            audit_entry(
+                decision_id=context.decision_id,
+                workspace_id=workspace_id,
+                specialist_id=specialist_id,
+                request_id=request_id,
+                outcome="allowed",
+            )
+        )
+    with harness_scope():
+        return operation()
 
 
 _HARNESS_SCOPE: ContextVar[bool] = ContextVar("webdesk_harness_scope", default=False)

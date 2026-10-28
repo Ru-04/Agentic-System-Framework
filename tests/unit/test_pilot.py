@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import io
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import timedelta
 
+import pytest
+
+from tests.support.authority import TEST_NOW, pilot_authority
 from webdesk.investigation import engine
 from webdesk.investigation.pilot import PILOT_CASES, PILOT_USER_AGENT, run_pilot
+from webdesk.specialists.authorization import AuthorityContext, AuthorizationDenied, AuthzCode
 
-NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
+NOW = TEST_NOW
 WOO_PAGE = (
     b"<html><body><p>Store API products: type=variation returns each variation with its price."
     b"</p></body></html>"
@@ -46,26 +51,26 @@ def test_pilot_activates_exactly_the_two_sources() -> None:
 
 def test_pilot_requests_only_the_two_pilot_urls() -> None:
     opener = FakeOpener()
-    run_pilot(opener, NOW)
+    run_pilot(opener, pilot_authority())
     assert sorted(opener.calls) == sorted(case.url for case in PILOT_CASES)
 
 
 def test_woocommerce_page_without_a_stated_version_is_unknown_not_cited() -> None:
-    results = {r.case: r for r in run_pilot(FakeOpener(), NOW)}
+    results = {r.case: r for r in run_pilot(FakeOpener(), pilot_authority())}
     woo = results["woocommerce_store_api_products"]
     assert woo.outcome == "unknown_support"
     assert woo.citations == ()
 
 
 def test_bigcommerce_page_with_a_stated_version_is_cited_as_verified() -> None:
-    results = {r.case: r for r in run_pilot(FakeOpener(), NOW)}
+    results = {r.case: r for r in run_pilot(FakeOpener(), pilot_authority())}
     big = results["bigcommerce_get_product"]
     assert big.outcome == "verified_support"
     assert big.citations == (PILOT_CASES[1].url,)
 
 
 def test_pilot_records_hash_and_timestamp_without_page_text() -> None:
-    results = run_pilot(FakeOpener(), NOW)
+    results = run_pilot(FakeOpener(), pilot_authority())
     for result in results:
         for record in result.fetch:
             assert record["retrieved_at"] == NOW.isoformat()
@@ -75,3 +80,58 @@ def test_pilot_records_hash_and_timestamp_without_page_text() -> None:
 
 def test_user_agent_identifies_the_pilot() -> None:
     assert PILOT_USER_AGENT.startswith("WebDesk-pilot/")
+
+
+# --- pilot self-authorization is refused before any request --------------------------
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate", "code"),
+    [
+        ("expired", lambda a: replace(a, now=NOW + timedelta(days=2)), AuthzCode.EXPIRED),
+        ("wrong actor", lambda a: replace(a, actor_id="someone-else"), AuthzCode.MISMATCH),
+        ("no verifier", lambda a: replace(a, permission_check=None), AuthzCode.VERIFIER_MISSING),
+        (
+            "missing run.start grant",
+            lambda a: replace(a, permission_check=lambda _actor, _perm, _ws: False),
+            AuthzCode.NOT_PERMITTED,
+        ),
+        ("unknown decision", lambda a: replace(a, decision_id="DEC-NOT-ISSUED"), AuthzCode.MISSING),
+    ],
+)
+def test_pilot_makes_no_request_without_a_verified_decision(
+    label: str, mutate: object, code: AuthzCode
+) -> None:
+    opener = FakeOpener()
+    authority: AuthorityContext = mutate(pilot_authority())  # type: ignore[operator]
+    with pytest.raises(AuthorizationDenied) as caught:
+        run_pilot(opener, authority)
+    assert caught.value.code is code, label
+    assert opener.calls == [], label
+
+
+def test_pilot_cannot_run_under_a_decision_for_another_request() -> None:
+    opener = FakeOpener()
+    authority = pilot_authority()
+    store = authority.store
+    other = replace(authority, decision_id="DEC-other")
+    store.issue(  # type: ignore[attr-defined]
+        replace(
+            store.get(authority.decision_id),  # type: ignore[attr-defined]
+            decision_id="DEC-other",
+            request_id="some-other-request",
+        )
+    )
+    with pytest.raises(AuthorizationDenied) as caught:
+        run_pilot(opener, other)
+    assert caught.value.code is AuthzCode.MISMATCH
+    assert opener.calls == []
+
+
+def test_pilot_with_a_verified_decision_retrieves_both_pages_and_audits_the_allowance() -> None:
+    opener = FakeOpener()
+    audit: list[dict[str, str]] = []
+    authority = replace(pilot_authority(), audit=audit)
+    run_pilot(opener, authority)
+    assert sorted(opener.calls) == sorted(case.url for case in PILOT_CASES)
+    assert [entry["outcome"] for entry in audit] == ["allowed"]

@@ -112,6 +112,25 @@ def run_slice(fixture: Mapping[str, Any], *, operator_confirmed: bool):  # type:
     return _slice.run_slice(fixture, operator_confirmed=operator_confirmed, authority=authority)
 
 
+def pilot_authority() -> AuthorityContext:
+    """A valid decision for one pilot run. Test fixture only: production issues it through the
+    operator workflow, and the pilot never creates it."""
+    from webdesk.investigation.pilot import (
+        PILOT_ACTIONS,
+        PILOT_REQUEST_ID,
+        PILOT_SPECIALIST_ID,
+        PILOT_WORKSPACE,
+    )
+
+    return _authority(
+        workspace=PILOT_WORKSPACE,
+        specialist=PILOT_SPECIALIST_ID,
+        request_id=PILOT_REQUEST_ID,
+        capability="",
+        actions=PILOT_ACTIONS,
+    )
+
+
 def run_in_harness(provider: _harness.SpecialistProvider, request: Any) -> Mapping[str, object]:
     """Call a provider's run inside the harness scope. For provider-output tests only.
 

@@ -22,7 +22,10 @@
 | R2c | Expired decision fails closed | `EXPIRED` when now is at or after expiry | `[expired]` |
 | R2d | Revoked decision fails closed | `REVOKED` | `[revoked]` |
 | R2e | Mismatched decision fails closed | `MISMATCH` on actor, workspace, specialist or request | `[wrong actor]`, `[wrong workspace]`, `[wrong specialist]`, `[wrong request]` |
-| R2f | Permission revoked at execution time | `NOT_PERMITTED` from the injected permission check | `[permission revoked]` |
+| R2f | Permission revoked at execution time | `NOT_PERMITTED` from the permission check, which is the RBAC engine (`rbac_permission_check`) | `[permission revoked]`; `test_run_start_is_refused_without_an_active_analyst_and_membership` |
+| R2g | Missing trusted verifier fails closed | `VERIFIER_MISSING` when `permission_check` is None | `test_a_missing_trusted_verifier_fails_closed`; pilot `[no verifier]` case |
+| R2h | Non-Analyst, inactive membership, inactive user, no roles | RBAC `run.start` = Analyst AND active membership, through `authorize()` | `test_run_start_is_refused...[non-Analyst (Approver)]`, `[Administrator alone]`, `[technical reviewer]`, `[inactive membership]`, `[inactive user]`, `[no roles]` (`tests/unit/test_qa07_rbac_wiring.py`) |
+| R2i | Non-UUID workspace or actor cannot be verified | Refused by `rbac_permission_check` | `test_a_workspace_that_is_not_a_project_identifier_is_refused`; `test_the_rbac_check_refuses_an_actor_that_is_not_a_user_identifier` |
 | R3a | Action cannot be substituted | Granted actions must cover every declared action; forbidden actions are never grantable | `test_granted_actions_must_cover_every_declared_action`; `test_forbidden_grant_is_refused_even_when_listed_in_the_decision` |
 | R3b | Workspace cannot be substituted | Decision workspace must equal request workspace | `test_a_decision_for_one_workspace_cannot_authorize_a_request_in_another` |
 | R3c | Specialist cannot be substituted | Decision specialist must equal request specialist | `[wrong specialist]` |
@@ -51,11 +54,13 @@
 ## Known limits (reviewer must assess)
 1. **In-process bypass is not a security boundary.** The harness scope is a context variable, and `harness_scope` is importable. Code that deliberately imports it can enter the scope. The control refuses direct and accidental calls and calls from other threads. It does not stop malicious code in the same process. An independent reviewer must decide whether that is acceptable.
 2. **The decision store is in memory.** `InMemoryDecisionStore` is the only implementation. There is no persistent store and no revocation across processes. Production needs a store backed by the platform's authorization data. That is not built, and production stays blocked (QA-07 production gate).
-3. **Permission re-check is injected.** `permission_check` is a parameter. This change wires no production function into it. The production wiring to `webdesk.rbac.engine.authorize` is not in this change.
-4. **Pilot exception.** `run_pilot` enters the harness scope itself, because the pilot is an operator-approved retrieval run and not a specialist run. This is an explicit exception. The reviewer must confirm it.
+3. **Permission re-check uses the RBAC engine, through an adapter.** `rbac_permission_check(store)` calls `webdesk.rbac.engine.authorize` for `run.start`, with the workspace read as the project id. Tests use an in-memory store that implements the same protocol as the SQL store. The SQL store has not been exercised with this check in an integration test. Production must also pass the project's data classification (the adapter uses `internal`; the `run.start` rule ignores it, but this must be reviewed).
+4. **Pilot self-authorization removed.** `run_pilot` no longer enters the harness scope. It takes an `AuthorityContext` from the caller and runs each retrieval through `execute_verified`, which verifies the decision first and then enters the scope. Missing, expired, revoked, mismatched or unverified decisions make no request. No production issuer of pilot decisions exists, so the pilot cannot run in production until the operator workflow exists. `pilot_authority()` in `tests/support` is a test fixture only.
 5. **Test wrappers.** `tests/support/authority.py` issues matching decisions for existing tests. A test wrapper cannot mask a production refusal, because the negative tests call the production functions directly.
 6. **Provider output tests.** Four provider-output tests call `run_in_harness`, which enters the scope explicitly. This is a test convenience, and the bypass tests cover the production route.
 
 ## Verification
-- Local, on `b5ea384`: 908 unit tests passed; ruff check and format clean on `src` and `tests`; strict mypy clean on `src/webdesk`.
+- Previous local run, on `b5ea384`: 908 unit tests passed; ruff clean; strict mypy clean.
+- Stage 1 revision (this commit): ruff check, ruff format and strict mypy clean locally. **Local pytest could not run in this session:** Windows Application Control (error 4551) blocked the pytest executable. Pytest was not rerun by another route. The CI run on the pushed SHA is the test record for this revision.
+- Run-start path (`src/webdesk/runs/service.py` `start_run`): calls `authorize(RUN_START)` with the project, and audits denials. Nothing under `src/webdesk/runs` or `src/webdesk/api` imports `webdesk.specialists`, so **specialist execution is not reachable from the run-start workflow today.** That is why the specialist gate is not on a live path yet.
 - CI: see the QA-07 merge package for the run bound to the final SHA.
