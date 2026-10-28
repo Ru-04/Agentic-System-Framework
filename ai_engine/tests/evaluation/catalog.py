@@ -1478,8 +1478,9 @@ def _remediation_rows() -> list[Scenario]:
             "A fabricated verified record outside the authorised set fails validation",
             "security",
             ("AI-S01",),
-            "agent output citing a verified record the lookup never authorised",
-            "FAILED_VALIDATION",
+            "agent output citing an UNVERIFIED record the lookup never served to this run",
+            "FAILED_VALIDATION with the reason 'was not served to this run' "
+            "(the served-record check)",
             "critical",
             "s01_fabricated_evidence_refused",
         ),

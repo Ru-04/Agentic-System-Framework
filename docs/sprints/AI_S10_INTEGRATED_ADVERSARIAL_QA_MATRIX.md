@@ -49,7 +49,7 @@ show that no other defect exists. Each class lists the cases that exist, not a s
 | Malformed or contradictory specialist output | `SEC-12` | pass | `Claim` | VERIFIED claim without evidence refused by the contract |
 | VERIFIED claim with a citation | `SPEC-13` | pass | `SpecialistInvestigationResult` | Refused by the output contract |
 | Model-constructed verified candidate | `S01-05` | pass | `SpecialistInvestigationResult` | Refused by the contract |
-| Fabricated record outside the authorised set | `S01-06` | pass | none (validation) | FAILED_VALIDATION |
+| Unserved record cited by agent output | `S01-06` | pass | none (served-record check) | FAILED_VALIDATION with 'was not served to this run' |
 | Approval field in a SOW request | `SEC-13` | pass | `build_request` | Refused at input |
 | Operator identity with invisible characters | `S01-01` | pass | `build_operator_selection` | `SelectionError` |
 | Unallowed collection or foreign project from an agent | `S01-02`, `S01-03` | pass | none (status) | `PERMISSION_DENIED`; no output |

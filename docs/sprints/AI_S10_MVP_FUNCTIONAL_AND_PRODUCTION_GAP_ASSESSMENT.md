@@ -35,7 +35,7 @@ extraction (`REQ-01`..`REQ-08`); LLM-backed intake offline (`LLM-01`..`LLM-03`);
 |---|---|---|---|---|
 | PG-1 | No production security or readiness review | `EXT-04` blocked | Critical | External review after Foundation |
 | PG-2 | No retention or deletion policy for evaluation data or AI outputs | D-13 | Major | WDS decision |
-| PG-3 | Real-data use not approved; `synthetic: false` refused | DEC-09; `DATA_NOT_APPROVED` | Major | WDS decision |
+| PG-3 | Real-data use not approved; `synthetic: false` refused | DEC-09; fixture ingestion refuses non-synthetic data (`ValueError`) | Major | WDS decision |
 | PG-4 | No numerical release thresholds | PENDING WDS Technical Lead | Major | WDS Technical Lead |
 | PG-5 | No human UAT | `EXT-03` blocked | Major | Stage D |
 | PG-6 | No real-platform or vendor-documentation validation | `SPEC-15`, `SPEC-16` blocked | Major | Source-access approval |

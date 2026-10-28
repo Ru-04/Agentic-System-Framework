@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 62e7226399ddc90a1c2578ad53c4a4805f80ae9815b68401527e0d83a1c7dd86",
+    "commit": "base 211d308; evaluated source sha256 adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e",
     "python": "3.12.10"
   },
   "results": [
@@ -1031,12 +1031,12 @@
       "title": "A model-constructed verified candidate is refused at the contract boundary"
     },
     {
-      "actual": "fabricated authorised-set record gives failed_validation",
+      "actual": "status failed_validation; reasons ['evidence EVD-FAKE-0002 was not served to this run']",
       "classification": "A-isolated-synthetic",
       "dependency": "none (isolated synthetic)",
       "enforced_by": null,
       "enforcement": null,
-      "expected": "FAILED_VALIDATION",
+      "expected": "FAILED_VALIDATION with the reason 'was not served to this run' (the served-record check)",
       "outcome": "pass",
       "references": [
         "AI-S01"

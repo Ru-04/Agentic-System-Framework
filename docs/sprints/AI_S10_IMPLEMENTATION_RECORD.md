@@ -105,7 +105,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `62e7226399ddc90a1c2578ad53c4a4805f80ae9815b68401527e0d83a1c7dd86`.
+  `adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.
@@ -119,7 +119,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 - **AI-S01 security (8 executed):** operator identity with invisible characters (`S01-01`); unallowed
   collection denied by the wrapper (`S01-02`); foreign-project request denied (`S01-03`); the agent cannot
   change the requirements it was given (`S01-04`); a model-constructed verified candidate is refused at the
-  contract (`S01-05`); fabricated evidence outside the authorised set fails validation (`S01-06`); a reviewed
+  contract (`S01-05`); an unverified record the lookup never served is refused by the served-record check, reason 'was not served to this run' (`S01-06`); a reviewed
   content change makes an operator selection stale (`S01-07`); and the stale-decision rejection (`STL-04`).
   Live Foundation enforcement is not run (EXT-05, EXT-06).
 - **Requirement extraction, deterministic (8 executed):** `REQ-01`..`REQ-08`: valid extraction with exact

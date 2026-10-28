@@ -916,7 +916,7 @@ def s01_fabricated_evidence_refused() -> Check:
         evidence_id="EVD-FAKE-0002",
         project_id=task.project_id,
         evidence_kind=EvidenceKind.APPROVED_INTERNAL,
-        evidence_status=EvidenceStatus.VERIFIED,
+        evidence_status=EvidenceStatus.UNVERIFIED,
         checked_at=NOW,
         relevance_summary="Fabricated verified record.",
         source_id="SRC-FAKE-0001",
@@ -928,8 +928,10 @@ def s01_fabricated_evidence_refused() -> Check:
         return result_for(agent_task, evidence=[fake])
 
     execution = execute(Custom(build), task, context, bundle)
-    ok = execution.status is AgentExecutionStatus.FAILED_VALIDATION
-    return Check(ok, f"fabricated authorised-set record gives {execution.status.value}")
+    reasons = list(execution.validation_errors)
+    served_check = "evidence EVD-FAKE-0002 was not served to this run" in reasons
+    ok = execution.status is AgentExecutionStatus.FAILED_VALIDATION and served_check
+    return Check(ok, f"status {execution.status.value}; reasons {reasons}")
 
 
 def s01_reviewed_change_makes_selection_stale() -> Check:
@@ -991,7 +993,9 @@ def req03_malformed_input_refused() -> Check:
     agent = RequirementAnalysisAgent(
         registry_version=REGISTRY_VERSION, catalog_version=CATALOG_VERSION
     )
-    reason, where = _with_reason(lambda: agent.analyze(project, []), ANALYZE, Exception)
+    from pydantic import ValidationError
+
+    reason, where = _with_reason(lambda: agent.analyze(project, []), ANALYZE, ValidationError)
     ok = reason is not None and where == "analyze"
     return Check(
         ok, f"empty input refused {reason is not None} enforced by {where}", enforced_by=where

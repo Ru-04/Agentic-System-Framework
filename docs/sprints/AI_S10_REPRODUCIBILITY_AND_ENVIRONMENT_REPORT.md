@@ -12,7 +12,7 @@ recorded in the Stage 4 acceptance packet, because this file is part of that com
 - **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
   normalised; computed by `evaluation.report.candidate_digest()`):
 
-  `62e7226399ddc90a1c2578ad53c4a4805f80ae9815b68401527e0d83a1c7dd86`
+  `adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`
 
 - The committed result documents state this digest. The consistency test regenerates the results from the
   source and fails if the committed documents differ. An export of the same commit must therefore produce

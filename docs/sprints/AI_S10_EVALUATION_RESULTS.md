@@ -1,6 +1,6 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 62e7226399ddc90a1c2578ad53c4a4805f80ae9815b68401527e0d83a1c7dd86`
+Candidate: `base 211d308; evaluated source sha256 adc20f8150a9c3d8cde35d1a7f04392565c939db456de7ba09d8b7b60506805e`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
@@ -81,7 +81,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | S01-03 | A-isolated-synthetic | pass | critical | - | PERMISSION_DENIED with no output | status permission_denied |
 | S01-04 | A-isolated-synthetic | pass | major | - | the caller's requirement is unchanged | caller's requirement unchanged=True |
 | S01-05 | A-isolated-synthetic | pass | critical | SpecialistInvestigationResult | ValidationError naming the verified-candidate rule | model-constructed verified candidate refused by SpecialistInvestigationResult |
-| S01-06 | A-isolated-synthetic | pass | critical | - | FAILED_VALIDATION | fabricated authorised-set record gives failed_validation |
+| S01-06 | A-isolated-synthetic | pass | critical | - | FAILED_VALIDATION with the reason 'was not served to this run' (the served-record check) | status failed_validation; reasons ['evidence EVD-FAKE-0002 was not served to this run'] |
 | S01-07 | A-isolated-synthetic | pass | critical | verify_selection | StaleSelectionError raised at verify_selection | stale selection refused True enforced by verify_selection |
 | SEC-01 | A-isolated-synthetic | pass | critical | generate | SOW refuses a requirement from another project | refused 'a requirement belongs to another project' enforced by generate |
 | SEC-02 | A-isolated-synthetic | pass | critical | - | claim cannot back; unauthorised collection blocker | status unsupported |

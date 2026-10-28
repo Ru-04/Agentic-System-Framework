@@ -20,7 +20,7 @@ records and the AI-engine governance documents in `docs/`.
 | R-2 | Operator confirmations are unsigned in-process records | Gate checks shape and binding, not authenticity | `EXT-06` blocked on Foundation | Engineering with WDS |
 | D-12 | LLM provider, model, budget, data-processing policy | No live LLM call path; offline deterministic LLM only | `EXT-01` blocked; `LLM-01`..`LLM-03` offline only | WDS |
 | D-13 | Retention and deletion of evaluation data and AI outputs | Open | Spec section 11; no scenario | WDS |
-| DEC-09 | Real-data use | `synthetic: false` refused with `DATA_NOT_APPROVED` | Not run; no real data used | WDS |
+| DEC-09 | Real-data use | `synthetic: false` refused: fixture ingestion raises `ValueError` ('real data is refused') | Not run; no real data used | WDS |
 | D-02 | Source-access matrix and per-vendor allowlist | None granted | `SPEC-15` blocked | WDS |
 | **STL-05** | **Stale input rejection (spec section 8)**: the spec says stale inputs are rejected. The accepted AI-S07/S08/S09 contracts flag, exclude or mark `needs_inputs`, and never refuse the operation | Flagging behaviour is what the engine implements. Only operator-selection staleness is a genuine rejection (`STL-04`) | `STL-05` **blocked**: the criterion cannot pass until WDS decides. If refusal is required, the change is an upstream AI-S08/AI-S09 correction through the permitted process | **WDS (new in Stage 3)** |
 | **UD-01** | **Upstream defect (AI-S09)**: the SOW does not compare the estimate's governance fingerprint with the governance review's | A mismatched estimate is accepted with no integrity issue | `UD-01` **open limitation**; the fix is outside AI-S10 scope and needs the permitted upstream change | **Engineering with WDS (new in Stage 3)** |
