@@ -244,6 +244,24 @@ class InvestigationProvider:
                             ],
                         }
                     )
+            elif result.outcome is Outcome.VERIFIED_SUPPORT:
+                # Only an activated boundary reaches this branch. The citation names the approved
+                # page and its content hash, so the claim can be checked against the page.
+                for citation in result.citations:
+                    findings.append(
+                        {
+                            "statement": f"{capability.name}: supported by an approved official "
+                            "page for the stated version.",
+                            "evidence_status": "cited",
+                            "evidence_refs": [
+                                {
+                                    "workspace_id": request.workspace_id,
+                                    "source_id": f"approved:{citation.url}",
+                                    "locator": citation.digest,
+                                }
+                            ],
+                        }
+                    )
             elif result.outcome is Outcome.REFUSED:
                 # Sanitized: the refused source, URL and page text are never echoed back.
                 unknowns.append(f"[REFUSE] {capability.name}: refused: {result.reason}")
