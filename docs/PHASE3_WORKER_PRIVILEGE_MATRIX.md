@@ -20,6 +20,7 @@ The worker holds no INSERT, UPDATE or DELETE on any table. Every write goes thro
 |---|---|---|
 | `fn_worker_claim_job` | claim the next eligible job with a lease and an attempt | claims queued jobs, and expired leases with attempts left (`clock_timestamp()`) |
 | `fn_worker_renew_lease` | renew the caller's lease | refused unless the lease is owned by the caller and unexpired (`0050`) |
+| `fn_worker_hold_lease` (`0051`) | confirm the caller's live lease and hold a `FOR KEY SHARE` lock on the job for the step's transaction | refused unless owned and unexpired; the lock blocks reclaim and does not block the heartbeat (H-22) |
 | `fn_worker_lock_run` | lock a run row for a state change | none |
 | `fn_worker_transition_run` | guarded run state change (expected state must hold) | none; legality is checked in worker code (`ALLOWED_TRANSITIONS`) |
 | `fn_worker_set_run_status` | set a run's status (queued after requeue) | none |
@@ -32,6 +33,7 @@ The worker holds no INSERT, UPDATE or DELETE on any table. Every write goes thro
 | `fn_worker_insert_checkpoint` | write a checkpoint (identifiers and flags only; the trigger enforces the key set) | none (written only after a successful renewal in the same transaction) |
 | `fn_worker_record_audit` | write one system audit event | none |
 | `fn_worker_reap_expired` (`0050`) | fail expired jobs with exhausted attempts, and their runs | locks job then run; expired leases only; attempts exhausted only |
+| `fn_worker_stuck_jobs` (`0051`) | read-only report of expired leases not reclaimed and queued jobs not claimed (G-8) | none; changes nothing |
 
 `tests/hardening/test_privilege_audit.py` pins this exact set for `webdesk_worker`. A new function must be added to the
 pin deliberately (the reaper was added in Phase 3).

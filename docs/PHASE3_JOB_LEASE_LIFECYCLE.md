@@ -27,12 +27,21 @@ Foundation vocabulary (migration `0007`). Phase 3 adds no state.
   Each claim increments `attempts`. The claim transaction commits before any execution (H-20).
 - **Lease length.** 120 seconds in production. A test profile may shorten it (`WEBDESK_TEST_LEASE_SECONDS`, refused
   outside `WEBDESK_ENV=test`).
-- **Renewal.** A step renews the lease in the same transaction as its work. Renewal succeeds only when the lease is
-  owned by the caller and unexpired. Each committed step renews, so a live worker's lease never expires between steps
-  (H-22; more frequent than the 30-second requirement).
+- **Heartbeat (H-22).** While a worker holds a job, a background thread renews the lease every 30 seconds
+  (`runs/heartbeat.py`). The renewal stamps `clock_timestamp()`. It renews only the caller's own unexpired lease on a
+  job that is still `leased`, so it is refused after a reclaim, a cancellation or a finish. A renewal error is reported
+  by class and retried at the next tick. The heartbeat interval is capped at a quarter of the lease, so a short test
+  lease still renews safely.
+- **Step fence (H-22).** Each step first calls `fn_worker_hold_lease` (migration `0051`). That proves the lease is live
+  and holds a `FOR KEY SHARE` lock on the job until the step's transaction ends. The lock does not block the heartbeat's
+  update, but it blocks reclaim (`FOR UPDATE SKIP LOCKED`), so no other worker can take the job during a step.
+- **Stall.** A single step running longer than the step limit (600 seconds) stops the heartbeat. The worker reports
+  `heartbeat.stalled` and the process ends with exit code 70, which releases the step's transaction and lets the lease
+  expire. A stall is not left to renew forever.
 - **Expiry.** Lease times use `clock_timestamp()` in the database (H-21). A worker cannot renew, finish or requeue a
   lease that has expired, even before another worker reclaims it.
-- **Stale worker.** A worker whose lease is lost or expired gets `lease_lost` from its next step and writes nothing.
+- **Stale worker.** A worker whose lease is lost or expired gets `lease_lost` from its next step, or from the
+  heartbeat, and writes nothing further.
 - **Reaper (H-24).** A leased job whose lease expired with `attempts >= 3` moves to `failed`. Its run moves to
   `failed` with `system_failure` when the run is in `intake_pending` or `parsing`. The run then leaves the active
   statuses, which releases its slot. The reaper locks the job, then the run (H-25 order). Each reap is audited
@@ -58,13 +67,13 @@ One transaction per step, each committed on success:
 4. finish: renew, transition to `intake_complete` then `blocked_pending_decision` (parked), checkpoint, complete the job,
    audit `run.parked`
 
-A failure in any step rolls back that step only. The failure is recorded in a fresh transaction. An uncommitted step is
-never a committed result.
+Each step begins with the fence (`hold`), so a stale worker is refused before it writes. A failure in any step rolls
+back that step only. The failure is recorded in a fresh transaction. An uncommitted step is never a committed result.
 
 ## Checkpoints
 
-`workflow_checkpoints` rows are written by the finish step, after its renewal, in the same transaction. A stale worker
-is refused by the renewal before it reaches the insert, so it cannot overwrite a successor's checkpoint.
+`workflow_checkpoints` rows are written by the finish step, after its fence, in the same transaction. A stale worker is
+refused by the fence before it reaches the insert, so it cannot overwrite a successor's checkpoint.
 
 ## Cancellation
 
