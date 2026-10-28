@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import re
 import urllib.error
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -123,6 +124,9 @@ def retrieve_approved_pages(
                 workspace_id=workspace_id,
                 text=text,
                 synthetic=False,
+                source_id=source_id,
+                retrieved_at=now.isoformat(),
+                title=_page_title(raw),
             )
         )
         records.append(
@@ -178,3 +182,14 @@ _NOT_FOUND_MARKERS: Final[tuple[str, ...]] = (
 def _is_not_found(text: str) -> bool:
     lowered = text.lower()
     return any(marker in lowered for marker in _NOT_FOUND_MARKERS)
+
+
+_TITLE: Final[re.Pattern[str]] = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+def _page_title(raw: str) -> str:
+    """The document title from the HTML title element, bounded in length. Empty if none."""
+    match = _TITLE.search(raw)
+    if match is None:
+        return ""
+    return " ".join(match.group(1).split())[:200]

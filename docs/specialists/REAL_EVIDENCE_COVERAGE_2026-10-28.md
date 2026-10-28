@@ -24,3 +24,7 @@ Status labels: VERIFIED BY APPROVED PILOT EVIDENCE, PARTIALLY VERIFIED, UNKNOWN,
 4. **Version applicability.** No version applicability is inferred from another page. The WooCommerce page states no version. The BigCommerce version (v3) is taken from the endpoint path on its own page.
 5. **Citations.** Citations carry the page digest and a passage digest. The evidence locator is the passage digest.
 6. **Synthetic results.** Synthetic test outcomes are not counted as real investigations.
+
+## Citation metadata (added 28 Oct 2026)
+
+Each pilot citation now carries the source identifier (`woocommerce_docs`, `bigcommerce_docs_product_page`), the retrieval time, the document title from the page's title element, the version the engine checked, and the digest of the matched passage. The provider's evidence reference contract (`source_id`, `locator`) holds the source URL and the passage digest. It has no field for title or version, so those are held in the engine citation and the pilot results file, not in the adapter response.

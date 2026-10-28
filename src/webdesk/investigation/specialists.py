@@ -9,7 +9,6 @@ Synthetic findings are labelled ``[SYNTHETIC]`` and are never reported as verifi
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -23,6 +22,7 @@ from webdesk.investigation.engine import (
     Outcome,
     Page,
     investigate,
+    term_in_text,
 )
 from webdesk.specialists.authority import Action
 from webdesk.specialists.catalog import REGISTRY_CAPABILITY_IDS, SpecialistId
@@ -152,32 +152,13 @@ class Decision(StrEnum):
     REFUSE = "REFUSE"
 
 
-# Explicit inflections of a required term. Whole-word matching only, so "prickly" never matches
-# "price", and an unrelated word cannot match a term by accident.
-_WORD_FORMS: Final[dict[str, tuple[str, ...]]] = {
-    "price": ("price", "prices", "priced", "pricing"),
-    "retry": ("retry", "retries", "retried", "retrying"),
-    "delivery": ("delivery", "deliveries"),
-    "cart": ("cart", "carts"),
-    "api": ("api", "apis"),
-}
-
-
-def _term_present(term: str, text: str) -> bool:
-    """Whole-word match on the term or one of its listed inflections; a phrase matches whole."""
-    word = term.lower()
-    forms = _WORD_FORMS.get(word, (word, f"{word}s"))
-    alternatives = "|".join(re.escape(form) for form in forms)
-    return re.search(rf"\b(?:{alternatives})\b", text.lower()) is not None
-
-
 def matched_capabilities(specialist: SpecialistId, task: str) -> tuple[Capability, ...]:
     """Capabilities whose every required term appears in the requirement text."""
     text = task.lower()
     return tuple(
         capability
         for capability in CATALOG[specialist]
-        if all(_term_present(term, text) for term in capability.required_terms)
+        if all(term_in_text(term, text) for term in capability.required_terms)
     )
 
 

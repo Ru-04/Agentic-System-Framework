@@ -12,6 +12,8 @@ import io
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
+import pytest
+
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Edition, Outcome, Page, investigate
 from webdesk.investigation.retrieval import FetchStatus, retrieve_approved_pages
@@ -217,3 +219,121 @@ def test_only_the_two_pilot_boundaries_are_active() -> None:
     assert engine.ACTIVE_BOUNDARIES == frozenset(
         {("woocommerce", Edition.NOT_APPLICABLE), ("bigcommerce", Edition.NOT_APPLICABLE)}
     )
+
+
+# --- sentence matching: false positives and negatives -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("term", "text", "expected"),
+    [
+        ("price", "Each variation has its own price.", True),
+        ("price", "Pricing is set per variation.", True),
+        ("price", "Prices are shown in the cart.", True),
+        ("price", "A prickly cactus has spines.", False),
+        ("price", "This is priceless advice.", False),
+        ("variation", "Variations are listed by parent.", True),
+        ("product", "Get Product on the catalog.", True),
+        ("product", "The productivity report.", False),
+        ("store api", "The Store API lists products.", True),
+        ("store api", "The store and the api differ.", False),
+    ],
+)
+def test_term_matching_cases(term: str, text: str, expected: bool) -> None:
+    from webdesk.investigation.engine import term_in_text
+
+    assert term_in_text(term, text) is expected
+
+
+def test_pricing_sentence_is_a_passage_match_not_a_false_negative() -> None:
+    page = _page(
+        WOO_URL,
+        "Products are listed here. Pricing is set per variation.",
+        version="1.0",
+        platform="woocommerce",
+        edition=Edition.NOT_APPLICABLE,
+    )
+    finding = investigate(
+        WOO_VARIATION, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
+    )
+    assert finding.outcome is Outcome.VERIFIED_SUPPORT
+
+
+def test_terms_in_different_sentences_remain_a_false_positive_guard() -> None:
+    page = _page(
+        WOO_URL,
+        "Variations are listed. A prickly price list is shown elsewhere.",
+        version="1.0",
+        platform="woocommerce",
+        edition=Edition.NOT_APPLICABLE,
+    )
+    finding = investigate(
+        WOO_VARIATION, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
+    )
+    assert finding.citations == ()
+
+
+# --- citation metadata links the claim to its source, retrieval and version -----------------------
+
+
+def test_retrieved_page_title_is_extracted_from_the_html_title_element() -> None:
+    from webdesk.investigation.retrieval import _page_title
+
+    raw = "<html><head><title>  Get   Product | BigCommerce Docs </title></head></html>"
+    assert _page_title(raw) == "Get Product | BigCommerce Docs"
+    assert _page_title("<html></html>") == ""
+
+
+def test_citation_carries_source_identity_retrieval_time_title_and_version() -> None:
+    body = (
+        b"<html><head><title>Products API | WooCommerce developer docs</title></head>"
+        b"<body><p>Each variation has its own price.</p></body></html>"
+    )
+
+    class _Opener:
+        def __call__(self, url: str, timeout: float) -> io.BytesIO:
+            return io.BytesIO(body)
+
+    outcome = retrieve_approved_pages(
+        platform="woocommerce",
+        edition=Edition.NOT_APPLICABLE,
+        urls=[WOO_URL],
+        workspace_id=WS,
+        version="1.0",
+        opener=_Opener(),
+        source_id="woocommerce_docs",
+        now=NOW,
+    )
+    engine_now_page = outcome.pages[0]
+    assert engine_now_page.source_id == "woocommerce_docs"
+    assert engine_now_page.retrieved_at == NOW.isoformat()
+    assert engine_now_page.title == "Products API | WooCommerce developer docs"
+    finding = investigate(
+        WOO_VARIATION,
+        outcome.pages,
+        workspace_id=WS,
+        requested_version="1.0",
+        operator_confirmed=True,
+    )
+    citation = finding.citations[0]
+    assert citation.url == WOO_URL
+    assert citation.version == "1.0"
+    assert citation.source_id == "woocommerce_docs"
+    assert citation.retrieved_at == NOW.isoformat()
+    assert citation.title == "Products API | WooCommerce developer docs"
+    assert (
+        citation.passage_digest == hashlib.sha256(b"Each variation has its own price.").hexdigest()
+    )
+
+
+def test_synthetic_pages_carry_no_retrieval_metadata() -> None:
+    page = _page(
+        WOO_URL,
+        "Each variation has its own price.",
+        version="1.0",
+        platform="woocommerce",
+        edition=Edition.NOT_APPLICABLE,
+    )
+    assert page.source_id == ""
+    assert page.retrieved_at == ""
+    assert page.title == ""
