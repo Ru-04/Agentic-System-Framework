@@ -99,6 +99,10 @@ class Page:
     workspace_id: str
     text: str
     synthetic: bool = True
+    # Retrieval metadata. Empty for synthetic fixtures.
+    source_id: str = ""
+    retrieved_at: str = ""
+    title: str = ""
 
     def digest(self) -> str:
         return hashlib.sha256(self.text.encode("utf-8")).hexdigest()
@@ -122,6 +126,10 @@ class Citation:
     shared: bool
     # Hash of the one passage (sentence) that contains every required term. Empty if not set.
     passage_digest: str = ""
+    # Document identity and retrieval metadata, linked to this citation.
+    source_id: str = ""
+    retrieved_at: str = ""
+    title: str = ""
 
 
 @dataclass(frozen=True)
@@ -161,6 +169,25 @@ def _authorization_violation(
     return None
 
 
+# Explicit inflections of a required term. Whole-word matching only, so "prickly" never matches
+# "price", and an unrelated word cannot match a term by accident.
+WORD_FORMS: Final[dict[str, tuple[str, ...]]] = {
+    "price": ("price", "prices", "priced", "pricing"),
+    "retry": ("retry", "retries", "retried", "retrying"),
+    "delivery": ("delivery", "deliveries"),
+    "cart": ("cart", "carts"),
+    "api": ("api", "apis"),
+}
+
+
+def term_in_text(term: str, text: str) -> bool:
+    """Whole-word match on the term or one of its listed inflections. A phrase matches whole."""
+    word = term.lower()
+    forms = WORD_FORMS.get(word, (word, f"{word}s"))
+    alternatives = "|".join(re.escape(form) for form in forms)
+    return re.search(rf"\b(?:{alternatives})\b", text.lower()) is not None
+
+
 def _matching_passage(text: str, terms: Sequence[str]) -> str | None:
     """The first sentence that contains every required term, or None.
 
@@ -168,8 +195,7 @@ def _matching_passage(text: str, terms: Sequence[str]) -> str | None:
     paragraph and "price" in another) do not support a capability claim.
     """
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        lowered = sentence.lower()
-        if sentence.strip() and all(term.lower() in lowered for term in terms):
+        if sentence.strip() and all(term_in_text(term, sentence) for term in terms):
             return sentence.strip()
     return None
 
@@ -265,6 +291,9 @@ def investigate(
                 digest=page.digest(),
                 shared=page.edition is Edition.SHARED,
                 passage_digest=hashlib.sha256(passage.encode("utf-8")).hexdigest(),
+                source_id=page.source_id,
+                retrieved_at=page.retrieved_at,
+                title=page.title,
             )
         )
 
