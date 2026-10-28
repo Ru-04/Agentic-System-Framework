@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import os
 import secrets
-import socket
 import subprocess
 import sys
+import tempfile
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -28,6 +28,7 @@ from sqlalchemy.engine import Connection, Engine
 from tests.support.app_name import label
 from tests.support.authority import SECRET as AUTHORITY_SECRET
 from tests.support.authority import authority_database_url, provision_login_password
+from tests.support.authority_start import listen_port, redact
 from webdesk.authority.client import AuthorityClient
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.delivery.transport import CaptureTransport
@@ -94,35 +95,42 @@ def authority_client() -> Iterator[AuthorityClient]:
             "WEBDESK_INTEGRATION_OWNER_URL is not set (needed to provision the authority login)"
         )
     password = provision_login_password(provisioning_url)
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
     env = {
         **os.environ,
         "WEBDESK_ENV": "test",
         "PGAPPNAME": label("authority"),
         "WEBDESK_AUTHORITY_DATABASE_URL": authority_database_url(app_url, password),
         "WEBDESK_AUTHORITY_SECRET": AUTHORITY_SECRET,
-        "WEBDESK_AUTHORITY_BIND": f"127.0.0.1:{port}",
+        "WEBDESK_AUTHORITY_BIND": "127.0.0.1:0",
         "WEBDESK_EMAIL_DOMAIN_ALLOWLIST": "wds-test.example",
     }
+    stderr = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed in finally
     process = subprocess.Popen(  # noqa: S603 - fixed argument list: interpreter and module name
         [sys.executable, "-m", "webdesk.authority.server"],
         env=env,
         stdout=subprocess.PIPE,
+        stderr=stderr,
         text=True,
     )
     try:
         assert process.stdout is not None
         line = process.stdout.readline()
-        if "authority listening" not in line:
-            raise RuntimeError(f"the authority process did not start: {line!r}")
+        port = listen_port(line)
+        if port is None:
+            process.wait(timeout=10)
+            stderr.seek(0)
+            detail = redact(stderr.read()[-800:], [password, AUTHORITY_SECRET])
+            raise RuntimeError(
+                f"the authority process did not start (exit {process.returncode}); "
+                f"stdout {line!r}; stderr tail {detail!r}"
+            )
         _authority = AuthorityClient(f"http://127.0.0.1:{port}", AUTHORITY_SECRET)
         yield _authority
     finally:
         _authority = None
         process.terminate()
         process.wait(timeout=10)
+        stderr.close()
 
 
 def _require_authority() -> AuthorityClient:
