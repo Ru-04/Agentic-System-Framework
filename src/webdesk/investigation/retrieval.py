@@ -21,6 +21,7 @@ import http.client
 import urllib.error
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
@@ -52,6 +53,8 @@ class FetchRecord:
     status: FetchStatus
     reason: str
     content_sha256: str | None = None
+    source_id: str | None = None
+    retrieved_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -71,8 +74,14 @@ def retrieve_approved_pages(
     workspace_id: str,
     version: str | None,
     opener: Opener | None,
+    source_id: str,
+    now: datetime,
 ) -> RetrievalOutcome:
     """Fetch approved pages, or record why each one was not fetched. Makes no request otherwise."""
+    if now.tzinfo is None:
+        raise ValueError("retrieval timestamp must be timezone-aware")
+    if not source_id.strip():
+        raise ValueError("source_id must not be blank")
     key = (platform, edition)
     boundary = engine.BOUNDARIES.get(key)
     pages: list[Page] = []
@@ -112,7 +121,15 @@ def retrieve_approved_pages(
                 synthetic=False,
             )
         )
-        records.append(FetchRecord(FetchStatus.FETCHED, "retrieved", content_sha256=digest))
+        records.append(
+            FetchRecord(
+                FetchStatus.FETCHED,
+                "retrieved",
+                content_sha256=digest,
+                source_id=source_id,
+                retrieved_at=now,
+            )
+        )
     return RetrievalOutcome(tuple(pages), tuple(records))
 
 

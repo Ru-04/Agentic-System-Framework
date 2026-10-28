@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import urllib.error
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,6 +22,7 @@ from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import SpecialistInput
 
 WS = "ws-synthetic"
+NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 APPROVED = "https://developer.woocommerce.com/docs/products/variations"
 OUTSIDE = "https://developer.woocommerce.com/blog/variations"
 VARIATION = Capability(
@@ -64,6 +66,8 @@ def _retrieve(
         workspace_id=WS,
         version=version,
         opener=opener,
+        source_id="woocommerce_docs",
+        now=NOW,
     )
 
 
@@ -96,6 +100,8 @@ def test_platform_without_a_boundary_is_inactive_and_makes_no_request() -> None:
         workspace_id=WS,
         version="1.0",
         opener=recorder,
+        source_id="shift4shop_3dcart_discovery",
+        now=NOW,
     )
     assert recorder.calls == []
     assert outcome.count(FetchStatus.INACTIVE) == 1
@@ -241,3 +247,26 @@ def test_provider_reports_verified_support_as_a_cited_non_synthetic_finding(
     assert len(findings) == 1
     assert "[SYNTHETIC]" not in findings[0]["statement"]
     assert findings[0]["evidence_status"] == "cited"
+
+
+def test_fetched_record_carries_source_identifier_and_retrieval_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _activate(monkeypatch)
+    record = _retrieve([APPROVED], Recorder()).records[0]
+    assert record.source_id == "woocommerce_docs"
+    assert record.retrieved_at == NOW
+
+
+def test_naive_retrieval_timestamp_is_refused() -> None:
+    with pytest.raises(ValueError):
+        retrieve_approved_pages(
+            platform="woocommerce",
+            edition=Edition.NOT_APPLICABLE,
+            urls=[APPROVED],
+            workspace_id=WS,
+            version="1.0",
+            opener=None,
+            source_id="woocommerce_docs",
+            now=datetime(2026, 10, 28, 12, 0),
+        )
