@@ -17,8 +17,8 @@ from evaluation.catalog import (
     build_catalog,
     executor_names,
 )
+from evaluation.executors import build_executors
 from evaluation.runner import Outcome, run_catalog, summarise, to_json, to_markdown
-from evaluation.scenarios import build_executors
 
 COMMIT = "AI-S10-TEST"
 CATALOG = build_catalog()

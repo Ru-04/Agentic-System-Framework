@@ -1,8 +1,24 @@
-# AI-S10 Reproducibility and Environment Report
+# AI-S10 Reproducibility and Environment Report (Stage 3)
 
-Status: Stage 1. Commands below were run on the development worktree during this stage.
+Status: Stage 3 remediation. The commands and counts below were run on the development worktree after the
+final source change. The committed-tree (clean export) counts are measured after the remediation commit and
+recorded in the Stage 4 acceptance packet, because this file is part of that commit.
 
-## 1. Environment
+## 1. Candidate identity
+
+- Base commit: `211d308` (`AI-S10: integrated evaluation checkpoint (synthetic, Stage 1)`), branch
+  `integration/ai-s01-s02-s03`.
+- Engine source (`ai_engine/src`): unchanged from the base commit.
+- **Candidate source digest** (SHA-256 over the engine source and the AI-S10 test package, line endings
+  normalised; computed by `evaluation.report.candidate_digest()`):
+
+  `62e7226399ddc90a1c2578ad53c4a4805f80ae9815b68401527e0d83a1c7dd86`
+
+- The committed result documents state this digest. The consistency test regenerates the results from the
+  source and fails if the committed documents differ. An export of the same commit must therefore produce
+  the same digest.
+
+## 2. Environment
 
 | Item | Value |
 |---|---|
@@ -11,80 +27,77 @@ Status: Stage 1. Commands below were run on the development worktree during this
 | pytest | 8.3.3 |
 | ruff | 0.6.9 |
 | mypy | 1.11.2 (compiled) |
-| Base commit | `3e79d01` on `integration/ai-s01-s02-s03` |
-| Working tree | Base plus the AI-S10 files listed in the implementation record |
+| Test path | `PYTHONPATH="src;tests"` (semicolon on Windows); `pyproject.toml` `pythonpath = ["src"]` |
 
 Shell note: the commands use `.venv/Scripts/...` (Git Bash). In PowerShell use `.venv\Scripts\...`.
-Set `PYTHONPATH` to `src;tests` (semicolon on Windows).
 
-## 2. Fixture and file identifiers
+## 3. Fixture and identifier conventions
 
-Fixtures are synthetic and come from the accepted AI-S06 to AI-S09 test helpers:
-projects `PRJ-SYN-0001` and `PRJ-SYN-0002`, requirements `REQ-SYN-000n`, evidence `EVD-SYN-000n`,
-operator `OPR-SYN-1`, run `RUN-SYN-0001`.
+All fixtures are synthetic: projects `PRJ-SYN-0001` and `PRJ-SYN-0002`, requirements `REQ-SYN-000n`,
+evidence `EVD-SYN-000n`, the synthetic operator `OPR-SYN-1`, run `RUN-SYN-0001`. Confirmations built by the
+AI-S10 executors are synthetic, human-shaped (`mock=False`) records. They are not Foundation operator
+authority. The offline LLM is deterministic and scripted; no provider is called.
 
-First 16 hex characters of the SHA-256 of each AI-S10 file (recompute with `sha256sum`; full digests are
-the authoritative identifiers):
-
-| File | SHA-256 (prefix) |
-|---|---|
-| `tests/evaluation/catalog.py` | `91745c1546e212af` |
-| `tests/evaluation/runner.py` | `207394b835aaaed6` |
-| `tests/evaluation/scenarios.py` | `f34348524d33ce20` |
-| `tests/test_ai_s10_evaluation.py` | `3d2a7e1f2b8d5d72` |
-
-These hashes describe the working tree at the time of the gate run. Any later edit changes them.
-
-## 3. Commands
+## 4. Commands
 
 ```bash
 cd ai_engine
-PYTHONPATH="src;tests" .venv/Scripts/python.exe -m pytest tests/test_ai_s10_evaluation.py -q
+PYTHONPATH="src;tests" .venv/Scripts/python.exe -m pytest tests/test_ai_s10_evaluation.py tests/test_ai_s10_evaluator_rules.py tests/test_ai_s10_mutations.py tests/test_ai_s10_consistency.py -q
 .venv/Scripts/python.exe -m pytest -q
-.venv/Scripts/ruff.exe check .
-.venv/Scripts/ruff.exe format --check .
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m ruff format --check .
 .venv/Scripts/mypy.exe --strict src tests
-PYTHONPATH="src;tests" .venv/Scripts/python.exe -m evaluation.report ../docs/sprints "<label>"
+PYTHONPATH="src;tests" .venv/Scripts/python.exe -m evaluation.report ../docs/sprints
 ```
 
-## 4. Metric definitions
+## 5. Test-count separation
 
-Written after the first catalogue run, not before. The spec (section 5) asks for them before the first
-run; this is a disclosed deviation.
+Counts are published separately. Committed and untracked tests are never added into one committed-baseline
+number.
+
+| Count | Value | Source |
+|---|---|---|
+| Development worktree: passed | 1744 | full suite on `integration-baseline` after remediation |
+| Development worktree: skipped | 3 | the three Foundation tests (lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`) |
+| Development worktree: failed | 0 | |
+| Untracked Foundation tests (collected) | 67 | `test_ai_s02_s04_acceptance_distinctions.py` (18), `_boundaries.py` (43), `_integration.py` (6) |
+| Untracked Foundation tests: passed / skipped | 64 / 3 | same files |
+| Committed tree: expected passed | 1680 | development passed (1744) minus the untracked Foundation passes (64) |
+| Committed tree: expected skipped | 0 | the skipped tests are untracked |
+| Collected but not run | 0 | no collected test is excluded from the run |
+| External integration criteria not executed | 13 blocked catalogue rows | see the catalogue; blocked rows are never counted as passed |
+
+The committed-tree figures are the expectation derived from the counts above. The measured clean-export
+figures of the remediation commit are recorded in the Stage 4 acceptance packet.
+
+## 6. Scenario catalogue counts (regenerated from source)
+
+- Total: 133 scenarios.
+- Class A (isolated synthetic): 112 pass, 0 fail, 5 open limitations, 3 delegated, 1 blocked.
+- Class B to F (external): 12 blocked, none passed.
+- Outcomes: pass 112, open_limitation 5, delegated 3, blocked 13, fail 0.
+- No cross-class percentage is computed.
+
+## 7. Metric definitions
+
+Written after the first catalogue run (disclosed; the spec requires them before the first run).
 
 - **Outcome** per scenario: `pass`, `fail`, `blocked`, `delegated`, `open_limitation`.
-- **Counts** are reported per classification. A cross-class percentage is not computed.
-- **Synthetic executed** means classification A scenarios with status `executed`.
-- **Thresholds: none set.** Every numerical release threshold is **PENDING WDS Technical Lead**
-  (spec section 7). No threshold is treated as approved.
+- **Enforcement check**: a scenario that declares an enforcement point passes only when its refusal was raised
+  at that point.
+- **Thresholds: none set.** Every numerical release threshold is **PENDING WDS Technical Lead** (spec section 7).
 
-## 5. Gate results (development worktree)
+## 8. Clean-export reproducibility procedure
 
-| Gate | Result |
-|---|---|
-| `test_ai_s10_evaluation.py` | 16 passed |
-| Full suite | 1728 passed, 3 skipped (the 3 Foundation skips, lines 357, 362, 367 of `test_ai_s02_s04_acceptance_distinctions.py`) |
-| `ruff check .` | All checks passed |
-| `ruff format --check .` | 151 files formatted |
-| `mypy --strict src tests` | No issues in 151 source files |
-| Catalogue run | 91 scenarios; 74 synthetic executed; 74 pass; 0 fail |
+1. `git archive <remediation-commit> | tar -x -C <scratch>/clean`
+2. From `<scratch>/clean/ai_engine`, with `PYTHONPATH=src;tests`, run the commands in section 4.
+3. Confirm the digest in the regenerated output equals the one in section 1.
+4. Confirm the regenerated result documents equal the committed ones (the consistency test does this).
+5. Confirm the import path is the exported `src` (print `ai_engine.__file__`).
 
-The 64 passing tests of the untracked Foundation files are counted in the full suite but are not in the
-committed tree. The 3 skipped tests are not run and are not passed.
+## 9. Reproducibility limits
 
-## 6. Clean-export reproducibility
-
-Procedure: export the checkpoint commit to a clean directory with `git archive`, then run the gates in
-section 3 there.
-
-Expected for the committed tree: the full suite without the 64 untracked Foundation passes, so 1664 passed
-and 0 skipped. The result of the clean export is reported in the Stage 1 hand-off message. It is not
-written into this file, because this file is part of the commit it would describe.
-
-## 7. Reproducibility limits
-
-- Windows-specific: `PYTHONPATH` separator and the `.venv` layout. Other platforms need the usual
-  adaptations.
-- The catalogue results depend on the engine code at the commit. Changing the engine changes the
-  outcomes and must be followed by a regeneration.
-- The three Foundation skips are environmental, not a defect of AI-S10.
+- Windows-specific: the `PYTHONPATH` separator and the `.venv` layout.
+- The results depend on the engine source at the commit; a source change changes the digest and requires
+  regeneration.
+- Line endings: the digest normalises CRLF to LF. Git warns about CRLF in the working copy; the stored content is LF.

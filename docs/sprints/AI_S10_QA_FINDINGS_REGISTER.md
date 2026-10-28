@@ -1,37 +1,53 @@
 # AI-S10 QA Findings Register
 
-Status: **Stage 1 self-check only. Independent QA (Stage 2) has not been performed.** The author cannot
-be the independent reviewer. Stage 2 adds its own findings to this register.
+Status: the Stage 2 independent QA of baseline `211d308` returned **FAIL**. Stage 3 remediated every
+finding below. The Stage 2 **re-review of the remediation commit is pending** and is the only verdict that can
+move this register to PASS. The author's self-checks are not an independent verdict.
 
-## 1. Stage 1 self-check findings (author)
+## 1. Stage 2 findings (baseline `211d308`) and dispositions
 
-| ID | Finding | Disposition | Status |
-|---|---|---|---|
-| SF-1 | The evaluation package was first created in the wrong checkout (`ai_engine/ai_engine/tests/evaluation` in the session's checkout, from a relative path). A copy exists there. | Work moved to `integration-baseline`. The stray copy could not be deleted (a safety check refused the removal). | **Open. User to delete** `webdesk-ai-s02\ai_engine\ai_engine` |
-| SF-2 | Three executors gave wrong results on first run (EST-10, PIPE-02, SOW-02) because the executor inputs were wrong. | Inputs corrected to the engine's contract. The engine was not changed. | Closed |
-| SF-3 | REC-03 was first written to expect refusal with no attempt. The engine runs the category with no evidence and reports `succeeded`. | Expectation corrected to the observed contract. Recorded as observation OBS-1. | Closed by correction; QA to confirm |
-| SF-4 | 138 lint findings in new files before fixes (E501, F401, I001, S105). | Autofix plus manual wrapping. S105 on `PASS` suppressed with a comment. Sentinel renamed. `__all__` workaround removed. | Closed |
-| SF-5 | Metric definitions were written after the first run. | Disclosed in the reproducibility report, section 4. | Disclosed |
-| SF-6 | The author's first coverage count showed no AI-S01 or AI-S02 references. The output had been cut by `tail`, which hid the AI-S01 and AI-S02 rows. | Recounted. AI-S02 has two blocked references. The traceability matrix corrected. | Closed |
-| SF-7 | The traceability matrix attributed the AI-S07 open limitation to EXT-08. It is EVID-16. | Corrected. | Closed |
-| SF-8 | Traceability row for AI-S06 named EXT-06 as its blocked scenario. It is SEC-18. | Corrected. | Closed |
-| SF-9 | The spec requires failure and recovery scenarios, including partial authorisation with no fallback and stale input rejected. | REC-01 to REC-03 added. "Stale input rejected" is implemented as flagged and not backed (SEC-04, EVID-07, EST-07), not rejected. See OBS-4. | Closed for REC-01 to REC-03; OBS-4 open |
+| ID | Severity | Finding (as reported) | Disposition | Evidence |
+|---|---|---|---|---|
+| QA-1 | Blocking | Replay test refused by workflow state before the ledger; removing `consume` left the suite green. | **Resolved.** Replay executors reach the ledger boundary (`consume`); refusals are checked at the enforcement point; mutation fails the replay tests. | `RPL-01`..`RPL-07`, `SEC-06`; `test_ledger_consume_removed_is_detected`. |
+| QA-2 | Blocking | Spec section 8 requires stale-input rejection; the engine only flags it. | **Resolved as classification; governance decision open.** Genuine rejection proven for stale operator selections (`STL-04`). Flagged revisions proven excluded and not completed (`STL-01`..`STL-03`, `STL-06`). The spec's rejection requirement for requirement and estimate inputs is **blocked** (`STL-05`) pending a WDS decision. | `STL-*`; `test_stale_input_that_is_only_flagged_is_not_classed_as_rejected`. |
+| QA-3 | Major | REC-03 expectation rewritten to fit the observed behaviour (C-15). | **Resolved.** Expectation restored and frozen. Classified `OPEN_LIMITATION`, linked to C-15, excluded from PASS. Producer unchanged. | `REC-03`; `test_frozen_expectation_for_rec03_*`. |
+| QA-4 | Major | Negative tests passed under an always-refuse mutation (SEC-05, SEC-07, SEC-08, SPEC-08). | **Resolved.** Exact reasons and enforcement points asserted; positive controls added; always-refuse mutation detected. | `SEC-05`, `SEC-07`, `SEC-08`, `SPEC-08`; `test_always_refuse_verification_is_detected`. |
+| QA-5 | Major | Results not anchored to one candidate; 1728 cited against 1664 committed; untracked provenance unclear. | **Resolved.** Candidate source digest; consistency test; separate test-count table; provenance stated per source; documents reconciled. | `report.candidate_digest()`; `test_committed_results_match_the_regenerated_output`; reproducibility report section 5. |
+| QA-6 | Major | Coverage gaps: AI-S01 (zero), requirement extraction (delegated), cross-project (narrow), pipeline traceability (none). | **Resolved for the offline scope.** AI-S01 (8 executed); extraction (8 deterministic and 3 LLM-backed, offline); cross-project (6 + `SEC-01`); traceability (`TRC-01`); the integrated adapter gap is blocked (`TRC-02`). | catalogue sections on AI-S01, REQ, LLM, XP, TRC. |
+| Minor (EVID-15) | Minor | Expected text named estimate and SOW; executor checked the estimate only. | **Resolved.** Executor checks the estimate readiness and the SOW deliverable and risk text. | `evid_blocker_not_erased`. |
+| Minor (SOW-12) | Minor | Expected "several fields"; executor tested one. | **Resolved.** Five positions tested; each must be flagged; approval unchanged. | `sow_injection_data`. |
+| Minor (SOW-09) | Minor | Expected "durations"; regex covered dates only. | **Resolved.** Dates and schedule durations checked. Effort hours (AI-S08 estimate values) excluded deliberately, stated in the executor. | `sow_no_dates`. |
+| Minor (SEC-09) | Minor | Name-based detection of a gate parameter. | **Resolved.** Behavioural: a direct call with no confirmation, actor or proposal returns an execution. Limitation still present. | `sec_r1_present`; `SEC-09` (open limitation). |
+| Minor (REC-01) | Minor | Only the initial failure was reported; no recovery tested. | **Resolved.** `REC-04`: transient first attempt, successful retry, eight calls. | `rec_recovery_after_transient`. |
+| Minor (REC-02) | Minor | One permanent variant. | **Resolved.** Three permanent statuses covered; `REC-05` covers an exception that is not retried. | `rec_permanent_no_retry`, `rec_exception_not_retried`. |
 
-## 2. Observations for Stage 2
+## 2. Reviewer observations (Stage 2 report) and dispositions
 
-| ID | Observation | Why it matters |
+| ID | Observation | Disposition |
 |---|---|---|
-| OBS-1 | REC-03: a category without its collection still runs, reports `succeeded`, and its specialist reports `evidence_unavailable`. No other collection is substituted. | Matches C-15. Consumers may read success as completeness. Decision required (governance register). |
-| OBS-2 | AI-S01 has no catalogue reference. AI-S02 has two blocked references only. | The matrix shows no executed coverage for these sprints. Add scenarios or accept the gap. |
-| OBS-3 | AI-S05 has 130 tests and 2 catalogue scenarios. | Breadth is in the test file, not the catalogue. |
-| OBS-4 | The spec says "stale input rejected". The implementation flags and does not back stale input, and marks the estimate line `needs_inputs`. It does not reject the request. | QA to decide whether flagging satisfies the spec or whether rejection is required. |
-| OBS-5 | Requirement extraction has one delegated scenario (PIPE-04) and no sprint reference. | Spec section 2 lists it as in scope. |
-| OBS-6 | The 16 AI-S10 tests check the runner, including mutations. They do not check the catalogue's expectations against an independent oracle. | Expectations were written by the author. Stage 2 should review them. |
-| OBS-7 | All adversarial cases are fixed and hand-written, one or two per class. No generated or property-based cases. | Absence of failures is not proof of absence of defects. |
-| OBS-8 | Two of the three open limitations (R-1, EVID-16) are real defects in the sense that the control is absent. They are shown as present, not fixed. | Correct per the spec; QA should confirm they are not marked as passes anywhere. |
-| OBS-9 | The sprint spec and master plan are untracked in the worktree. The spec was read in full; the master plan was read by search only. | Authority files not fully reviewed are named as such in this record. |
+| QA-7 | SEC-12 is refused by the `Claim` constructor, not the output validator; SPEC-13 is genuine. | **Resolved.** Enforcement recorded as `Claim` for SEC-12 and `SpecialistInvestigationResult` for SPEC-13; SEC-12 expected text narrowed to the Claim contract. |
+| QA-8 | SEC-09 accepted any name-based signature check. | Resolved (see the minor above). |
+| QA-9 | REC-01 proved bounded retry only; REC-02 covered one variant. | Resolved (see the minors above). |
+| QA-10 | Three executors corrected after the first run; a misplaced duplicate evaluation package exists in the session worktree. | The corrections are recorded in the implementation record. **The duplicate remains and must be deleted by the user** (`webdesk-ai-s02\ai_engine\ai_engine`); the removal was refused by a safety check. |
+| — | EVID-16 would still report open if the lexical screen were removed entirely. | Accepted as stated: EVID-16 is an open limitation whose check passes only while the limitation is present. Semantic adequacy remains untested. |
 
-## 3. Stage 2 (independent QA)
+## 3. New finding recorded by Stage 3 (upstream, not fixed)
 
-Not started. Stage 2 should check: the catalogue expectations; the REC-03 decision; OBS-2 and OBS-5 coverage;
-the reproducibility of the clean export; and the wording of every "pass" against what it proves.
+| ID | Class | Finding | Disposition |
+|---|---|---|---|
+| UD-01 | Upstream defect (AI-S09), open limitation | The SOW does not compare the estimate's governance fingerprint with the governance review's. A mismatched estimate is accepted with no integrity issue. | **Recorded.** Outside AI-S10 scope; fixing it changes accepted AI-S09 output and needs the permitted upstream change and renewed verification. Test asserts the defect is still present. |
+
+## 4. Known limits that remain (not hidden)
+
+- Mutation coverage is two controls (ledger `consume`; verification gate). The inline stale-revision check and
+  the upstream fingerprint gap are not mutation-tested.
+- `STL-05` (spec section 8 rejection) cannot pass until WDS decides the rule.
+- `REC-03` / `C-15` remain unresolved policy.
+- AI-S01 wrapper denials are status-based; their enforcement point is recorded as none.
+- AI-S05 has 130 accepted tests and 2 catalogue scenarios; its breadth is in its test file.
+- `PIPE-04`, `PIPE-05`, `SPEC-14` remain delegated (sprint test files), as recorded.
+
+## 5. Stage 2 re-review
+
+Pending. The full re-review of the remediation commit is to be performed by an independent reviewer that has
+not seen the Stage 3 reasoning, and is required before any PASS is claimed.

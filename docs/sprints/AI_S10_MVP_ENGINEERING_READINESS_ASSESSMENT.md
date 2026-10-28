@@ -1,45 +1,45 @@
-# AI-S10 MVP Engineering Readiness Assessment
+# AI-S10 MVP Engineering Readiness Assessment (Stage 3)
 
-Status: Stage 1 self-assessment. It is an input to Stage 2 QA and to WDS acceptance. It is not a release
-recommendation, and it is not a production-readiness statement.
+Status: Stage 3 self-assessment. Input to the Stage 2 re-review and to WDS acceptance. Not a release
+recommendation and not a production-readiness statement.
 
 ## 1. Verdict
 
-- **Synthetic engineering scope (AI-S06 to AI-S09):** engineering-complete as a checkpoint, subject to
-  independent QA. The runner reports 74 of 74 executed synthetic scenarios passing.
-- **MVP as a whole:** **not ready.** Integration with Foundation, governance decisions, real-provider and
-  real-platform validation, and production readiness are open. None of them is claimed.
+- **Offline synthetic engineering scope (AI-S06 to AI-S09, with AI-S01 and AI-S02 offline coverage):**
+  engineering-complete as a Stage 3 checkpoint, **subject to the Stage 2 re-review**. Class A: 112 executed
+  scenarios pass, none fails.
+- **MVP as a whole:** **not ready.** Foundation integration, the governance decisions in section 2, real-provider
+  and real-platform validation, and production readiness are open. None is claimed.
 
-## 2. Classification of every open item
-
-Each item belongs to exactly one class. The classes follow the spec's separation (A to F, and the
-AI-S10 status categories).
+## 2. Classification of open items
 
 | Class | Items | Basis |
 |---|---|---|
-| **Engineering-complete (synthetic)** | AI-S06 orchestration gate and execution; AI-S07 reviewer; AI-S08 estimation draft; AI-S09 draft SOW; the 74 executed scenarios | Runner outcomes; accepted sprint tests (full suite 1728 passed) |
-| **Engineering-defective (open)** | C-15: execution envelope reports `succeeded` with `evidence_unavailable` (observed, REC-03). EVID-16: evidence sufficiency is lexical, so an off-topic summary sharing one term backs a claim (open limitation) | Observed behaviour; the open-limitation probe passes only because the limitation is present |
-| **Engineering gap (coverage)** | No executed scenario references AI-S01. AI-S02 has only two blocked references (EXT-05, EXT-07). AI-S05 (130 tests) has two scenarios. Requirement extraction has only a delegated scenario (PIPE-04) with no sprint reference | Traceability matrix |
-| **Integration-blocked** | R-2 (unsigned confirmations, EXT-06); authoritative Foundation reads (EXT-05); durable audit (SEC-18); Foundation integration tests (EXT-07, skipped) | Foundation blocker register |
-| **Governance-decision-required** | A-4, C-15, GP-1, D-05, D-06, D-07, D-10, D-04/C-08, D-14, R-1, R-2, D-12, D-13, DEC-09, D-02, and the numerical thresholds (PENDING WDS Technical Lead) | Governance decision register |
-| **Real-provider validation required** | EXT-01 (live LLM evaluation). Not run | Real-provider register |
-| **Real-platform validation required** | SPEC-15 (vendor documentation), SPEC-16 (real platform), EXT-02 (sandbox), SOW-13 (house template and export). Not run | Real-provider and platform register |
-| **Production-readiness pending** | EXT-04 (production security and readiness), EXT-03 (human UAT, Stage D). Not run | Scenario catalogue |
+| **Engineering-complete (synthetic)** | AI-S06 gate and execution (with replay enforcement proven by mutation); AI-S07 reviewer; AI-S08 estimate; AI-S09 draft SOW; AI-S01 security boundaries; LLM-backed intake (offline) | Runner outcomes; accepted sprint tests |
+| **Engineering-defective (open)** | **UD-01**: AI-S09 SOW does not compare the estimate and governance fingerprints (upstream, recorded, not fixed). **C-15**: execution reports `succeeded` when evidence is unavailable (`REC-03`, open limitation). **EVID-16**: lexical evidence sufficiency (open limitation) | Observed behaviour; the open-limitation checks pass only while the limitation is present |
+| **Engineering gap (coverage)** | AI-S05 (130 tests, 2 scenarios); `PIPE-04`, `PIPE-05`, `SPEC-14` remain delegated to sprint test files | Traceability matrix |
+| **Integration-blocked** | R-2 (unsigned confirmations, `EXT-06`); authoritative Foundation reads (`EXT-05`); durable audit (`SEC-18`); Foundation integration tests (`EXT-07`, skipped); integrated Foundation-to-SOW path (`TRC-02`) | Foundation blocker register |
+| **Governance-decision-required** | `STL-05` (stale-input rejection rule, spec section 8); A-4, C-15, GP-1, D-05, D-06, D-07, D-10, D-04/C-08, D-14, R-1, R-2, D-12, D-13, DEC-09, D-02; numerical thresholds (PENDING WDS Technical Lead) | Governance decision register |
+| **Real-provider validation required** | `EXT-01` (live LLM evaluation). Not run | Real-provider register |
+| **Real-platform validation required** | `SPEC-15`, `SPEC-16`, `EXT-02`, `SOW-13`. Not run | Real-provider and platform register |
+| **Production-readiness pending** | `EXT-04` (production security and readiness); `EXT-03` (human UAT, Stage D). Not run | Scenario catalogue |
 
 ## 3. What the synthetic results do and do not show
 
-They show that the engines behave as the accepted sprint specifications describe, on synthetic inputs,
-against the cases in the catalogue. They do not show that:
+They show that the engines behave as the accepted sprint specifications describe, on synthetic inputs, for the
+cases in the catalogue. They do not show that:
 
 - any specialist produces correct platform guidance (no vendor documentation was read or validated);
-- any evidence is genuine (all evidence is `synthetic_mock`, `unverified`);
-- the gate resists a real operator, a real attacker or a real Foundation deployment (R-1, R-2 are open);
+- any evidence is genuine (evidence is `synthetic_mock` or `unverified`);
+- the gate resists a real operator, a real attacker or a Foundation deployment (R-1 and R-2 are open);
 - estimates are right for any real project (no reference data; no approved bases);
-- any SOW is acceptable to a client or matches the house template (SOW-13 blocked).
+- any SOW is acceptable to a client or matches the house template (`SOW-13` blocked);
+- stale inputs are rejected as the spec requires (`STL-05` blocked; flagging is what the accepted contracts do).
 
 ## 4. Readiness conditions for the next gate
 
-1. Stage 2 independent QA returns no blocking finding on the checkpoint.
-2. WDS records rulings for the governance decisions that affect the in-scope code (A-4, C-15, GP-1, R-1, R-2).
-3. The coverage gaps in section 2 are closed or explicitly accepted.
-4. The Foundation blockers are either resolved or accepted as out of scope for this MVP step.
+1. The Stage 2 re-review of the remediation commit returns PASS for the approved offline scope.
+2. WDS rules on `STL-05` (stale-input rejection) and on the C-15 envelope semantics that `REC-03` records.
+3. WDS decides whether `UD-01` is corrected upstream (and re-verified) or accepted as a known limitation.
+4. The coverage limits in section 2 are closed or explicitly accepted.
+5. The Foundation blockers are resolved, or accepted as out of scope for this MVP step.

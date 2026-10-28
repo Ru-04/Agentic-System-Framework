@@ -4,6 +4,16 @@ AI-S10 evaluation runner.
 Executes the ``executed`` scenarios and records every other status without counting it as a pass.
 The report never combines classes into a single percentage: synthetic outcomes are reported
 separately from blocked, delegated, open-limitation and real-platform classes.
+
+Evaluator rules enforced here (see the remediation record):
+
+- A scenario that declares an enforcement point passes only when its check was refused
+  at that point.
+  A refusal from an unrelated layer is a failure, whatever its message says.
+- An open limitation is never an executed pass. Its check passes only while the limitation is still
+  observed; if the limitation disappears, the scenario fails and must be reviewed.
+- Blocked and delegated rows are never passes.
+- An executor exception or a non-``Check`` return is a failure, not a skip.
 """
 
 from __future__ import annotations
@@ -35,34 +45,46 @@ class Result:
     severity: str
     references: tuple[str, ...]
     dependency: str
+    enforcement: str | None
+    enforced_by: str | None
+
+
+def _judge(scenario: Scenario, check: Check) -> tuple[str, str]:
+    """Map an executor's check to an outcome, applying the enforcement-point rule."""
+    if scenario.enforcement is not None and check.enforced_by != scenario.enforcement:
+        observed = check.enforced_by or "none"
+        return (
+            Outcome.FAIL,
+            f"enforcement point not reached: expected {scenario.enforcement}, observed {observed}",
+        )
+    if scenario.status is Status.OPEN_LIMITATION:
+        # passed=True means the limitation is still present, which is the expected state.
+        return (Outcome.OPEN_LIMITATION if check.passed else Outcome.FAIL), check.actual
+    return (Outcome.PASS if check.passed else Outcome.FAIL), check.actual
+
+
+def _run_check(scenario: Scenario, executors: Mapping[str, object]) -> tuple[str, str, str | None]:
+    assert scenario.executor is not None
+    executor = executors[scenario.executor]
+    try:
+        check = executor()  # type: ignore[operator]
+        if not isinstance(check, Check):
+            raise TypeError("executor must return a Check")
+    except Exception as error:  # the runner records the failure; it does not hide it
+        return Outcome.FAIL, f"raised {type(error).__name__}", None
+    outcome, actual = _judge(scenario, check)
+    return outcome, actual, check.enforced_by
 
 
 def _run_one(scenario: Scenario, executors: Mapping[str, object]) -> Result:
+    enforced: str | None = None
     if scenario.status is Status.EXECUTED:
-        assert scenario.executor is not None
-        executor = executors[scenario.executor]
-        try:
-            check = executor()  # type: ignore[operator]
-            if not isinstance(check, Check):
-                raise TypeError("executor must return a Check")
-        except Exception as error:  # the runner records the failure; it does not hide it
-            outcome, actual = Outcome.FAIL, f"raised {type(error).__name__}"
-        else:
-            outcome = Outcome.PASS if check.passed else Outcome.FAIL
-            actual = check.actual
+        outcome, actual, enforced = _run_check(scenario, executors)
     elif scenario.status is Status.OPEN_LIMITATION:
         if scenario.executor is None:
             outcome, actual = Outcome.OPEN_LIMITATION, scenario.dependency
         else:
-            executor = executors[scenario.executor]
-            try:
-                check = executor()  # type: ignore[operator]
-            except Exception as error:
-                outcome, actual = Outcome.FAIL, f"raised {type(error).__name__}"
-            else:
-                # passed=True means the limitation is still present, which is the expected state.
-                outcome = Outcome.OPEN_LIMITATION if check.passed else Outcome.FAIL
-                actual = check.actual
+            outcome, actual, enforced = _run_check(scenario, executors)
     elif scenario.status is Status.DELEGATED:
         outcome, actual = Outcome.DELEGATED, scenario.dependency
     else:
@@ -77,6 +99,8 @@ def _run_one(scenario: Scenario, executors: Mapping[str, object]) -> Result:
         severity=scenario.severity,
         references=scenario.references,
         dependency=scenario.dependency,
+        enforcement=scenario.enforcement,
+        enforced_by=enforced,
     )
 
 
@@ -130,7 +154,7 @@ def to_markdown(results: tuple[Result, ...], commit: str) -> str:
     lines = [
         "# AI-S10 Evaluation Results",
         "",
-        f"Commit under evaluation: `{commit}`",
+        f"Candidate: `{commit}`",
         "",
         "Outcomes are reported per classification. No cross-class percentage is computed.",
         "",
@@ -144,12 +168,12 @@ def to_markdown(results: tuple[Result, ...], commit: str) -> str:
         "",
         "## Results",
         "",
-        "| ID | Classification | Outcome | Severity | Expected | Actual |",
-        "|---|---|---|---|---|---|",
+        "| ID | Classification | Outcome | Severity | Enforced by | Expected | Actual |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in results:
         lines.append(
             f"| {r.scenario_id} | {r.classification} | {r.outcome} | {r.severity} | "
-            f"{r.expected} | {r.actual} |"
+            f"{r.enforced_by or '-'} | {r.expected} | {r.actual} |"
         )
     return "\n".join(lines) + "\n"

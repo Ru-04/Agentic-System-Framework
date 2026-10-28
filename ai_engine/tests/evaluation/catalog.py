@@ -14,7 +14,7 @@ scenarios run. Every other status is reported as it is and is never counted as a
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Literal
 
@@ -41,6 +41,9 @@ class Check:
 
     passed: bool
     actual: str
+    # The component whose refusal produced this result, if the check observed one. A scenario that
+    # declares an enforcement point passes only when this matches it (see runner._judge).
+    enforced_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,9 @@ class Scenario:
     dependency: str
     severity: Literal["critical", "major", "minor", "info"]
     executor: str | None = None
+    # Name of the protective function that must raise the refusal (e.g. ``consume``). None means the
+    # scenario asserts behaviour that is not a refusal at a single enforcement point.
+    enforcement: str | None = None
 
 
 Executor = Callable[[], Check]
@@ -209,7 +215,8 @@ def build_catalog() -> tuple[Scenario, ...]:
             "specialists",
             ("AI-S06",),
             "AI-S06 seven-requirement proposal",
-            "execute refuses when no confirmation is recorded",
+            "execute refused with 'no operator confirmation is in force for this run' at execute; "
+            "no specialist runs; a confirmed run executes all seven",
             "critical",
             "spec_no_execution_unconfirmed",
         )
@@ -416,7 +423,8 @@ def build_catalog() -> tuple[Scenario, ...]:
             "security",
             ("AI-S06",),
             "confirmation marked mock on production orchestrator",
-            "ConfirmationRefused",
+            "refused with reason 'mock confirmation is not permitted on the production path' at "
+            "verify_confirmation; a valid human-shaped confirmation is accepted",
             "critical",
             "sec_forged_confirmation",
         )
@@ -427,8 +435,8 @@ def build_catalog() -> tuple[Scenario, ...]:
             "Replayed confirmation refused on a second use",
             "security",
             ("AI-S06",),
-            "same confirmation submitted twice",
-            "second confirmation refused",
+            "same confirmation submitted twice to verification, sharing one ledger",
+            "second use refused with 'confirmation ID was already used' at the ledger (consume)",
             "critical",
             "sec_replay",
         )
@@ -440,7 +448,8 @@ def build_catalog() -> tuple[Scenario, ...]:
             "security",
             ("AI-S06",),
             "confirmation with expiry before the clock",
-            "ConfirmationRefused",
+            "refused with reason 'confirmation has expired' at verify_confirmation; an unexpired "
+            "confirmation is accepted",
             "critical",
             "sec_expired",
         )
@@ -452,7 +461,9 @@ def build_catalog() -> tuple[Scenario, ...]:
             "security",
             ("AI-S06",),
             "confirmation carrying a different run identifier",
-            "ConfirmationRefused",
+            "refused with reason 'confirmation is bound to another run' at "
+            "verify_confirmation; the "
+            "correct run is accepted",
             "critical",
             "sec_wrong_run",
         )
@@ -463,7 +474,8 @@ def build_catalog() -> tuple[Scenario, ...]:
             "Direct specialist execution bypass (legacy run_specialist ungated) — R-1",
             "security",
             ("R-1",),
-            "run_specialist takes no confirmation or actor; limitation present",
+            "a direct call to run_specialist with no confirmation, actor or proposal returns an "
+            "execution status; the limitation is still present",
             "R-1 open: not a production authorisation boundary",
             "sec_r1_present",
         )
@@ -498,8 +510,9 @@ def build_catalog() -> tuple[Scenario, ...]:
             "Malformed or contradictory specialist output is refused",
             "security",
             ("AI-2", "AI-S07"),
-            "output with VERIFIED claim and no evidence",
-            "validation refuses the output",
+            "output with a VERIFIED claim and no evidence",
+            "refused by the Claim contract at construction (the Claim model is the "
+            "enforcement point)",
             "critical",
             "sec_malformed_output",
         )
@@ -1151,24 +1164,497 @@ def build_catalog() -> tuple[Scenario, ...]:
                 "recovery",
                 ("AI-S06",),
                 "synthetic seven-category run; specialist call replaced by FAILED_VALIDATION",
-                "every category makes one call; no retry follows a permanent status",
+                "for each permanent variant (validation, permission, unsupported) every category "
+                "makes one call and no retry follows",
                 "major",
                 "rec_permanent_no_retry",
             ),
             _ex(
-                "REC-03",
-                "Partial authorisation refuses the affected category with no fallback",
+                "REC-04",
+                "Recovery: a transient failure followed by a successful retry",
                 "recovery",
-                ("AI-S06", "AI-S07"),
-                "synthetic run with one collection withheld from the authorised set",
-                "the withheld category uses no evidence and reports evidence_unavailable; "
-                "no other collection is substituted; the other categories run",
-                "critical",
-                "rec_partial_authorisation",
+                ("AI-S06",),
+                "synthetic seven-category run; the first attempt of one category fails transient",
+                "that category succeeds on its second attempt; every category ends succeeded; "
+                "eight specialist calls in total (seven categories, one retried)",
+                "major",
+                "rec_recovery_after_transient",
+            ),
+            _ex(
+                "REC-05",
+                "A raised specialist exception is recorded as a failure and never retried",
+                "recovery",
+                ("AI-S06",),
+                "synthetic seven-category run; specialist call raises RuntimeError",
+                "every category makes one call and its outcome records 'specialist raised "
+                "RuntimeError' as the failure",
+                "major",
+                "rec_exception_not_retried",
             ),
         ]
     )
-    return tuple(scenarios)
+    scenarios.append(
+        _limitation(
+            "REC-03",
+            "Partial authorisation: a withheld collection is refused before any attempt, with no "
+            "fallback",
+            "recovery",
+            ("AI-S06", "AI-S07", "C-15"),
+            "the withheld category is refused before any specialist attempt; no evidence is used; "
+            "no other collection is substituted",
+            "C-15 OPEN: the execution envelope reports succeeded when the output is "
+            "evidence_unavailable. The observed behaviour is recorded here as the limitation; it "
+            "is not a pass of the expectation above",
+            "rec_partial_authorisation",
+        )
+    )
+    scenarios.extend(_remediation_rows())
+    return tuple(replace(s, enforcement=ENFORCEMENT.get(s.scenario_id)) for s in scenarios)
+
+
+def _remediation_rows() -> list[Scenario]:
+    """Stage 3 rows: replay enforcement, stale input, upstream defect, cross-project, AI-S01,
+    requirement extraction and pipeline traceability."""
+    rows: list[Scenario] = [
+        _ex(
+            "RPL-01",
+            "First valid use of a confirmation is accepted by verification",
+            "replay",
+            ("AI-S06",),
+            "production-configured proposal; human-shaped confirmation (mock=False); fresh ledger",
+            "verification accepts the first use",
+            "critical",
+            "rpl_first_use_accepted",
+        ),
+        _ex(
+            "RPL-02",
+            "Reuse in another run is refused at binding, and consumes nothing",
+            "replay",
+            ("AI-S06",),
+            "valid confirmation re-presented with a different run identifier",
+            "refused with 'confirmation is bound to another run' at verify_confirmation; a later "
+            "valid use is still accepted",
+            "critical",
+            "rpl_reuse_in_another_run",
+        ),
+        _ex(
+            "RPL-03",
+            "Reuse in another project is refused at binding, and consumes nothing",
+            "replay",
+            ("AI-S06",),
+            "valid confirmation presented for a different project identifier",
+            "refused with 'confirmation is bound to another project' at "
+            "verify_confirmation; a later "
+            "valid use is still accepted",
+            "critical",
+            "rpl_reuse_in_another_project",
+        ),
+        _ex(
+            "RPL-04",
+            "Reuse with a changed specialist selection is refused by the ledger",
+            "replay",
+            ("AI-S06",),
+            "same confirmation ID and nonce with a narrowed confirmed selection",
+            "refused with 'confirmation ID was already used' at consume",
+            "critical",
+            "rpl_reuse_with_changed_selection",
+        ),
+        _ex(
+            "RPL-05",
+            "Reuse after expiry is refused, and the refused attempt consumes nothing",
+            "replay",
+            ("AI-S06",),
+            "expired copy of a valid confirmation, then the valid confirmation",
+            "refused with 'confirmation has expired' at verify_confirmation; "
+            "the valid confirmation "
+            "is then accepted",
+            "critical",
+            "rpl_reuse_after_expiry",
+        ),
+        _ex(
+            "RPL-06",
+            "The ledger port refuses a second consume of the same confirmation",
+            "replay",
+            ("AI-S06",),
+            "direct ConfirmationLedger.consume called twice",
+            "second consume refused with 'confirmation ID was already used' at consume",
+            "critical",
+            "rpl_direct_ledger_port",
+        ),
+        _ex(
+            "RPL-07",
+            "A fresh ID with a reused nonce is refused by the ledger",
+            "replay",
+            ("AI-S06",),
+            "consumed confirmation with a new ID but the same nonce",
+            "refused with 'confirmation nonce was already used (replay)' at consume",
+            "critical",
+            "rpl_nonce_reuse_with_fresh_id",
+        ),
+        _ex(
+            "STL-01",
+            "Current requirement revisions are accepted without a stale-revision issue",
+            "stale",
+            ("AI-S08", "AI-S09"),
+            "SOW requirement revisions equal the estimate's revisions",
+            "no stale-revision integrity issue",
+            "major",
+            "stl_current_revision_accepted",
+        ),
+        _ex(
+            "STL-02",
+            "A stale requirement revision is reported and not presented as complete",
+            "stale",
+            ("AI-S08", "AI-S09"),
+            "estimate built against revision 2; SOW requirement at revision 1",
+            "reported as an integrity issue for the requirement; its deliverable is not complete",
+            "critical",
+            "stl_stale_revision_excluded",
+        ),
+        _ex(
+            "STL-03",
+            "A missing requirement revision is reported per contract, not raised as an exception",
+            "stale",
+            ("AI-S09",),
+            "estimate with no revision for one requirement",
+            "integrity issue reported; the SOW is still produced",
+            "major",
+            "stl_missing_revision_handled",
+        ),
+        _ex(
+            "STL-04",
+            "A stale operator selection is rejected before any agent runs",
+            "stale",
+            ("AI-S01",),
+            "operator selection made on project revision 1; project now at revision 2",
+            "StaleSelectionError raised at run_investigation; the agent never runs",
+            "critical",
+            "stl_stale_operator_selection_rejected",
+        ),
+        _ext(
+            "STL-05",
+            "Stale requirement or estimate input is refused at the boundary (spec section 8)",
+            "stale",
+            Classification.SYNTHETIC,
+            ("AI-S07", "AI-S08", "AI-S09", "AI-S10 spec section 8"),
+            "stale requirement and estimate inputs are refused, not flagged",
+            "GOVERNANCE DECISION REQUIRED: spec section 8 says stale inputs are rejected; the "
+            "accepted AI-S07/S08/S09 contracts flag, exclude or mark needs_inputs and never refuse "
+            "the operation. Flagging is not counted as rejection",
+        ),
+        _ex(
+            "STL-06",
+            "Flagged stale input does not produce a completed or approved outcome",
+            "stale",
+            ("AI-S09",),
+            "stale revision in the estimate",
+            "approval stays pending_human_approval; the draft is not approved; project totals "
+            "stay incomplete",
+            "critical",
+            "stl_no_false_completion",
+        ),
+        _limitation(
+            "UD-01",
+            "SOW does not detect an estimate built against a different governance review",
+            "upstream",
+            ("AI-S09", "AI-S08"),
+            "the fingerprint mismatch is reported as an integrity issue",
+            "UPSTREAM DEFECT (AI-S09): the SOW does not compare the estimate's governance "
+            "fingerprint with the governance review's. A compatible correction is required",
+            "ud01_fingerprint_mismatch_undetected",
+        ),
+        _ex(
+            "XP-01",
+            "Specialist evidence access excludes records of another project",
+            "cross-project",
+            ("AI-S06",),
+            "one lookup holding records of PRJ-SYN-0001 and PRJ-SYN-0002",
+            "no outcome cites a record of the other project",
+            "critical",
+            "xp01_specialist_foreign_evidence_invisible",
+        ),
+        _ex(
+            "XP-02",
+            "The Governance Reviewer refuses a cross-project citation",
+            "cross-project",
+            ("AI-S07",),
+            "verified foreign-project record cited by a same-project requirement",
+            "CROSS_PROJECT_CITATION is reported and the requirement is not backed",
+            "critical",
+            "xp02_reviewer_foreign_citation_refused",
+        ),
+        _ex(
+            "XP-03",
+            "The estimate refuses governance from another project",
+            "cross-project",
+            ("AI-S08",),
+            "governance summary for PRJ-SYN-0002 in a PRJ-SYN-0001 request",
+            "refused with 'governance review belongs to another project' at estimate",
+            "critical",
+            "xp03_estimate_foreign_governance_refused",
+        ),
+        _ex(
+            "XP-04",
+            "The estimate refuses a requirement snapshot from another project",
+            "cross-project",
+            ("AI-S08",),
+            "requirement snapshot for PRJ-SYN-0002 in a PRJ-SYN-0001 request",
+            "refused with 'a requirement snapshot belongs to another project' at estimate",
+            "critical",
+            "xp04_estimate_foreign_snapshot_refused",
+        ),
+        _ex(
+            "XP-05",
+            "The SOW refuses governance from another project",
+            "cross-project",
+            ("AI-S09",),
+            "governance summary for PRJ-SYN-0002 in a PRJ-SYN-0001 SOW request",
+            "refused with 'governance review belongs to another project' at _require_governance",
+            "critical",
+            "xp05_sow_foreign_governance_refused",
+        ),
+        _ex(
+            "XP-06",
+            "The SOW refuses an estimate from another project",
+            "cross-project",
+            ("AI-S09",),
+            "estimate draft for PRJ-SYN-0002 in a PRJ-SYN-0001 SOW request",
+            "refused with 'estimate belongs to another project' at generate",
+            "critical",
+            "xp06_sow_foreign_estimate_refused",
+        ),
+        _ex(
+            "S01-01",
+            "Invisible or control characters are refused as operator identity",
+            "security",
+            ("AI-S01",),
+            "zero-width and control characters in the actor identifier",
+            "SelectionError at build_operator_selection for each identity",
+            "critical",
+            "s01_control_character_identity_refused",
+        ),
+        _ex(
+            "S01-02",
+            "An agent requesting an unallowed collection is denied by the wrapper",
+            "security",
+            ("AI-S01",),
+            "probe agent searching a collection outside the authorised set",
+            "PERMISSION_DENIED with no output",
+            "critical",
+            "s01_unallowed_collection_denied",
+        ),
+        _ex(
+            "S01-03",
+            "An agent requesting another project is denied by the wrapper",
+            "security",
+            ("AI-S01",),
+            "probe agent searching with a foreign project identifier",
+            "PERMISSION_DENIED with no output",
+            "critical",
+            "s01_foreign_project_denied",
+        ),
+        _ex(
+            "S01-04",
+            "An agent cannot change the requirements it was given",
+            "security",
+            ("AI-S01",),
+            "probe agent appending a category to a requirement it received",
+            "the caller's requirement is unchanged",
+            "major",
+            "s01_agent_cannot_change_requirements",
+        ),
+        _ex(
+            "S01-05",
+            "A model-constructed verified candidate is refused at the contract boundary",
+            "security",
+            ("AI-S01",),
+            "candidate solution constructed with status VERIFIED",
+            "ValidationError naming the verified-candidate rule",
+            "critical",
+            "s01_model_verified_candidate_refused",
+        ),
+        _ex(
+            "S01-06",
+            "A fabricated verified record outside the authorised set fails validation",
+            "security",
+            ("AI-S01",),
+            "agent output citing a verified record the lookup never authorised",
+            "FAILED_VALIDATION",
+            "critical",
+            "s01_fabricated_evidence_refused",
+        ),
+        _ex(
+            "S01-07",
+            "Any reviewed content change makes an operator selection stale",
+            "security",
+            ("AI-S01",),
+            "analysis whose project revision changed after the decision",
+            "StaleSelectionError raised at verify_selection",
+            "critical",
+            "s01_reviewed_change_makes_selection_stale",
+        ),
+        _ex(
+            "LLM-01",
+            "LLM-backed lead intake accepts a correct reply on the synthetic fixture (offline)",
+            "extraction",
+            ("AI-S02",),
+            "deterministic offline LLM port; approved guard; synthetic brief fixture",
+            "status accepted with a successful call",
+            "major",
+            "llm01_intake_accepts_fixture",
+        ),
+        _ex(
+            "LLM-02",
+            "LLM-backed intake refuses a hallucinated quote after retries",
+            "extraction",
+            ("AI-S02",),
+            "scripted offline LLM returning a quote absent from the source, three times",
+            "status failed; no result; call INVALID_REPLY_EXHAUSTED; no segment analysed",
+            "critical",
+            "llm02_hallucinated_quote_refused",
+        ),
+        _ex(
+            "LLM-03",
+            "Untrusted segment text stays out of the LLM system prompt",
+            "extraction",
+            ("AI-S02",),
+            "deterministic offline LLM capturing the first request",
+            "no segment text in the system prompt; the system prompt is the registered prompt",
+            "critical",
+            "llm03_untrusted_text_stays_out_of_system_prompt",
+        ),
+        _ex(
+            "REQ-01",
+            "Valid requirement extraction preserves each wording as an exact source quote",
+            "extraction",
+            ("requirement_analysis",),
+            "synthetic brief fixture (adapter, offline)",
+            "six client requirements; each original wording is an exact substring of its segment",
+            "major",
+            "req01_valid_extraction",
+        ),
+        _ex(
+            "REQ-02",
+            "Ambiguous wording becomes an open clarification question",
+            "extraction",
+            ("requirement_analysis",),
+            "synthetic brief fixture containing vague terms",
+            "questions for 'faster' and 'immediately' exist and all are open",
+            "major",
+            "req02_ambiguity_becomes_open_question",
+        ),
+        _ex(
+            "REQ-03",
+            "Malformed input (no segments) is refused at analysis",
+            "extraction",
+            ("requirement_analysis",),
+            "empty segment list",
+            "refused at analyze",
+            "major",
+            "req03_malformed_input_refused",
+        ),
+        _ex(
+            "REQ-04",
+            "A segment outside the project is refused at analysis",
+            "extraction",
+            ("requirement_analysis",),
+            "segment carrying another project identifier",
+            "refused with 'outside project' at analyze",
+            "critical",
+            "req04_foreign_segment_refused",
+        ),
+        _ex(
+            "REQ-05",
+            "Identifiers are unique and deterministic, and client requirements cite a source",
+            "extraction",
+            ("requirement_analysis",),
+            "synthetic brief fixture analysed twice",
+            "proposal keys unique and identical across runs; every client requirement has a source",
+            "major",
+            "req05_identifiers_and_sources_preserved",
+        ),
+        _ex(
+            "REQ-06",
+            "Extraction asserts no verified status, assigns no requirement ID and commits no scope",
+            "extraction",
+            ("requirement_analysis",),
+            "synthetic brief fixture",
+            "evidence UNVERIFIED; no requirement IDs; human review required; scope not committed",
+            "critical",
+            "req06_no_unsupported_certainty",
+        ),
+        _ex(
+            "REQ-07",
+            "Instruction-like text in a source segment is data and accepts nothing",
+            "extraction",
+            ("requirement_analysis",),
+            "source segment containing an instruction to approve all requirements",
+            "no requirement is accepted for scope; scope not committed; no requirement IDs",
+            "critical",
+            "req07_instruction_in_source_is_data",
+        ),
+        _ex(
+            "REQ-08",
+            "Inferred follow-up requirements are never accepted for scope",
+            "extraction",
+            ("requirement_analysis",),
+            "synthetic brief fixture with integration gaps",
+            "inferred requirements exist and none is accepted for scope",
+            "critical",
+            "req08_inferred_requirements_never_accepted",
+        ),
+        _ex(
+            "TRC-01",
+            "Requirement identifiers stay correlated through specialist, estimate and governance",
+            "traceability",
+            ("AI-S06", "AI-S07", "AI-S08", "AI-S09"),
+            "seven-requirement offline run, governance fingerprint f*64",
+            "specialist outcomes, estimate revisions and the governance fingerprint agree",
+            "critical",
+            "trc01_identifiers_correlated",
+        ),
+        _ext(
+            "TRC-02",
+            "Foundation-fed requirement-to-SOW path (no integrated adapter)",
+            "traceability",
+            Classification.FOUNDATION,
+            ("AI-S06", "AI-S09", "AI-S10 spec section 10"),
+            "a Foundation-fed run reaches a SOW through the integrated adapter",
+            "no integrated Foundation adapter path exists; the offline pipeline uses synthetic "
+            "fixtures; Foundation approval required",
+        ),
+    ]
+    return rows
+
+
+ENFORCEMENT: dict[str, str] = {
+    "SEC-01": "generate",
+    "SEC-05": "verify_confirmation",
+    "SEC-06": "consume",
+    "SEC-07": "verify_confirmation",
+    "SEC-08": "verify_confirmation",
+    "SPEC-08": "execute",
+    "RPL-02": "verify_confirmation",
+    "RPL-03": "verify_confirmation",
+    "RPL-04": "consume",
+    "RPL-05": "verify_confirmation",
+    "RPL-06": "consume",
+    "RPL-07": "consume",
+    "STL-04": "run_investigation",
+    "XP-03": "estimate",
+    "XP-04": "estimate",
+    "XP-05": "_require_governance",
+    "XP-06": "generate",
+    "S01-01": "build_operator_selection",
+    "S01-07": "verify_selection",
+    "REQ-03": "analyze",
+    "REQ-04": "analyze",
+    "EST-02": "ThreePoint",
+    "SEC-12": "Claim",
+    "SPEC-13": "SpecialistInvestigationResult",
+    "SEC-13": "build_request",
+    "S01-05": "SpecialistInvestigationResult",
+}
 
 
 def executor_names(catalog: tuple[Scenario, ...]) -> tuple[str, ...]:
