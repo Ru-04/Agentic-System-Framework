@@ -219,10 +219,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self.client_address[0],
                 self.server.reset_transport,
             )
-        except (SQLAlchemyError, TransportUnavailable):
+        except (SQLAlchemyError, TransportUnavailable) as exc:
             # Delivery failed: the transaction rolled back and no token survives. The reply stays
-            # neutral.
-            _diagnose(RESET_REQUEST_PATH, "delivery or database refusal; reply unchanged")
+            # neutral. The class and SQLSTATE are logged (never the message, which may echo data).
+            sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+            _diagnose(
+                RESET_REQUEST_PATH,
+                f"delivery or database refusal ({type(exc).__name__}, sqlstate={sqlstate}); "
+                "reply unchanged",
+            )
         self._reply(200, {"accepted": True})
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming

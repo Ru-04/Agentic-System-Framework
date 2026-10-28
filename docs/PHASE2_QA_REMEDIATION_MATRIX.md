@@ -1,0 +1,43 @@
+# Phase 2 QA findings: remediation matrix
+
+Input: independent QA report, verdict "QA FAILED, consolidated remediation required" (findings F-01 to F-13). Head at
+start of remediation: `46e0e14`.
+
+Status values: **implemented** means the engineering change and its tests are committed locally and verified by the
+suite. **Ready for independent verification** is the status of every finding. This matrix does not close a finding on
+the authority of the implementing team. Closure belongs to the independent QA re-test.
+
+## Matrix
+
+| ID | Sev. | Finding | Change | Evidence (tests and checks) | Status |
+|---|---|---|---|---|---|
+| F-01 | MAJOR | Concurrent grant revocation: both could succeed, the second overwrote the timestamp, both audited | Migration `0044_grant_revocation_lock`: both revocation functions lock the grant (`FOR UPDATE`), re-check `revoked_at`, use a guarded update and check the affected-row count; the proof is validated before the lock. `projects/service.py`: a loser is refused as `409 grant_already_revoked` with a durable `grant.revoke.denied` audit. `authority/proofs.py` lists the new reasons. | `tests/committed/test_phase2_concurrency.py`: two real connections, project and restricted grants, exactly one success and one conflict; the first timestamp survives; the loser's proof stays unspent. `test_projects.py`: sequential re-revocation is 409. | Implemented; ready for independent verification |
+| F-02 | MAJOR | Teardown: sessions attached to disposable databases; cause unidentified | **Root cause established and fixed** (`docs/PHASE2_TEARDOWN_ROOT_CAUSE.md`): `_app()` in `tests/hardening/test_source_read_authorization.py` was a cached engine with a default pool that was never disposed, so one `webdesk_app_login` pooled connection outlived the test process's teardown. It now uses `NullPool`. The teardown report and the bounded 5-second wait are kept; a persistent session still fails the run. No `FORCE`. | Hardening subset: before fix exit 1 (`probe-hard1`), after fix exit 0 (`probe-hard2`). Three full sequential runs: see `docs/PHASE2_EVIDENCE.md`, section QA remediation final sprint. | Implemented; root cause established; ready for independent verification |
+| F-03 | MAJOR | Shared database names: overlapping runs collided and gave an invalid result | Run namespaces (`tests/support/run_namespace.py`): generated or explicit run identifier; per-run template, integration and hardening databases; refusal of existing prefixes; ownership labels; cleanup of labelled databases only. Hardening conftest reads its URLs at fixture time. | `docs/TEST_DATABASE_ISOLATION.md`. Concurrent sessions alpha and bravo; refusal of a reused prefix; privilege audit now reads the run's own database. | Implemented; ready for independent verification |
+| F-04 | MAJOR | Recovery `appointment_target_ineligible` returned 409; WDS rule not applied | `ceremony/recovery.py`: target ineligibility returns 403. Other recovery refusals stay 409 (lifecycle). Role-assignment classification unchanged. | `tests/integration/test_recovery_status_codes.py` (three tests: inactive target 403, remaining Administrator 403, coverage 409). `docs/PHASE2_GOVERNANCE_CLARIFICATION.md` section 1. | Implemented; ready for independent verification |
+| F-05 | MINOR | No Phase 2 concurrency coverage | `tests/committed/test_phase2_concurrency.py`: approval versus rejection in both orders, with exactly one outcome, a domain refusal (`409 not_pending`) and a durable denial audit. The race also exposed a defect, fixed in `identity/contacts.py`: a losing rejection raised a raw database error, and a losing approval returned a generic `approval_refused`. Both now map `approval_not_pending` to `409 not_pending`. | Five concurrency tests, all passing. | Implemented; ready for independent verification |
+| F-06 | INFORMATIONAL | `tokens.issue` has no product caller | Not implemented, per the instruction. Recorded as an out-of-scope production dependency. | `docs/PHASE2_GOVERNANCE_CLARIFICATION.md` section 5 (H-50, H-52). | Recorded (production dependency) |
+| F-07 | MINOR | An expired pending change kept its address reserved until the sweep ran, which nothing schedules | Migration `0045_change_expiry_on_demand`: `fn_expire_stale_change_for_email` applies the sweep's transition for the requested address only; `fn_request_change_with_proof` takes an injected window (default 24 hours). `identity/contacts.py`: a new request expires stale changes for its address first, with an `approval.expired` audit. | `tests/committed/test_change_expiry.py`: a stale change releases its address for a new request; a live change still blocks it; an expired change cannot be approved or rejected (409 `expired`). | Implemented; ready for independent verification |
+| F-08 | INFORMATIONAL | Denial audits attributed to `anonymous` with no account reference; the activation SQL-error path was not audited | Token-matched denials record the account as a reference (`record_refs`); the actor remains `anonymous`; no token value is recorded. The activation SQL-error path writes `activation.denied`. | `tests/committed/test_phase2_identity.py`: the denial's reference is the account, the actor is `anonymous`, and the token value appears nowhere. | Implemented; ready for independent verification |
+| F-09 | MINOR | WDS acknowledgement of the H-12 Phase 1 test correction | Acknowledgement recorded; semantics kept. | `docs/PHASE2_GOVERNANCE_CLARIFICATION.md` section 2. | Recorded (WDS acknowledgement) |
+| F-10 | MINOR | Migration evidence limited to function snapshots | `tests/committed/test_migration_catalog.py`: a full catalog comparison (tables, columns, column and table ACLs, constraints, indexes, triggers, functions with owner, ACL, security definer, search path and definition, schema ACLs, role memberships, operation rules). A multi-step downgrade to 0041 and a re-upgrade to head. A negative control proves the comparison sees 0042 to 0045. No historical migration was rewritten. | `tests/committed/test_migration_catalog.py`; `docs/PHASE2_MIGRATION_PRIVILEGE_EVIDENCE.md`. | Implemented; ready for independent verification |
+| F-11 | MINOR | `test_privilege_hardening.py` edited under a formatting exception | Formatted (two-line change). Exception record updated. | `ruff format --check` lists exactly the five historical files. | Implemented |
+| F-12 | INFORMATIONAL | Leftover disposable databases | Not deleted (the cleanup was denied and is not bypassed). Documented, with cleanup prerequisites; run namespaces clean up their own labelled databases. | `docs/TEST_DATABASE_ISOLATION.md` section 4. | Documented; cleanup awaits owner decision |
+| F-13 | MINOR | Owner engine in `tests/hardening/conftest.py` not released on exception | `world` and the appointing engine are released in `finally`. | `tests/hardening/conftest.py`. | Implemented |
+
+## Completeness review (section E of the sprint)
+
+| Required negative or coverage case | Covered by |
+|---|---|
+| Absent approval | Not reachable by an approved transition: `pending_activation` requires an approved approval (`0018`, `fn_issue_token` in `0014`). The database refusal is asserted by `tests/integration/test_security_closure.py`. |
+| Rejected approval | Not reachable from an approved one: the approval state trigger (`0010`) refuses approved to rejected. A rejected change cannot be approved afterwards: `tests/integration/test_phase2_guards.py::test_a_rejected_contact_change_cannot_later_be_approved` (409 `not_pending`, audited). |
+| Mismatched approval | Not reachable through approved transitions: an email change needs an approved change and an active account. The matching rule is enforced by `fn_issue_token` and the activation trigger. |
+| Expired appointment | `tests/committed/test_deadlines.py`, `tests/integration/test_recovery_status_codes.py`. |
+| Consumed appointment | `tests/committed/test_deadlines.py` (409 `appointment_consumed_or_expired`). |
+| Revoked Administrator | `tests/integration/test_phase2_guards.py` (database refusal for project and restricted revocation). |
+| Duplicate operation proof | `tests/integration/test_phase2_guards.py` (`proof_spent`). |
+| Concurrent revocation | `tests/committed/test_phase2_concurrency.py`. |
+| Concurrent approval and rejection | `tests/committed/test_phase2_concurrency.py`. |
+| Durable denial audit after rollback | `tests/committed/test_phase2_identity.py` (through `run_in_transaction` and `auth.activate`). |
+| Restricted grant access after revocation | `tests/integration/test_phase2_guards.py` (`has_restricted_grant` is false after revocation). |
+| Correct recovery response codes | `tests/integration/test_recovery_status_codes.py`. |

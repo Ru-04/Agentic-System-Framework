@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 
 from webdesk.auth.service import AuthError
 from webdesk.intake.ingest import ingest_source
@@ -58,8 +59,13 @@ def owner_engine() -> Iterator[Engine]:
 
 @functools.cache
 def _app() -> Engine:
-    """The login role's engine, for committed setup and reads that the authority must see."""
-    return create_engine(os.environ["WEBDESK_HARDENING_APP_URL"])
+    """The login role's engine, for committed setup and reads that the authority must see.
+
+    NullPool: this engine is never disposed, so a pooled connection would stay attached to the
+    run's hardening database until the process exits. That leaked ``webdesk_app_login`` session
+    is the teardown defect of QA F-02. Without a pool, each use closes its connection on return.
+    """
+    return create_engine(os.environ["WEBDESK_HARDENING_APP_URL"], poolclass=NullPool)
 
 
 def _session_committed(user: uuid.UUID) -> str:
