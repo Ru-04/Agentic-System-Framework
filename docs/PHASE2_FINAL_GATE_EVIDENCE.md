@@ -174,3 +174,41 @@ Full evidence (logs, not in the repository): `scratchpad/p2fix/runs/` and `scrat
 - Read-only facts: owner `webdesk_integration_owner`; no `shobj_description` label (the namespace runner always writes one, so these predate it); zero attached sessions; OIDs 18264 to 20120.
 - Ownership: matched by name to the earlier attempts documented in section 8 of this file (`p2-focus-a`, `p2-focus-b`), which the development session recorded as not counted. Not proven from the database alone.
 - Status: **untouched.** Deletion requires the owner's authorisation. No other session's resources were modified.
+
+
+## 14. Final clean gate on frozen commit 00ec194
+
+Frozen implementation baseline: `00ec194` (the NoResultFound test fix). Earlier commits in this sprint: `142fecd` (D4 attribution), `513a218` (authority harness: ephemeral port and reported startup failures), `2030ebf` (gate evidence).
+
+| Run | Namespace | Start (UTC) | Finish (UTC) | Result | Exit | Leftover namespace DBs | Attached sessions after | Counted |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `p2final-1` | 19:02:08 | 19:08:40 | 693 passed, 1 warning (388.9 s) | 0 | 0 | 0 | Yes |
+| 2 | `p2final-2` | 19:08:41 | 19:15:05 | 693 passed, 1 warning (380.3 s) | 0 | 0 | 0 | Yes |
+| 3 | `p2final-3` | 19:15:06 | 19:21:52 | 693 passed, 1 warning (402.4 s) | 0 | 0 | 0 | Yes |
+
+- Tested commit: `00ec194` for all three; the commit was unchanged before and after each run.
+- PostgreSQL: dedicated cluster `127.0.0.1:55442`, system identifier `7701671162267615270`.
+- No skips reported in any run; no failures or errors.
+- Static checks at `00ec194`: `ruff check src tests migrations` passed; `ruff format --check` lists exactly the five documented exception files; `mypy --strict src/webdesk` exit 0 (57 files, mypy 1.11.2).
+
+### NoResultFound root cause (resolved)
+
+- Test: `tests/hardening/test_ceremony_and_public_execute.py::test_a_login_role_cannot_disable_an_account_by_naming_a_real_administrator`.
+- Reproduced alone on an empty namespace: `NoResultFound` at the first query, which expects an active Administrator row (test line 54).
+- Cause: a test defect. The test requested only `conn` and read Administrators that only the session `world` fixture installs. It passed only when an earlier test had already installed the system. In the failing gate run the install never happened, because the authority child failed to start.
+- Correction: the test now requests `world`. No assertion changed. Alone: 24 passed for the file.
+
+### Authority-child startup (not root-caused)
+
+- Symptom in runs `p2fix-full1` and `p2gate-1`: the child exits before its start line. `p2gate-1`: exit `3221225794` (`0xC0000142`, DLL initialisation failure), 108 errors.
+- Evidence gathered: the server log shows no authentication failure or FATAL for the windows of those runs. A Windows Code Integrity block at 15:47:09 UTC names a different worktree's `pytest.exe` and cannot be attributed to the child.
+- Harness defects fixed in `513a218`: the probe-then-release port race, and uncaptured stderr. Startup now binds an ephemeral port and reports it; a failure reports the exit code and a redacted stderr tail.
+- Reliability probe (diagnostic, not in the repository): 3 concurrent workers × 30 starts on 55442 at this commit, 90 of 90 started, median start 1.1 s, no failures. Under this load the startup path did not fail.
+- Classification: **not proven.** The probe does not reproduce the failure inside a full pytest process that shares the machine with other sessions' test runs. The component blocked at the time is not identified. This is not recorded as environmental or as fixed.
+- The three clean runs above are not evidence that the earlier failure cannot recur.
+
+### Namespace ownership (older databases)
+
+- `wdst_p2_focus_a_cb873a68e9a`, `wdst_p2_focus_a_c6dc55b09e8`, `wdst_p2_focus_b_cfc7408d5df`, `wdst_p2_focus_b_c0a50a3bddd`: untouched.
+- Facts: owner `webdesk_integration_owner`; no label; no attached sessions; OIDs 18264–20120.
+- Ownership is not proven. The brief's conditions for cleanup (created by this session, no other process use, no evidence to preserve, exact identity matched to retained run records, cleanup permitted for this owner) are not all established. Cleanup is not authorized.
