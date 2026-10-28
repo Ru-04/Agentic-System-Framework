@@ -310,7 +310,7 @@ def test_an_administrator_revokes_a_project_grant_and_the_revocation_is_audited(
         projects.revoke_project_grant(
             conn, prove(conn, first, "project.access.revoke", project), grant
         )
-    assert (exc.value.status, exc.value.reason) == (404, "grant_not_active")
+    assert (exc.value.status, exc.value.reason) == (409, "grant_already_revoked")
 
 
 def test_a_grant_holder_cannot_revoke_its_own_grant(conn: Connection) -> None:

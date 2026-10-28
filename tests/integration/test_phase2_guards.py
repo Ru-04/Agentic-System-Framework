@@ -7,6 +7,7 @@ transaction.
 
 from __future__ import annotations
 
+import base64
 import os
 import uuid
 
@@ -15,10 +16,17 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
-from tests.support.people import administrators_for
+from tests.support.people import _email, active_user, administrators_for
 from tests.support.proofs import prove
+from webdesk.authority.proofs import ProofRefused
+from webdesk.crypto.contact_box import ContactBox
+from webdesk.identity import contacts
+from webdesk.identity.contacts import ContactServiceError
+from webdesk.identity.email import ContactEmailPolicy
 from webdesk.projects import service as projects
+from webdesk.rbac.engine import ResourceRef
 from webdesk.rbac.revoke import revoke_role
+from webdesk.rbac.sql_store import SqlAuthorizationStore
 
 pytestmark = pytest.mark.integration
 
@@ -171,3 +179,73 @@ def test_the_guard_owner_may_update_only_the_revocation_column_of_the_grant_tabl
             text("SELECT has_column_privilege('webdesk_guard_owner', :t, 'user_id', 'UPDATE')"),
             {"t": table},
         ).scalar_one()
+
+
+def test_a_duplicate_use_of_one_operation_proof_is_refused_as_spent(conn: Connection) -> None:
+    first, second = administrators_for(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="Dup", data_classification="internal"
+    )
+    grant_one = projects.grant_project_access(
+        conn, prove(conn, first, "project.access.grant", project), project, second, ["source.read"]
+    )
+    grant_two = projects.grant_project_access(
+        conn, prove(conn, first, "project.access.grant", project), project, second, ["source.read"]
+    )
+    proof = prove(conn, first, "project.access.revoke", project)
+    projects.revoke_project_grant(conn, proof, grant_one)
+    with pytest.raises(ProofRefused) as exc:
+        projects.revoke_project_grant(conn, proof, grant_two)
+    assert exc.value.reason == "proof_spent"
+
+
+def test_a_restricted_grant_is_no_longer_authorized_once_revoked(conn: Connection) -> None:
+    first, second = administrators_for(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="Lapse", data_classification="restricted"
+    )
+    grant = projects.grant_restricted(
+        conn,
+        prove(conn, first, "restricted.grant", project),
+        resource_type="project",
+        resource_id=project,
+        user=second,
+        reason="phase 2 lapse",
+    )
+    store = SqlAuthorizationStore(conn)
+    assert store.has_restricted_grant(second, ResourceRef(project_id=project, source_id=None))
+    projects.revoke_restricted_grant(conn, prove(conn, first, "restricted.revoke", grant), grant)
+    assert not store.has_restricted_grant(second, ResourceRef(project_id=project, source_id=None))
+
+
+def test_a_rejected_contact_change_cannot_later_be_approved(conn: Connection) -> None:
+    """Negative: a rejected approval is not live and cannot be decided again."""
+    box = ContactBox(base64.b64encode(b"" * 32).decode("ascii"))
+    policy = ContactEmailPolicy(
+        allowed_domains=frozenset({"wds-test.example"}), alias_denylist=frozenset({"admin"})
+    )
+    first, second = administrators_for(conn)
+    staff = active_user(conn)
+    change = contacts.request_change(
+        conn, prove(conn, first, "contact.request.change", staff), policy, staff, _email()
+    )
+    contacts.reject_change(conn, prove(conn, first, "contact.reject.change", change), change)
+    with pytest.raises(ContactServiceError) as exc:
+        contacts.approve_change(
+            conn,
+            prove(conn, second, "contact.approve.change", change),
+            change,
+            "proof-after-reject",
+            contact_box=box,
+        )
+    assert (exc.value.status, exc.value.reason) == (409, "not_pending")
+    assert _audit_count(conn, "contact.change.denied", "not_pending") == 1
+
+
+def _audit_count(conn: Connection, event: str, reason: str) -> int:
+    return int(
+        conn.execute(
+            text("SELECT count(*) FROM audit_events WHERE event_type = :e AND error_class = :r"),
+            {"e": event, "r": reason},
+        ).scalar_one()
+    )
