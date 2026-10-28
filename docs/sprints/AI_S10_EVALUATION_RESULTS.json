@@ -1,6 +1,6 @@
 {
   "environment": {
-    "commit": "base 211d308; evaluated source sha256 37a5fd03d575c7ecd822712a4b439afe0da511f933beb8ed712aea29dffe8658",
+    "commit": "base 211d308; evaluated source sha256 cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694",
     "python": "3.12.10"
   },
   "results": [
@@ -652,6 +652,21 @@
       "scenario_id": "PIPE-05",
       "severity": "info",
       "title": "Evidence retrieval over the admitted index"
+    },
+    {
+      "actual": "project A returned ['CHK-A-1']; project B returned ['CHK-B-1']",
+      "classification": "A-isolated-synthetic",
+      "dependency": "none (isolated synthetic)",
+      "enforced_by": null,
+      "enforcement": null,
+      "expected": "each project receives only its own chunk",
+      "outcome": "pass",
+      "references": [
+        "AI-S03"
+      ],
+      "scenario_id": "RAG-01",
+      "severity": "critical",
+      "title": "AI-S03 RAG index filters chunks by project at the search boundary (component level)"
     },
     {
       "actual": "attempts [2]; specialist calls 14",
@@ -2067,7 +2082,7 @@
       "A-isolated-synthetic": {
         "delegated": 3,
         "open_limitation": 4,
-        "pass": 115
+        "pass": 116
       },
       "B-foundation-integration": {
         "blocked": 5
@@ -2089,11 +2104,11 @@
       "blocked": 12,
       "delegated": 3,
       "open_limitation": 4,
-      "pass": 115
+      "pass": 116
     },
-    "synthetic_executed": 115,
+    "synthetic_executed": 116,
     "synthetic_failed": 0,
-    "synthetic_passed": 115,
-    "total_scenarios": 134
+    "synthetic_passed": 116,
+    "total_scenarios": 135
   }
 }

@@ -102,7 +102,7 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 - The results are anchored to a **candidate source digest**, not to a label. The digest is SHA-256 over the
   engine source and the AI-S10 test package, with line endings normalised. Current value:
-  `8a90557fec8b91547d6ed354d8b1487aebf1b22bd749b82de2d98b57d1c7e29b`.
+  `cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694`.
 - `test_ai_s10_consistency.py` regenerates the results from the source and requires them to match the
   committed documents byte for byte, and requires every result to agree with its scenario status.
 - Test-count separation is in the reproducibility report, section 5.
@@ -171,11 +171,11 @@ verification fails. `RPL-06` and `RPL-07` exercise the ledger port directly and 
 
 ## 6. Catalogue after remediation
 
-- 134 scenarios. Class A: 115 executed and passing, 0 failing; 4 open limitations (`SEC-09`, `EVID-16`,
+- 135 scenarios. Class A: 116 executed and passing, 0 failing; 4 open limitations (`SEC-09`, `EVID-16`,
   `EXT-08`, `REC-03`); 3 delegated (`PIPE-04`, `PIPE-05`, `SPEC-14`); 0 blocked in class A.
 - Class B: 5 blocked (`EXT-05`, `EXT-06`, `EXT-07`, `SEC-18`, `TRC-02`). Class C: 1 (`EXT-01`).
   Class D: 2 (`EXT-02`, `SPEC-15`). Class E: 3 (`EXT-03`, `SOW-13`, `SPEC-16`). Class F: 1 (`EXT-04`).
-- Outcomes: pass 115, open_limitation 4, delegated 3, blocked 12, fail 0.
+- Outcomes: pass 116, open_limitation 4, delegated 3, blocked 12, fail 0.
 
 ## 7. Upstream defect recorded, not fixed
 

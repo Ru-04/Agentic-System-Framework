@@ -1619,6 +1619,16 @@ def _remediation_rows() -> list[Scenario]:
             "sec_categories_not_proposed",
         ),
         _ex(
+            "RAG-01",
+            "AI-S03 RAG index filters chunks by project at the search boundary (component level)",
+            "cross-project",
+            ("AI-S03",),
+            "identical chunk text in two projects, one collection; search for each project",
+            "each project receives only its own chunk",
+            "critical",
+            "rag01_project_filter_index_boundary",
+        ),
+        _ex(
             "TRC-01",
             "Requirement identifiers stay correlated through specialist, estimate and governance",
             "traceability",

@@ -1396,7 +1396,37 @@ def sec_categories_not_proposed() -> Check:
     )
 
 
+def rag01_project_filter_index_boundary() -> Check:
+    """AI-S03 RAG index project filter, at the index search boundary, with identical text in two
+    projects. Component-level evidence: it shows the index filter, not end-to-end retrieval."""
+    from ai_s03_support import COLLECTION_A, PROJECT_A, PROJECT_B
+    from test_ai_s03_index import _chunk, _index
+
+    same = "Synthetic warehouse stock note."
+    index = _index(
+        [
+            _chunk("CHK-A-1", project=PROJECT_A, collection=COLLECTION_A, text=same),
+            _chunk("CHK-B-1", project=PROJECT_B, collection=COLLECTION_A, text=same),
+        ]
+    )
+    ids_a = [
+        h.chunk.chunk_id
+        for h in index.search(
+            project_id=PROJECT_A, collections=[COLLECTION_A], query="warehouse stock", top_k=10
+        )
+    ]
+    ids_b = [
+        h.chunk.chunk_id
+        for h in index.search(
+            project_id=PROJECT_B, collections=[COLLECTION_A], query="warehouse stock", top_k=10
+        )
+    ]
+    ok = ids_a == ["CHK-A-1"] and ids_b == ["CHK-B-1"]
+    return Check(ok, f"project A returned {ids_a}; project B returned {ids_b}")
+
+
 EXECUTORS: dict[str, Any] = {
+    "rag01_project_filter_index_boundary": rag01_project_filter_index_boundary,
     "sec_categories_not_proposed": sec_categories_not_proposed,
     "stl05_policy_flag_exclude_track": stl05_policy_flag_exclude_track,
     "llm01_intake_accepts_fixture": llm01_intake_accepts_fixture,

@@ -6,7 +6,7 @@ recommendation and not a production-readiness statement.
 ## 1. Verdict
 
 - **Offline synthetic engineering scope (AI-S06 to AI-S09, with AI-S01 and AI-S02 offline coverage):**
-  engineering-complete as a Stage 3 checkpoint, **subject to the Stage 2 re-review**. Class A: 115 executed
+  engineering-complete as a Stage 3 checkpoint, **subject to the Stage 2 re-review**. Class A: 116 executed
   scenarios pass, none fails.
 - **MVP as a whole:** **not ready.** Foundation integration, the governance decisions in section 2, real-provider
   and real-platform validation, and production readiness are open. None is claimed.

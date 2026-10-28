@@ -1,14 +1,14 @@
 # AI-S10 Evaluation Results
 
-Candidate: `base 211d308; evaluated source sha256 37a5fd03d575c7ecd822712a4b439afe0da511f933beb8ed712aea29dffe8658`
+Candidate: `base 211d308; evaluated source sha256 cac42d94e67c955d61607f4faf0d283c1ca8e6b5b59d8a7b1044784aea612694`
 
 Outcomes are reported per classification. No cross-class percentage is computed.
 
 ## Summary
 
-- Total scenarios: 134
-- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 4, 'pass': 115}
-- Synthetic (A) executed: 115; passed 115; failed 0
+- Total scenarios: 135
+- Outcomes: {'blocked': 12, 'delegated': 3, 'open_limitation': 4, 'pass': 116}
+- Synthetic (A) executed: 116; passed 116; failed 0
 
 ## Results
 
@@ -56,6 +56,7 @@ Outcomes are reported per classification. No cross-class percentage is computed.
 | PIPE-03 | A-isolated-synthetic | pass | critical | - | reviewer authorises nothing; SOW approval stays pending | status evidence_backed; authorises_anything False |
 | PIPE-04 | A-isolated-synthetic | delegated | info | - | covered by the named accepted test file, which the committed gate runs | not re-executed by AI-S10; see tests/test_requirement_analysis.py |
 | PIPE-05 | A-isolated-synthetic | delegated | info | - | covered by the named accepted test file, which the committed gate runs | not re-executed by AI-S10; see tests/test_ai_s03_retrieval.py |
+| RAG-01 | A-isolated-synthetic | pass | critical | - | each project receives only its own chunk | project A returned ['CHK-A-1']; project B returned ['CHK-B-1'] |
 | REC-01 | A-isolated-synthetic | pass | major | - | every category makes exactly max_attempts (2) calls and ends transient | attempts [2]; specialist calls 14 |
 | REC-02 | A-isolated-synthetic | pass | major | - | for each permanent variant (validation, permission, unsupported) every category makes one call and no retry follows | failed_validation:[1]/7; permission_denied:[1]/7; unsupported_request:[1]/7 |
 | REC-03 | A-isolated-synthetic | open_limitation | critical | - | the withheld category is refused before any specialist attempt; no evidence is used; no other collection is substituted | withheld ['shopify_specialist']: attempted=True no_evidence=True specialist=evidence_unavailable=True execution=succeeded=True; others ran=True |
