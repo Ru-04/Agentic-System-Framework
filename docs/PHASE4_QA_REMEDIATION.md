@@ -139,3 +139,79 @@ with `git checkout` before any commit, so no formatting drift is in the history.
 - Known open: QA-06 and the Windows memory residual.
 - Governance: approver identity and approval date as WDS records them are not in the repository.
 - No WDS acceptance is implied. Production readiness is not claimed.
+
+## 10. Sprint 2026-10-28 (QA-05 and QA-06 blockers)
+
+Starting baseline `8040f9e`. Code commits, in order:
+
+- `d5dc287`: meter every PDF decode at the reader boundary; detect hidden text in nested graphs. Replaces the pre-scan.
+- `17c825b`: committed-row tests for nested-form text and admission refusal of an expanding PDF.
+- `f03698d`: serialize the process-wide decoder patch; concurrency regression test.
+
+Design and guarantees: `docs/PHASE4_PDF_CONTAINMENT.md`. Provenance: `docs/PHASE4_GOVERNANCE_PROVENANCE_MATRIX.md`.
+
+### 10.1 Findings and disposition
+
+| ID | Disposition | Evidence |
+|---|---|---|
+| QA-05 bypass A (CR-only stream line) | **Fixed.** Metered at the decoder, so the delimiter does not matter | `test_qa05_bypass_a_cr_only_line_ending_after_stream_is_metered_like_any_other`; `test_qa05_bypass_a_crlf_line_ending_is_metered` |
+| QA-05 bypass B (hidden `endstream` in deflate data) | **Fixed** | `test_qa05_bypass_b_a_hidden_endstream_in_compressed_data_is_metered` |
+| QA-05 root cause (pre-scan disagrees with reader) | **Fixed.** The boundary moved to the decoder the reader calls | `PHASE4_PDF_CONTAINMENT.md` section 2 |
+| QA-05 cross-reference streams, indirect or wrong `/Length`, aggregate expansion, incremental update | **Fixed** and tested | `test_qa05_a_cross_reference_stream_bomb_is_metered`; `test_qa05_an_indirect_or_wrong_length_does_not_change_the_charge`; `test_qa05_aggregate_expansion_across_two_streams_is_refused_by_the_cumulative_budget` |
+| QA-05 admission (upload opened PDFs unmetered in the API process) | **Found in this sprint, fixed.** Admission uses the same meter | `test_qa05_a_committed_expanding_pdf_is_refused_at_admission_before_any_parse` (422) |
+| QA-05 concurrent admission and parsing (process-wide patch) | **Found in this sprint, fixed** with a lock | `test_qa05_concurrent_admission_and_parsing_never_leak_the_patch` |
+| QA-05 child-process containment | **Verified.** The bomb returns a classified refusal from the child; the parent survives | `test_qa05_the_child_process_refuses_the_bomb_and_the_parent_survives` |
+| QA-05 Windows process memory | **Not contained.** Stated as a residual, not claimed | `PHASE4_PDF_CONTAINMENT.md` section 6 |
+| QA-06 text two levels inside forms | **Fixed (Option B).** Page flagged; zero segments give `unsupported` with metadata | `test_qa06_text_two_levels_inside_forms_is_flagged_not_silently_dropped`; committed `test_qa06_a_committed_nested_form_text_is_unsupported_with_its_region_as_metadata` |
+| QA-06 mixed ordinary and nested text | **Fixed.** Partial with the segment and the flag | `test_qa06_mixed_ordinary_text_and_nested_form_text_is_partial_with_the_flag`; committed `test_qa06_a_committed_mixed_page_is_partial…` |
+| QA-06 repeated, cyclic, excessive depth, sibling forms | **Fixed.** Visited set, depth 8, 512-object bound; unbounded walks flag the page | `test_qa06_*` (repeated, cyclic, depth, siblings) |
+| QA-06 annotations, patterns, Type 3 glyphs (same silent-omission class) | **Fixed** under the same walk | `test_qa06_text_in_an_annotation…`; `test_qa06_text_in_a_type3…`; `test_qa06_a_pattern_stream…` |
+| QA-06 negative control (vector-only form) | **Verified not flagged** | `test_qa06_a_vector_only_form_is_not_flagged` |
+
+### 10.2 Preserved previous fixes
+
+- QA-01, QA-02, QA-03, QA-04: unchanged; their tests run in gate steps 01, 02 and 06.
+- D1 to D4: unchanged; `test_parse_defects.py` updated only where the boundary moved (the per-stream refusal test now
+  asserts the meter's ratio refusal; the LZW page is flagged, not refused as a whole file, because it is never decoded).
+- H-30 and H-35: committed outcome and concurrency tests (gate steps 02 and 03) pass.
+
+### 10.3 Gate on the final committed implementation (`f03698d`, dedicated developer cluster, system identifier
+`7701663525754380326`, PostgreSQL 16.4)
+
+Run alone; a first attempt overlapped a stopped run on the same namespaces and was discarded. Log directory is the session
+scratchpad `gate/` (`summary.txt` and one log per step). Timestamps are +05:30.
+
+| # | Step | Result | Exit | Window |
+|---|---|---|---|---|
+| 01 | Focused H-30 to H-35 | 118 passed | 0 | 21:38:38 to 21:39:09 |
+| 02 | Committed-row outcomes | 16 passed | 0 | 21:39:09 to 21:39:28 |
+| 03 | Concurrency and reparse | 3 passed | 0 | 21:39:28 to 21:39:35 |
+| 04 | Crash, hang, output cap | 3 passed, 23 deselected | 0 | 21:39:35 to 21:39:41 |
+| 05 | Corpus manifest | 2 passed (manifest unchanged; CORPUS_VERSION 2) | 0 | 21:39:41 to 21:39:43 |
+| 06 | Full Foundation regression | **787 passed**, 1 warning | 0 | 21:39:43 to 21:46:35 |
+| 07 | AI Read v1 | 28 passed | 0 | 21:46:35 to 21:48:25 |
+| 08 | Restricted-role privilege audit | 34 passed | 0 | 21:48:25 to 21:48:29 |
+| 09 | Migration and catalog | head `0043_phase2_review_fixes`; upgrade, downgrade -1, upgrade; locator CHECK admits offset keys | 0 | 21:48:29 to 21:48:30 |
+| 10 | Synthetic demonstration | 1 passed | 0 | 21:48:31 to 21:48:36 |
+| 11 | Ruff lint | clean | 0 | 21:48:36 |
+| 12 | Ruff format policy | 6 files would reformat: `migrations/versions/0017, 0019, 0020, 0040`, `tests/hardening/test_privilege_hardening.py`, `tests/integration/test_reassessment.py`; these are the documented exceptions | 1 (documented) | 21:48:36 |
+| 13 | Strict mypy | clean, 60 files | 0 | 21:48:36 to 21:48:37 |
+
+Teardown state: the developer cluster `webdesk-p4-postgres` (127.0.0.1:55434) is still running and was not modified beyond
+the test databases the fixtures create and drop. The QA cluster `webdesk-qa-postgres` (127.0.0.1:55435) from the earlier
+independent re-test is still running. Neither was deleted.
+
+### 10.4 Residual limitations
+
+- Windows process memory: not contained (H-DEC-4). Production containment needs a separate decision.
+- Admission time: the upload-time open is bounded by the decode budget, not by time. The API process has no separate
+  timeout for it.
+- Corrupt flate streams are refused, which is stricter than pypdf.
+- QA-06 is Option B: nested-form text is flagged, not extracted.
+- Governance provenance: see `PHASE4_GOVERNANCE_PROVENANCE_MATRIX.md`. Engineering completion does not resolve it.
+
+### 10.5 Verdict
+
+PHASE 4 ENGINEERING REMEDIATION COMPLETE — READY FOR INDEPENDENT QA. This is engineering authorization only. It is not
+independent QA and not WDS acceptance. The author of these changes also wrote the probes and this record; an independent
+reviewer must re-test QA-05 and QA-06 from `PHASE4_PDF_CONTAINMENT.md` and `tests/unit/test_pdf_containment.py`.
