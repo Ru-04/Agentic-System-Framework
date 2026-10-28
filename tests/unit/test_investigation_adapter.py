@@ -69,9 +69,14 @@ def _page(
     )
 
 
-def _run(specialist: SpecialistId, pages: tuple[Page, ...]) -> AdapterResponse:
+def _run(
+    specialist: SpecialistId,
+    pages: tuple[Page, ...],
+    *,
+    task: str = "product variation pricing for the store",
+) -> AdapterResponse:
     provider = InvestigationProvider(specialist, pages, "1.0")
-    return call_adapter(provider, _request(specialist))
+    return call_adapter(provider, _request(specialist, task=task))
 
 
 WOO_VARIATION = _page(
@@ -147,7 +152,7 @@ def test_bigcommerce_sibling_page_is_not_cited() -> None:
         "product catalog",
         platform="bigcommerce",
     )
-    response = _run(SpecialistId.BIGCOMMERCE, (page,))
+    response = _run(SpecialistId.BIGCOMMERCE, (page,), task="product catalog read")
     assert response.findings == ()  # type: ignore[attr-defined]
 
 
@@ -159,7 +164,9 @@ def test_magento_feature_is_not_supported_by_release_notes() -> None:
         platform="magento_open_source",
         edition=Edition.MAGENTO_OPEN_SOURCE,
     )
-    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (notes,))
+    response = _run(
+        SpecialistId.MAGENTO_ADOBE_COMMERCE, (notes,), task="release history catalog import"
+    )
     assert all("catalog import" not in f.statement for f in response.findings)  # type: ignore[attr-defined]
 
 
@@ -171,7 +178,9 @@ def test_magento_release_history_is_supported_from_release_notes() -> None:
         platform="magento_open_source",
         edition=Edition.MAGENTO_OPEN_SOURCE,
     )
-    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (notes,))
+    response = _run(
+        SpecialistId.MAGENTO_ADOBE_COMMERCE, (notes,), task="release history for this version"
+    )
     assert any("release history" in f.statement for f in response.findings)  # type: ignore[attr-defined]
 
 
@@ -182,7 +191,7 @@ def test_adobe_only_page_is_not_applied_to_magento_open_source_claims() -> None:
         platform="adobe_commerce",
         edition=Edition.ADOBE_COMMERCE,
     )
-    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (rest,))
+    response = _run(SpecialistId.MAGENTO_ADOBE_COMMERCE, (rest,), task="REST product read")
     # The Adobe Commerce REST claim is supported. No Magento Open Source claim is produced from it.
     assert any("REST product read" in f.statement for f in response.findings)  # type: ignore[attr-defined]
     assert all("catalog import" not in f.statement for f in response.findings)  # type: ignore[attr-defined]
@@ -194,14 +203,20 @@ def test_shift4shop_has_no_approved_source_so_no_claim_is_made() -> None:
         "product read API",
         platform="shift4shop",
     )
-    response = _run(SpecialistId.SHIFT4SHOP, (page,))
+    response = _run(SpecialistId.SHIFT4SHOP, (page,), task="product read API")
     assert response.findings == ()  # type: ignore[attr-defined]
     assert any("unsupported_source" in u for u in response.unknowns)  # type: ignore[attr-defined]
 
 
 def test_standalone_and_middleware_return_explicit_unsupported_outcomes() -> None:
-    for specialist in (SpecialistId.STANDALONE_APPLICATIONS, SpecialistId.MIDDLEWARE_APPLICATIONS):
-        response = call_adapter(InvestigationProvider(specialist, (), "1.0"), _request(specialist))
+    named_tasks = (
+        (SpecialistId.STANDALONE_APPLICATIONS, "application architecture selection"),
+        (SpecialistId.MIDDLEWARE_APPLICATIONS, "webhook delivery retry"),
+    )
+    for specialist, task in named_tasks:
+        response = call_adapter(
+            InvestigationProvider(specialist, (), "1.0"), _request(specialist, task=task)
+        )
         assert response.status == "incomplete"
         assert response.findings == ()
         assert any("unsupported_source" in u for u in response.unknowns)

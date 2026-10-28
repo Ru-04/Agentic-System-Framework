@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Final
 
 from webdesk.investigation.engine import (
@@ -46,7 +47,8 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
             "woocommerce",
             NA,
             ClaimKind.FEATURE,
-            ("variation", "price"),
+            # "pric" is a stem: it matches price, pricing and priced in the requirement text.
+            ("variation", "pric"),
         ),
         Capability(
             "REST API product read", "woocommerce", NA, ClaimKind.FEATURE, ("rest", "product")
@@ -112,46 +114,53 @@ PROVIDER_ACTIONS: Final[frozenset[str]] = frozenset(
     {Action.READ_EVIDENCE.value, Action.PROPOSE_CANDIDATES.value, Action.DECLARE_UNKNOWNS.value}
 )
 
-# A requirement needs at least this many distinct specific terms before any investigation runs.
-MIN_SPECIFIC_TERMS: Final = 3
-
-_STOPWORDS: Final[frozenset[str]] = frozenset(
-    {
-        "and",
-        "are",
-        "but",
-        "can",
-        "does",
-        "for",
-        "from",
-        "has",
-        "have",
-        "how",
-        "into",
-        "its",
-        "not",
-        "our",
-        "the",
-        "their",
-        "them",
-        "they",
-        "this",
-        "that",
-        "use",
-        "what",
-        "which",
-        "who",
-        "will",
-        "with",
-        "your",
-    }
-)
+FEASIBILITY_UNKNOWN: Final = "feasibility is not determined by this specialist"
 
 
-def specific_terms(text: str) -> frozenset[str]:
-    """Distinct words of three or more characters that are not common stopwords."""
-    words = re.findall(r"[a-z0-9]+", text.lower())
-    return frozenset(word for word in words if len(word) >= 3 and word not in _STOPWORDS)
+class Decision(StrEnum):
+    """Outcome of the requirement check. Each is a deterministic rule, not a confidence score."""
+
+    INVESTIGATE = "INVESTIGATE"
+    INVESTIGATE_WITH_UNKNOWNS = "INVESTIGATE_WITH_UNKNOWNS"
+    CLARIFY = "CLARIFY"
+    REFUSE = "REFUSE"
+
+
+def _term_present(term: str, text: str) -> bool:
+    """Word-start match, so 'price' matches 'pricing' and 'variation' matches 'variations'."""
+    return re.search(r"\b" + re.escape(term.lower()), text) is not None
+
+
+def matched_capabilities(specialist: SpecialistId, task: str) -> tuple[Capability, ...]:
+    """Capabilities whose every required term appears in the requirement text."""
+    text = task.lower()
+    return tuple(
+        capability
+        for capability in CATALOG[specialist]
+        if all(_term_present(term, text) for term in capability.required_terms)
+    )
+
+
+def decide(
+    specialist: SpecialistId,
+    task: str,
+    *,
+    requested_version: str | None,
+    operator_confirmed: bool,
+) -> tuple[Decision, str]:
+    """Authorization first, then objective, then version. Returns the decision and its reason."""
+    if not operator_confirmed:
+        return Decision.REFUSE, "operator confirmation is missing; no investigation was run"
+    if not matched_capabilities(specialist, task):
+        return Decision.CLARIFY, (
+            "the requirement does not name a capability this specialist can investigate; "
+            "state the capability or objective; no investigation was run"
+        )
+    if requested_version is None:
+        return Decision.INVESTIGATE_WITH_UNKNOWNS, (
+            "the requested version is not stated, so version applicability stays unknown"
+        )
+    return Decision.INVESTIGATE, ""
 
 
 def canonical_capability(specialist_id: SpecialistId) -> str:
@@ -165,6 +174,7 @@ class InvestigationProvider:
     specialist: SpecialistId
     pages: tuple[Page, ...]
     requested_version: str | None
+    operator_confirmed: bool = True
 
     @property
     def specialist_id(self) -> SpecialistId:
@@ -175,18 +185,26 @@ class InvestigationProvider:
         return PROVIDER_ACTIONS
 
     def run(self, request: SpecialistInput) -> Mapping[str, object]:
-        if len(specific_terms(request.task)) < MIN_SPECIFIC_TERMS:
+        # Authorization and the objective are checked before any page is read.
+        decision, reason = decide(
+            self.specialist,
+            request.task,
+            requested_version=self.requested_version,
+            operator_confirmed=self.operator_confirmed,
+        )
+        if decision is Decision.REFUSE:
+            return self._response(request, [], [f"[REFUSE] {reason}"], status="failed")
+        if decision is Decision.CLARIFY:
             return self._response(
                 request,
                 [],
-                [
-                    "clarification required: the requirement names fewer than "
-                    f"{MIN_SPECIFIC_TERMS} specific terms; no investigation was run",
-                    "feasibility is not determined by this specialist",
-                ],
+                [f"[CLARIFY] {reason}", f"[CLARIFY] {FEASIBILITY_UNKNOWN}"],
             )
+
         findings: list[dict[str, object]] = []
         unknowns: list[str] = []
+        if decision is Decision.INVESTIGATE_WITH_UNKNOWNS:
+            unknowns.append(f"[INVESTIGATE_WITH_UNKNOWNS] {reason}")
         for capability in CATALOG[self.specialist]:
             result: Finding = investigate(
                 capability,
@@ -214,7 +232,7 @@ class InvestigationProvider:
             else:
                 reason = result.reason or "; ".join(result.unknowns)
                 unknowns.append(f"{capability.name}: {result.outcome.value}: {reason}")
-        unknowns.append("feasibility is not determined by this specialist")
+        unknowns.append(f"[{decision.value}] {FEASIBILITY_UNKNOWN}")
         return self._response(request, findings, unknowns)
 
     def _response(
@@ -222,13 +240,14 @@ class InvestigationProvider:
         request: SpecialistInput,
         findings: list[dict[str, object]],
         unknowns: list[str],
+        status: str = "incomplete",
     ) -> Mapping[str, object]:
         return {
             "contract_version": "1.0.0",
             "request_id": request.request_id,
             "workspace_id": request.workspace_id,
             "specialist_id": self.specialist.value,
-            "status": "incomplete",
+            "status": status,
             "findings": findings,
             "unknowns": unknowns,
         }
