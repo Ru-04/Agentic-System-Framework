@@ -95,3 +95,25 @@ Checks on `3ffdbbc`: `ruff check src tests migrations` passed; `ruff format --ch
 Coverage: the AI Read Contract v1 tests (`tests/committed/test_ai_read_v1.py`), the migration catalog and downgrade/re-upgrade test (`tests/committed/test_migration_catalog.py`), the privilege audit and restricted-login tests (`tests/hardening/`), and the owner-reset tests (`tests/integration/test_owner_reset.py`) all run inside each full pass above. Their individual results are not separately recorded beyond the totals.
 
 Status: the three-run gate on the dedicated cluster is met for `3ffdbbc`. Independent QA has not accepted the work, and no WDS acceptance is claimed.
+
+## 9. Final gate after QA remediation (D1, D2, D3), code `ad28ac0`
+
+Cluster: dedicated `webdesk-p2-postgres` at `127.0.0.1:55442`, system identifier `7701671162267615270`. Each run uses a unique namespace and runs sequentially; no foreign pytest process touched this cluster.
+
+| Run | Namespace | Start | Finish | Result | Exit | Leftover namespace DBs | Attached sessions |
+|---|---|---|---|---|---|---|---|
+| Full 1 | `fix-gate-1` | 18:55:05 | 19:01:40 | 688 passed, 1 warning | 0 | none | 0 |
+| Full 2 | `fix-gate-2` | 19:01:41 | 19:08:26 | 688 passed, 1 warning | 0 | none | 0 |
+| Full 3 | `fix-gate-3` | 19:08:27 | 19:14:52 | 688 passed, 1 warning | 0 | none | 0 |
+| Owner reset x10 | `fix-or-1` to `fix-or-10` | — | — | 10 passed each | 0 each | — | — |
+
+The 688 total is the previous 681 plus five owner-reset fault-injection cases and two restricted-login contact-window cases.
+
+Focused runs before the gate: the D2 negative tests with change-expiry, concurrency, privilege audit and migration catalog, 28 passed (`d2-focus`, exit 0). The D1 fault module against the fixed handler: 5 passed, and the earlier negative control (old handler): 4 failed, 1 passed (`d1-neg`, exit 1 as expected). The concurrency module three times in a row: 5 passed each, exit 0 (`d3-conc-1` to `d3-conc-3`).
+
+Static checks on `ad28ac0`:
+- `ruff check src tests migrations`: all checks passed.
+- `ruff format --check src tests migrations`: 5 files, exactly the documented exception list (the new `0046` migration was formatted).
+- `mypy --strict src/webdesk`: `mypy 1.11.2`, 57 source files, "Success: no issues found", exit 0.
+
+Migration: `0046_fixed_contact_change_window` applied to the dedicated base database (`alembic upgrade head`, exit 0). Downgrade and re-upgrade are exercised by the migration catalog test, which passed in every full run.

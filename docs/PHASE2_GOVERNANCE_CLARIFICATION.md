@@ -12,7 +12,10 @@ WDS rule:
 - **409 Conflict**: an expired appointment; a consumed appointment; an otherwise authorised operation that conflicts
   with an existing lifecycle state.
 
-Applied to the recovery and role-assignment pathways (approved basis: EVAL-F11f, EVAL-F11h):
+Applied to the recovery and role-assignment pathways (approved basis: EVAL-F11f, EVAL-F11h). The EVAL-F11h text (v0.3.10)
+states "403 for authorization, 409 for stale/consumed/deadline conflict". The classification of
+`appointment_target_ineligible` as 403 is an interpretation of that rule, not a quoted row. No WDS record of its
+approval was located (see section 4).
 
 | Refusal | Code | Class | Where |
 |---|---|---|---|
@@ -41,38 +44,42 @@ appointment); `tests/committed/test_deadlines.py` (409 for expired and consumed 
 ## 2. Acknowledgement of the H-12 Phase 1 test correction (F-09)
 
 The Phase 1 test `test_below_two_an_administrator_grant_needs_an_appointment` previously expected 409 for a grant
-without an appointment below two Administrators. It now expects 403 `appointment_required`, following EVAL-F11f
-("`role.assign` for Administrator MUST reject an existing active staff user without an approved, unexpired
-ceremony-backed Administrator-appointment approval (403)").
+without an appointment below two Administrators. It now expects 403 `appointment_required`.
 
-WDS has acknowledged this correction as the implementation of the approved requirement. The approved 403/409
-semantics are kept. The earlier assertion is not restored.
+Spec basis (located): EVAL-F11f in `WebDesk_Agentic_Requirement_Platform_Specs/EVALUATION_PLAN.md` states that with
+exactly one active Administrator, `role.assign` for Administrator MUST reject an existing active staff user without an
+approved, unexpired ceremony-backed Administrator-appointment approval (403). The implementation follows that text.
 
-## 3. Injected approval windows for tests (F-07)
+WDS acknowledgement (not located): this document previously stated that WDS acknowledged the correction. No record
+of that acknowledgement exists in the repository: the specs and governance registers contain no entry for the Phase 2
+test correction. Evidence status: **the requirement is located; the WDS acknowledgement is missing**. No approver
+identity or retrospective approval is recorded here. QA F-09 remains blocked on that record (section 4).
 
-The 24-hour contact-change deadline is approved (EVAL-F11d). Production uses the database default of 24 hours.
-Tests pass a short window to `contacts.request_change(..., window=...)` and to the guard
-`fn_request_change_with_proof(..., p_window)`. No approval row is back-dated.
+## 3. Contact-change approval window (F-07, D2)
 
-Approved basis: P-INC3-TEST-CLOCK-05 (deterministic test-only injected time and disposable databases for installation,
-contact activation and expiry scenarios), and the installation-window precedent (GD-003). The injected value is never
-set by production code.
+Normative duration (located): 24 hours. Sources: changelog v0.3.7, item T8 (`24h pending contact-change TTL`);
+EVAL-F11d (`24 hours` deadline from contact approval); GOVERNANCE P-INC3-TEST-CLOCK-05 (test-only injected time is
+approved for tests; production uses real authoritative time and rejects any test-only clock mechanism).
 
-## 4. Expiry of stale pending contact changes (F-07, applied)
+Implementation (migration 0046, QA D2):
 
-The approved rule (EVAL-F11d): a pending contact change expires at 24 hours and releases its target reservation.
-The expiry sweep applies that transition, but nothing schedules the sweep in production.
+- The database boundary fixes the window. `fn_request_change_with_proof` accepts a window other than 24 hours only when
+  the session login belongs to `webdesk_test_clock`. The check runs before the proof is consumed. The deadline is
+  `now()` on the database clock plus the window.
+- `webdesk_test_clock` is a group role with no members in production. Only a test cluster grants it to its integration
+  owner (`docs/PHASE2_DEDICATED_TEST_CLUSTER.md`, step 5).
+- Restricted-login tests (`tests/hardening/test_contact_change_window.py`) show that a 1-hour window is refused with
+  SQLSTATE 42501 and that the 24-hour window reaches the proof check.
+- The application never passes a window; the default is 24 hours.
 
-Applied: when a new change request for an address is made, pending changes for that address that are past their
-deadline are expired and their reservations released first. This is the same transition the sweep applies, limited
-to the address needed. It can grant nothing and cannot touch a live request. Each expiry writes an `approval.expired`
-audit event. Tests: `tests/committed/test_change_expiry.py`.
+## 4. Governance evidence status (QA D6, F-06, F-09)
 
-The sweep remains a dependency for the other expiries (appointments, tokens, and changes that are not requested
-again). Its scheduling belongs to the later operational phase.
+| Item | Status | Evidence located | Missing |
+|---|---|---|---|
+| F-04 403/409 mapping | Interpretation documented | EVAL-F11f (403 for missing appointment), EVAL-F11h (403 authorization, 409 conflict) | A WDS record for the classification of `appointment_target_ineligible` as 403. |
+| F-09 H-12 test correction | Requirement located; acknowledgement missing | EVAL-F11f text (403) | The WDS acknowledgement of the correction. |
+| D6 (this document's citations) | Evidence gap | The specs folder contains no record of the Phase 2 QA remediation authorisation. | The authorisation record itself. |
+| F-06 token issuance | Phase 6 dependency (approved scope) | `docs/INCREMENT_3_HARDENING_PLAN.md`: H-50 recovery CLI and H-52 outbox are Phase 6 items. | None for Phase 2; production dependency for Phase 6. |
 
-## 5. Scope of token delivery (F-06)
-
-Activation and reset token delivery is not implemented in this sprint. `tokens.issue` has no production caller. Its
-delivery and wiring belong to the later approved notification and outbox phase (H-50, H-52; ARCHITECTURE
-"account contact outbox"). This sprint does not implement production notification infrastructure.
+No approver, date or approval is invented for any row. Each gap is a governance dependency for WDS, not an implementation
+defect.
