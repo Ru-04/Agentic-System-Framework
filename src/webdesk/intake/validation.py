@@ -24,7 +24,8 @@ from email.parser import BytesParser
 
 from docx import Document
 
-from webdesk.intake.parsers import ParserFailure, open_pdf_structure
+from webdesk.intake.isolation import open_pdf_in_child
+from webdesk.intake.parsers import ParserFailure
 from webdesk.storage.content_store import MAX_BYTES
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -100,7 +101,7 @@ def _check_pdf(data: bytes) -> None:
     if not data.startswith(b"%PDF-"):
         raise _refuse(415, "signature_mismatch")
     try:
-        encrypted = open_pdf_structure(data)
+        encrypted = open_pdf_in_child(data)
     except ParserFailure as exc:
         # The same metered open as the parser (QA-05): an expansion refused here is refused for the
         # same reason.

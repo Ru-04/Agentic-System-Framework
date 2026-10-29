@@ -106,6 +106,37 @@ def run_isolated(mime: str, data: bytes) -> ParseResult:
     )
 
 
+ADMISSION_MODE = "admission"
+
+
+def open_pdf_in_child(data: bytes) -> bool:
+    """Open a PDF for upload admission in the isolated child, and return whether it is encrypted.
+
+    The API process never opens a PDF itself. The child runs under the parse's timeout and output
+    cap, so a malformed structure that makes the reader loop or expand is refused as
+    ``parser_timeout`` or a classified failure, and the request is released. The timeout is a
+    containment, not a memory bound.
+    """
+    command = [sys.executable, "-s", "-m", "webdesk.intake.parser_child", ADMISSION_MODE]
+    try:
+        completed = _run_child(command, data)
+    except subprocess.TimeoutExpired as exc:
+        raise ParserFailure(limits.PARSER_TIMEOUT) from exc
+    except OSError as exc:
+        raise ParserFailure(limits.PARSER_CRASH) from exc
+    if len(completed.stdout) > limits.PARSER_OUTPUT_BYTES:
+        raise ParserFailure(limits.PARSER_OUTPUT_LIMIT)
+    if completed.returncode != 0:
+        raise ParserFailure(limits.PARSER_CRASH)
+    try:
+        payload = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ParserFailure(limits.PARSER_CRASH) from exc
+    if "failure" in payload:
+        raise ParserFailure(str(payload["failure"]))
+    return bool(payload["encrypted"])
+
+
 def run_in_process(mime: str, data: bytes) -> ParseResult:
     """The same parsers, run in the caller's process. Used by tests that inject a parser."""
     parser = PARSERS.get(mime)

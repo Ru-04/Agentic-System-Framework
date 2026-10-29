@@ -15,7 +15,9 @@ import os
 import sys
 import time
 
-from webdesk.intake.parsers import PARSERS, ParseResult, ParserFailure
+from webdesk.intake.parsers import PARSERS, ParseResult, ParserFailure, open_pdf_structure
+
+ADMISSION_MODE = "admission"  # the mode name used by isolation.open_pdf_in_child
 
 
 def _inject_fault() -> None:
@@ -44,6 +46,18 @@ def main(argv: list[str]) -> int:
     mime = argv[1]
     data = sys.stdin.buffer.read()
     _inject_fault()
+    if mime == ADMISSION_MODE:
+        # Upload admission for PDFs runs here, under the parent's timeout and output cap.
+        admission: dict[str, object]
+        try:
+            admission = {"encrypted": open_pdf_structure(data)}
+        except ParserFailure as exc:
+            admission = {"failure": exc.reason}
+        except Exception:
+            admission = {"failure": "corrupt_structure"}
+        sys.stdout.write(json.dumps(admission, sort_keys=True, separators=(",", ":")))
+        sys.stdout.flush()
+        return 0
     parser = PARSERS.get(mime)
     if parser is None:
         payload: dict[str, object] = {"failure": "unsupported_mime"}

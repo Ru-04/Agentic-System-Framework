@@ -28,7 +28,7 @@ from webdesk.intake.ingest import IngestError, ingest_source
 from webdesk.intake.read_access import ReadAccessError, read_source_version_v1
 from webdesk.intake.reparse import reparse_source_version
 from webdesk.runs import service as runs
-from webdesk.storage.content_store import ContentStore
+from webdesk.storage.content_store import MAX_BYTES, ContentStore
 
 router = APIRouter()
 
@@ -134,7 +134,8 @@ async def upload_source(project_id: str, request: Request, token: Token) -> dict
     upload = form.get("file")
     if not isinstance(upload, UploadFile):
         raise IngestError(422, "file_required")
-    data = await upload.read()
+    # Read at most one byte past the approved maximum; an oversized upload is refused unheld (D5).
+    data = await upload.read(MAX_BYTES + 1)
     store = _store(request)
     project = _uuid(project_id)
     supersedes = form.get("supersedes_source_id")

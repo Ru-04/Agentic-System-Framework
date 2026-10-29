@@ -44,6 +44,7 @@ from typing import Any, cast
 from docx import Document
 from pypdf import PdfReader
 from pypdf.filters import (
+    ASCII85Decode,
     CCITTFaxDecode,
     DCTDecode,
     FlateDecode,
@@ -139,6 +140,26 @@ class _DecodeMeter:
         self.filter_refusals = 0  # a stream the reader asked to decode with a refused filter
         self._charged: dict[int, bytes] = {}  # keeps charged buffers alive so their ids stay unique
 
+    def reserve_ascii85(self, data: bytes) -> None:
+        """ASCII85 expands to at most 4 output bytes per input byte, 'z' included (QA-05, D1).
+
+        The worst case is charged before the decode runs.
+        """
+        if self.refusal is not None:
+            raise ParserFailure(self.refusal)
+        if id(data) in self._charged:
+            return
+        bound = 4 * len(data)
+        size_room = limits.MAX_ARCHIVE_UNCOMPRESSED_BYTES - self.total
+        ratio_room = limits.MAX_ARCHIVE_RATIO * self.input_size - self.total
+        if bound > min(size_room, ratio_room):
+            self.refusal = (
+                limits.ARCHIVE_SIZE_LIMIT if size_room <= ratio_room else limits.ARCHIVE_RATIO_LIMIT
+            )
+            raise ParserFailure(self.refusal)
+        self.total += bound
+        self._charged[id(data)] = data
+
     def charge_flate(self, data: bytes) -> None:
         if self.refusal is not None:
             raise ParserFailure(self.refusal)
@@ -185,6 +206,13 @@ def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
     original_dct = vars(DCTDecode)["decode"]
     original_jpx = vars(JPXDecode)["decode"]
     original_ccitt = vars(CCITTFaxDecode)["decode"]
+    original_a85 = vars(ASCII85Decode)["decode"]
+    original_a85_fn = original_a85.__func__
+
+    def metered_a85(data: bytes, *args: Any, **kwargs: Any) -> bytes:
+        meter.reserve_ascii85(data)
+        decoded: bytes = original_a85_fn(data, *args, **kwargs)
+        return decoded
 
     original_flate_fn: Any = original_flate.__func__  # the plain function behind the staticmethod
 
@@ -199,6 +227,7 @@ def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
     type.__setattr__(DCTDecode, "decode", staticmethod(refuse_filter))
     type.__setattr__(JPXDecode, "decode", staticmethod(refuse_filter))
     type.__setattr__(CCITTFaxDecode, "decode", staticmethod(refuse_filter))
+    type.__setattr__(ASCII85Decode, "decode", staticmethod(metered_a85))
     try:
         yield
     finally:
@@ -208,6 +237,7 @@ def _metered_pdf_decoding(meter: _DecodeMeter) -> Iterator[None]:
         type.__setattr__(DCTDecode, "decode", original_dct)
         type.__setattr__(JPXDecode, "decode", original_jpx)
         type.__setattr__(CCITTFaxDecode, "decode", original_ccitt)
+        type.__setattr__(ASCII85Decode, "decode", original_a85)
         _PDF_DECODE_LOCK.release()
 
 
@@ -398,6 +428,9 @@ def _parse_pdf_metered(data: bytes, meter: _DecodeMeter) -> ParseResult:
         if reader.is_encrypted:
             raise ParserFailure("encrypted_not_permitted")
         pages = list(reader.pages)
+        if meter.filter_refusals:
+            # Refused filter swallowed while opening or rebuilding (D2). Fail, not silent.
+            raise ParserFailure(PDF_FILTER_UNSUPPORTED)
     except ParserFailure:
         raise
     except Exception as exc:
@@ -428,7 +461,8 @@ def _parse_pdf_metered(data: bytes, meter: _DecodeMeter) -> ParseResult:
             continue
         if text:
             segments.append(SegmentDraft("pdf_page", {"page_number": number}, text))
-        if hidden or (not text and _has_image(page)):
+        unreliable = "�" in text  # pypdf could not map a glyph (D3): the text is not trustworthy
+        if hidden or unreliable or (not text and _has_image(page)):
             # H-33 and QA-06: text that pypdf cannot extract is flagged, never silently omitted. An
             # image-only page
             # holds content that is not text. There is no OCR, so it is reported, not read as blank.
