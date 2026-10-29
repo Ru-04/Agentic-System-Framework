@@ -263,6 +263,7 @@ def test_the_approval_guards_use_the_database_clock_after_0053(committed_engine:
         "fn_reject_create_with_proof",
         "fn_issue_token",
         "fn_revoke_expired_activation_tokens",
+        "fn_reject_change_with_proof",
     ]
     with committed_engine.connect() as conn:
         rows = conn.execute(
