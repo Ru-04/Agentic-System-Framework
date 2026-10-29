@@ -557,3 +557,38 @@ produced" as a `partial` result. The region is retained as `unsupported` metadat
 - The plan status line in `docs/INCREMENT_3_HARDENING_PLAN.md` said "Approved as the non-production engineering baseline".
   That overstated the record. It now states that the approval is relayed and its provenance is incomplete.
 - The 120 s parser-timeout lease reference cites Phase 3 material that is not on this branch. It is unverified here (QA-07).
+
+## WDS-DECISIONS-2026-10-29: Phase 4 non-production decisions (communicated 29 October 2026, Asia/Kolkata)
+
+**Provenance and limits.** The authorization below was communicated to the Phase 4 engineering session on 29 October 2026
+(Asia/Kolkata) in the Claude Code chat, in an instruction pasted by the account that holds the sales address. The
+decision-maker's name, role, the authenticated approval channel, the exact approval wording as WDS records it, and any
+signature are **not recorded here and not supplied by this entry**. The entry records the communicated text as the
+approved interpretation for engineering. Administrative attestation (an authenticated WDS record that names the approver,
+the time and the artifact) is outstanding. Formal WDS acceptance is not recorded by this entry.
+
+**Scope.** The authorization is for non-production validation only. It does not waive technical security defects,
+production containment requirements, or independent QA. QA-05 and QA-06 have not been waived and require independent
+verification.
+
+**Decisions (as communicated).**
+
+- **H-DEC-3:** approve the reported parser numeric limits for non-production validation only, including the approved
+  20 MiB input limit and the provisional 100 MiB cumulative decoded-data limit and 100x expansion policy. Production parser
+  limits require separate capacity and security validation.
+- **H-DEC-4:** accept the documented Windows process-memory containment limitation for non-production testing only. This does
+  not authorize Windows production deployment without adequate containment or an approved alternative hosting strategy.
+- **H-DEC-5:** approve the documented DOCX paragraph, table-cell and nested-table locator semantics to the extent they match
+  the authoritative source-locator schema (REQUIREMENT_SCHEMA section 4).
+- **H-DEC-6:** partial requires at least one committed segment and at least one flagged region. A zero-segment result cannot
+  be partial. Unsupported and failed keep their distinct meanings.
+- **EML:** normalized text offsets using `start_offset` and `end_offset`, with subject/body provenance and the approved
+  normalization rules (Unicode NFC, surrounding whitespace removed; zero-based, end-exclusive code points).
+
+**Artifact binding (engineering record, not a WDS signature).** The implementation of these decisions is at the commits
+listed in `docs/PHASE4_QA_REMEDIATION.md` and in the final-review remediation commit. A document or register hash was not
+computed by this entry. Administrative attestation must bind each decision to a commit SHA or a document hash.
+
+**Evidence still required from WDS (administrative attestation).** Name of the approver and role; the approval time and
+channel as WDS records them; the exact approval wording; a WDS-authored statement binding each decision to a commit or
+document hash.

@@ -215,3 +215,20 @@ independent re-test is still running. Neither was deleted.
 PHASE 4 ENGINEERING REMEDIATION COMPLETE — READY FOR INDEPENDENT QA. This is engineering authorization only. It is not
 independent QA and not WDS acceptance. The author of these changes also wrote the probes and this record; an independent
 reviewer must re-test QA-05 and QA-06 from `PHASE4_PDF_CONTAINMENT.md` and `tests/unit/test_pdf_containment.py`.
+
+### 10.6 Final-review remediation (commit f416716, 2026-10-29)
+
+| Finding | Disposition |
+|---|---|
+| D1 ASCII85 not metered | Fixed: worst-case reservation before decode |
+| D2 filter refusal swallowed by reader rebuild | Fixed: file fails with `pdf_filter_unsupported` |
+| D3 replacement characters without flag | Fixed: page flagged, segment kept |
+| D4 admission in API process, no time bound | Fixed for the enforced bound: admission runs in the timed child. Reviewer's specific xref-loop repro not reproduced by a synthetic fixture |
+| D5 upload read unbounded before size check | Partly fixed: read capped at max+1. Framework multipart buffering remains a residual |
+
+Gate on `f416716` (developer cluster `webdesk-p4-postgres`, system identifier `7701663525754380326`), run after the
+cluster was restarted without changing its data: focused 118 passed; committed outcomes 16 passed; concurrency 3 passed;
+crash and timeout 3 passed (23 deselected); corpus 2 passed; full regression **793 passed**; AI Read v1 28 passed;
+privilege audit 34 passed; migration and catalog ok; demonstration 1 passed; Ruff lint clean; Ruff format exit 1 with
+the six documented exception files; strict mypy clean. Earlier invalid runs (cluster down, and an overlapping run) are
+not counted.

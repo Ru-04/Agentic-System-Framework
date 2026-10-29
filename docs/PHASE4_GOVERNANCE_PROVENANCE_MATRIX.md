@@ -67,3 +67,10 @@ line (`docs/INCREMENT_3_HARDENING_PLAN.md`, line 3) already says the approval is
 5. Decide whether the H-DEC-4 Windows containment residual is accepted for non-production only, and whether production
    requires a further decision.
 6. Confirm the QA-02 ruling wording, or supply a replacement.
+
+## Provenance matrix update (2026-10-29)
+
+The WDS-DECISIONS-2026-10-29 authorization is recorded in `docs/GOVERNANCE_DECISION_REGISTER.md`. Its approver identity,
+approval channel and time as WDS records them, and its exact wording, remain missing. Administrative attestation is the only
+outstanding record requirement for the engineering decisions. QA-05 and QA-06 are not waived. Production containment and
+production limits are unchanged.

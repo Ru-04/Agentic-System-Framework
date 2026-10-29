@@ -141,3 +141,20 @@ Within the parser process, for an input that is accepted:
 - Committed-row tests: `tests/committed/test_parse_outcomes.py` (nested-form unsupported with metadata, mixed partial,
   admission refusal of an expanding cross-reference stream with HTTP-equivalent 422).
 - Gate: see `docs/PHASE4_QA_REMEDIATION.md`, section 9.
+
+## 9. Final-review remediation (commit f416716)
+
+- **ASCII85 (D1):** expansion is at most four output bytes per input byte. The worst case is reserved against the
+  cumulative budget before the decode runs. Tests: `tests/unit/test_pdf_remediation.py`.
+- **Swallowed filter refusals (D2):** if the reader refuses a filter while it opens or rebuilds the file, the file fails
+  with `pdf_filter_unsupported`. It does not return a silent empty result.
+- **Replacement characters (D3):** a page whose extracted text contains U+FFFD is flagged. The segment is kept, so the
+  result is partial when text exists.
+- **Admission (D4):** `open_pdf_in_child` runs PDF admission in the isolated child under the parse timeout and output cap.
+  The API process no longer opens PDFs. The timeout is the enforced bound. It is not a memory bound. A self-referencing
+  cross-reference loop from the review was not reproduced by a synthetic fixture.
+- **Upload read (D5):** the upload is read at most one byte past the approved 20 MiB maximum before validation. The
+  multipart parser of the web framework still buffers the request body, so a complete request-size cap is not closed here.
+
+**Residuals after this remediation.** Windows process memory (H-DEC-4). The admission timeout is the only time bound, and
+the framework body buffering in D5. Nested-form text is flagged, not extracted (QA-06, Option B).
