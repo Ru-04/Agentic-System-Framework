@@ -101,9 +101,17 @@ Both failures on the developer and independent clusters came from the test envir
 ## Acceptance status
 
 - Engineering: complete at f001b9d.
-- Independent QA: **PASSED** (assessment) on f001b9d.
-- WDS formal acceptance: **PENDING**. Not granted by this document.
-- Cross-phase integration: **PENDING** (dependencies above).
+- Independent QA: **PASSED** on f001b9d.
+- WDS formal acceptance: **GRANTED for the standalone X7 scope**, decision dated 30 October 2026
+  (Asia/Kolkata), accepted implementation commit f001b9d, documentation commit 3d7e789. The decision text was
+  supplied in chat by the user and is not verified against an authoritative register.
+- Dispositions recorded by WDS: Finding 3 accepted as a scope limitation (service-layer H-42 only). Finding 5
+  assigned to Phase 3 as a required cross-phase security and fencing dependency; the function is not declared
+  secure.
+- Governance gaps: the approver identity, signature, approval channel and artifact hashes are not in the
+  repository. They must be obtained through the approved governance process. None have been invented here.
+- Cross-phase integration: **PENDING**. Acceptance does not cover deployment, unreviewed merges or
+  waiver of Phase 3 security or fencing requirements.
 - Branch `feature/foundation-phase-5` is not merged or deployed.
 
 ## Resources
