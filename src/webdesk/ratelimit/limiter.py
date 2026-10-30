@@ -35,8 +35,21 @@ def subject_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _lock_key(conn: Connection, limit: Limit, subject: str) -> None:
+    """Serialize every check and record for one (scope, subject) until the transaction ends (H-72).
+
+    Concurrent attempts for the same key wait here, so each one counts the events the others have
+    already recorded. Different keys do not block each other.
+    """
+    conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+        {"k": f"{limit.scope}:{subject_hash(subject)}"},
+    )
+
+
 def check(conn: Connection, limit: Limit, subject: str) -> None:
     """Refuse if ``subject`` already reached ``limit`` events in ``window``."""
+    _lock_key(conn, limit, subject)
     count = conn.execute(
         text(
             """SELECT count(*) FROM rate_limit_events
