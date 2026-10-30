@@ -154,3 +154,11 @@ Source: WDS Authorized Approver, chat, 28 October 2026.
 - **QA-07-MERGE-01 RULED:** the QA-07 run-time authority enforcement gate ("make run-time enforcement a hard gate before any integration", `AS_REVIEW_PACKET_2026-10-23.md` Q7) **BLOCKS** the merge of the first development PR into the integration branch.
 - **Consequence:** the first PR for candidate `79c90bc` is HELD. It cannot merge until run-time authority enforcement is in place and verified, or until WDS rules otherwise in writing.
 - Not a ruling on production integration, which remains blocked by QA-07 under the standing restriction.
+
+## M2 Sprint 4 management closure (30 October 2026, chat)
+Source: WDS Authorized Approver, chat, 30 October 2026. Record: `SPRINT4_CLOSURE_RECORD_2026-10-30.md`.
+- **S4-CLOSE-01 APPROVED:** M2 Sprint 4 management closure, bound to `e907861` (specialist-ci run #52, success). Commencement of M2 Sprint 5 authorized.
+- **Status recorded:** SPRINT 4 MANAGEMENT CLOSED — CARRIED-FORWARD EVIDENCE AND INDEPENDENT QA RECORDS REMAIN TRACEABLE.
+- **Not evidence of:** PG's personal review (not supplied, not backdated), Shopify 55-pair human labels (0 of 55), or real investigations beyond the two active pilot sources.
+- **Carried forward:** O1–O7 as listed in the closure record. Sprint 5 plan: `SPRINT5_PLAN_2026-10-30.md`.
+- **Proposed reconciliation:** `SPRINT4_5_ACCEPTANCE_RECONCILIATION_PROPOSED_2026-10-28.md` remains a proposed amended baseline, not the original frozen document. WDS did not review every clause of an unidentified revision.
