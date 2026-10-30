@@ -214,8 +214,19 @@ class OutboxWorker:
         else:
             return "sent" if self._mark_sent(notice) else "lease_lost"
         self._audit_failure(notice, reason)
-        self._retry_or_dead_letter(notice, reason)
-        return "retry"
+        if not self._retry_or_dead_letter(notice, reason):
+            return "lease_lost"
+        return "dead_letter" if notice.attempt_count >= self._threshold else "retry"
 
     def run_once(self, limit: int = 10) -> list[str]:
-        return [self.deliver(notice) for notice in self.claim(limit)]
+        """Deliver one claimed batch. One notice that fails unexpectedly does not abort the batch.
+
+        Its lease is left to expire, so the notice is reclaimed later (H-52).
+        """
+        outcomes: list[str] = []
+        for notice in self.claim(limit):
+            try:
+                outcomes.append(self.deliver(notice))
+            except Exception:  # noqa: BLE001 - isolate one notice from the rest of the batch
+                outcomes.append("error")
+        return outcomes

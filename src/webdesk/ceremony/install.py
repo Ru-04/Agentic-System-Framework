@@ -95,7 +95,10 @@ def load_signed_authorization(
     if not isinstance(payload, dict):
         raise InstallationError("authorization_malformed")
 
-    key = load_pem_public_key(owner_public_key_path.read_bytes())
+    try:
+        key = load_pem_public_key(owner_public_key_path.read_bytes())
+    except (OSError, ValueError, TypeError) as exc:
+        raise InstallationError("owner_key_invalid") from exc
     if not isinstance(key, Ed25519PublicKey):
         raise ConfigurationError("owner public key must be Ed25519")
     body = canonical_bytes(payload)

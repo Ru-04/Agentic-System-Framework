@@ -193,8 +193,8 @@ def test_h52_a_failed_alert_audit_rolls_back_the_dead_letter(
 
     monkeypatch.setattr(outbox_worker, "record_worker_event", failing_alert)
     worker = _worker(engine, _Failing(), "worker-atomic", threshold=1)
-    with pytest.raises(RuntimeError, match="audit write failed"):
-        worker.run_once(limit=10)
+    # The batch survives the failure (H-52): the notice is reported as an error, not dead-lettered.
+    assert worker.run_once(limit=10) == ["error"]
     assert _status(engine, notice)[0] != "dead_letter"
     assert (
         _count(
@@ -223,3 +223,52 @@ def test_h52_application_and_outbox_roles_cannot_read_or_change_alerts(
         conn.execute(
             text("UPDATE in_app_alerts SET reason_code = 'x' WHERE notice_id = :n"), {"n": notice}
         )
+
+
+def test_h52_the_alert_function_refuses_a_notice_that_is_not_dead_lettered(
+    engine: Engine,
+    made: dict[str, list[uuid.UUID]],  # noqa: F811
+) -> None:
+    notice, user = _notice(engine, made)
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+        accepted = conn.execute(
+            text("SELECT webdesk_guard.fn_outbox_record_alert(:n, :u, 'premature')"),
+            {"n": notice, "u": user},
+        ).scalar_one()
+    assert accepted is False
+    assert (
+        _count(engine, "SELECT count(*) FROM in_app_alerts WHERE notice_id = :n", {"n": notice})
+        == 0
+    )
+
+
+def test_h52_exhausted_retries_report_a_dead_letter(
+    engine: Engine,
+    made: dict[str, list[uuid.UUID]],  # noqa: F811
+) -> None:
+    _notice(engine, made)
+    worker = _worker(engine, _Failing(), "worker-exhaust", threshold=1)
+    assert worker.run_once(limit=10) == ["dead_letter"]
+
+
+def test_h52_one_failing_notice_does_not_abort_the_batch(
+    engine: Engine,
+    made: dict[str, list[uuid.UUID]],  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from webdesk.delivery.transport import CaptureTransport
+
+    bad, _ = _notice(engine, made)
+    good, _ = _notice(engine, made)
+    worker = _worker(engine, CaptureTransport(), "worker-batch", threshold=5)
+    real_deliver = worker.deliver
+
+    def deliver(notice: Any) -> str:
+        if notice.notice_id == bad:
+            raise RuntimeError("unexpected failure")
+        return real_deliver(notice)
+
+    monkeypatch.setattr(worker, "deliver", deliver)
+    assert sorted(worker.run_once(limit=10)) == ["error", "sent"]
+    assert _status(engine, good)[0] == "sent"

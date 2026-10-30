@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.api.transactions import run_in_transaction
+from webdesk.cli.diagnostics import database_refusal
 from webdesk.config import ConfigurationError, Settings
 from webdesk.identity.sweep import sweep_expired
 
@@ -35,9 +36,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = create_engine(settings.database_url.get_secret_value())
     try:
         counts = run_in_transaction(engine, sweep_expired)
-    except SQLAlchemyError:
-        print("refused: database_unavailable", file=sys.stderr)
-        return 3
+    except SQLAlchemyError as exc:
+        message, status = database_refusal(exc)
+        print(message, file=sys.stderr)
+        return status
     finally:
         engine.dispose()
 

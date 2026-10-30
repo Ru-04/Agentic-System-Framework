@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from webdesk.cli.diagnostics import database_refusal
 from webdesk.config import ConfigurationError, Settings
 from webdesk.crypto.contact_box import ContactBox
 from webdesk.delivery.transport import TransportUnavailable, transport_from_settings
@@ -49,7 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     try:
         transport = transport_from_settings(settings)
-    except TransportUnavailable as exc:
+    except (TransportUnavailable, ConfigurationError) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
 
@@ -66,9 +67,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigurationError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
-    except SQLAlchemyError:
-        print("refused: database_unavailable", file=sys.stderr)
-        return 3
+    except SQLAlchemyError as exc:
+        message, status = database_refusal(exc)
+        print(message, file=sys.stderr)
+        return status
     finally:
         engine.dispose()
 

@@ -29,6 +29,7 @@ from webdesk.ceremony.recovery import (
     apply_recovery,
     prepare_recovery,
 )
+from webdesk.cli.diagnostics import database_refusal
 from webdesk.config import ConfigurationError, Settings
 
 
@@ -96,9 +97,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except RecoveryError as exc:
         print(f"refused: {exc.reason}", file=sys.stderr)
         return 2
-    except SQLAlchemyError:
-        print("refused: database_unavailable", file=sys.stderr)
-        return 3
+    except SQLAlchemyError as exc:
+        message, status = database_refusal(exc)
+        print(message, file=sys.stderr)
+        return status
     finally:
         # Release the pooled connections on every path, so the process leaves no session behind.
         engine.dispose()

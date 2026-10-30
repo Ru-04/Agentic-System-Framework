@@ -88,3 +88,44 @@ def test_outbox_cli_refuses_without_a_transport_or_key(
 
 def test_outbox_cli_rejects_a_non_positive_limit() -> None:
     assert outbox_cli.main(["--limit", "0"]) == 2
+
+
+def test_a_malformed_owner_key_is_a_refusal_not_a_traceback(
+    tmp_path: Path,
+    owner_key: tuple[Any, Path],  # noqa: F811
+) -> None:
+    private, public = owner_key
+    path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-q1"))
+    public.write_bytes(b"this is not a PEM public key")
+    with pytest.raises(InstallationError) as exc:
+        prepare_recovery(_settings(public), path, FixedClock())
+    assert exc.value.reason == "owner_key_invalid"
+
+
+def test_a_permission_denial_is_a_refusal_and_an_outage_is_status_three() -> None:
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from webdesk.cli.diagnostics import database_refusal
+
+    class _Orig:
+        sqlstate = "42501"
+
+    denied = SQLAlchemyError("permission denied")
+    denied.orig = _Orig()  # type: ignore[attr-defined]
+    assert database_refusal(denied) == ("refused: insufficient_privilege", 2)
+
+    outage = SQLAlchemyError("connection refused")
+    assert database_refusal(outage) == ("refused: database_unavailable", 3)
+
+
+def test_the_outbox_cli_refuses_production_with_a_capture_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WEBDESK_ENV", "production")
+    monkeypatch.setenv("WEBDESK_DATABASE_URL", "postgresql+psycopg://u:p@127.0.0.1:1/none")
+    monkeypatch.setenv("WEBDESK_EMAIL_TRANSPORT", "capture")
+    monkeypatch.setenv("WEBDESK_OUTBOX_DEAD_LETTER_THRESHOLD", "5")
+    monkeypatch.setenv(
+        "WEBDESK_OUTBOX_ENCRYPTION_KEY", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+    )
+    assert outbox_cli.main([]) == 2
