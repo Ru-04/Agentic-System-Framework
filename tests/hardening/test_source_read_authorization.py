@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection, Engine, make_url
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import DBAPIError
 
 from webdesk.auth.service import AuthError
@@ -46,10 +46,9 @@ def owner_engine() -> Iterator[Engine]:
     The login role has no privilege for these. Tests use it only to set up a state the service
     cannot reach.
     """
-    url = make_url(os.environ["WEBDESK_TEST_DATABASE_URL"]).set(
-        database="webdesk_hardening", drivername="postgresql+psycopg"
-    )
-    engine = create_engine(url.render_as_string(hide_password=False))
+    # The hardening database is owned by webdesk_test_owner (WEBDESK_HARDENING_OWNER_URL). The
+    # integration owner holds no privilege on its tables, so the setup role must be that owner.
+    engine = create_engine(os.environ["WEBDESK_HARDENING_OWNER_URL"])
     yield engine
     engine.dispose()
 
