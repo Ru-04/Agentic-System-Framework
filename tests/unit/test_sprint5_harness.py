@@ -138,3 +138,32 @@ def test_the_export_is_identical_for_identical_inputs() -> None:
     first = report_json(evaluate(dataset, runner))  # type: ignore[arg-type]
     second = report_json(evaluate(dataset, runner))  # type: ignore[arg-type]
     assert first == second
+
+
+def test_the_runner_never_reports_supported_evidence_without_retrieval() -> None:
+    from webdesk.evaluation.runner import observe
+
+    dataset = load_dataset(DATASET, MANIFEST)
+    for scenario in dataset.scenarios:
+        observation = observe(scenario)
+        assert observation.citation_ids == ()
+
+
+def test_a_specialist_without_an_active_source_is_unsupported_not_investigated() -> None:
+    from webdesk.evaluation.runner import observe
+
+    shopify = parse_dataset(
+        _raw(
+            [
+                {
+                    "scenario_id": "A",
+                    "specialist_id": "shopify",
+                    "category": "synthetic_fixture",
+                    "requirement": "Check the plan feature availability.",
+                    "expected": "INVESTIGATE",
+                    "note": "",
+                }
+            ]
+        )
+    ).scenarios[0]
+    assert observe(shopify).outcome is Outcome.UNSUPPORTED_SOURCE
