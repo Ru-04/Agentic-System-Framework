@@ -88,3 +88,19 @@ Implementation commit: **e644669** (on `feature/foundation-phase-6`, from `featu
 - Teardown root cause, evidence-based: pg_stat_activity background processes have NULL usename and NULL
   state; the guard now counts only client backends (538ac10), and tests/integration/test_session_leak_guard.py
   checks that a live client session still blocks the drop.
+
+## Formal acceptance record (draft, not granted)
+
+Recorded from the acceptance text supplied in chat. The content matches the reviewed evidence above.
+
+- Scope: H-50, H-51, H-52; H-DEC-8 option 1 (dedicated `in_app_alerts` table).
+- Engineering SHA: 9a9e8d3. Documentation SHA: eb1a4d1.
+- Independent QA: PASSED, eligible for WDS acceptance (reviewer assessment).
+- Technical recommendation: ACCEPT, standalone scope only.
+- **WDS formal acceptance: PENDING.** Requires explicit authenticated WDS confirmation, recorded against the
+  verified artifacts. The approver identity, timestamp, signature and channel are not in this repository and
+  have not been filled in.
+- Follow-up recommended before or with acceptance: promote the wrong-owner alert-refusal scratch test to a
+  permanent regression test. This is a test-only change and would require a new frozen SHA and reviewer re-check.
+- Accepted limitations and dependencies: as listed above. Standalone acceptance does not authorize deployment,
+  waive Phase 3 security requirements, or establish cross-phase integration readiness.
