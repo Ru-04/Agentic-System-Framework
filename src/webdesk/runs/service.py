@@ -34,6 +34,7 @@ from sqlalchemy.exc import DBAPIError
 
 from webdesk.audit.service import record_event
 from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
+from webdesk.idempotency.service import IdempotencyError, lookup, run_keyed
 from webdesk.rbac.engine import ResourceRef, authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -155,8 +156,40 @@ def start_run(
     project: uuid.UUID,
     *,
     expected_project_revision: int,
+    idempotency_key: uuid.UUID | None = None,
 ) -> uuid.UUID:
     actor = actor_for(conn, proof, "run.start", project)
+    if idempotency_key is None:
+        return _start(conn, proof, actor, project, expected_project_revision)
+    # H-62: a true replay returns the stored run before any authorization or revision check. A new
+    # key is recorded in the same savepoint as the run, so a lost race on the key commits no run.
+    endpoint = f"POST /projects/{project}/runs"
+    payload = {"expected_project_revision": expected_project_revision}
+    try:
+        stored = lookup(conn, actor=actor, endpoint=endpoint, key=idempotency_key, payload=payload)
+        if stored is None:
+            stored = run_keyed(
+                conn,
+                actor=actor,
+                endpoint=endpoint,
+                key=idempotency_key,
+                payload=payload,
+                operation=lambda: {
+                    "run_id": str(_start(conn, proof, actor, project, expected_project_revision))
+                },
+            )
+    except IdempotencyError as exc:
+        raise RunError(exc.status, exc.reason) from exc
+    return uuid.UUID(str(stored["run_id"]))
+
+
+def _start(
+    conn: Connection,
+    proof: uuid.UUID,
+    actor: uuid.UUID,
+    project: uuid.UUID,
+    expected_project_revision: int,
+) -> uuid.UUID:
     project_row = conn.execute(
         text("SELECT status, data_classification, revision FROM projects WHERE project_id = :p"),
         {"p": project},

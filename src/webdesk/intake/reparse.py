@@ -21,6 +21,7 @@ from sqlalchemy.exc import DBAPIError
 
 from webdesk.audit.service import record_event
 from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
+from webdesk.idempotency.service import IdempotencyError, lookup, run_keyed
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -77,8 +78,44 @@ def reparse_source_version(
     *,
     reason: str,
     expected_source_revision: int,
+    idempotency_key: uuid.UUID | None = None,
 ) -> None:
     actor = actor_for(conn, proof, "source.reparse", version_id)
+    if idempotency_key is None:
+        _reparse(conn, proof, actor, version_id, reason, expected_source_revision)
+        return
+    # H-62: a true replay returns before any authorization or revision check. A new key is recorded
+    # in the same savepoint as the reparse, so a lost race on the key commits no reparse.
+    endpoint = f"POST /source-versions/{version_id}/reparse"
+    payload = {"reason": reason, "expected_source_revision": expected_source_revision}
+
+    def operation() -> dict[str, object]:
+        _reparse(conn, proof, actor, version_id, reason, expected_source_revision)
+        return {"source_version_id": str(version_id), "status": "pending"}
+
+    try:
+        stored = lookup(conn, actor=actor, endpoint=endpoint, key=idempotency_key, payload=payload)
+        if stored is None:
+            run_keyed(
+                conn,
+                actor=actor,
+                endpoint=endpoint,
+                key=idempotency_key,
+                payload=payload,
+                operation=operation,
+            )
+    except IdempotencyError as exc:
+        raise ReparseError(exc.status, exc.reason) from exc
+
+
+def _reparse(
+    conn: Connection,
+    proof: uuid.UUID,
+    actor: uuid.UUID,
+    version_id: uuid.UUID,
+    reason: str,
+    expected_source_revision: int,
+) -> None:
     decision = authorize(SqlAuthorizationStore(conn), actor, Permission.SOURCE_REPARSE.value)
     if not decision.allowed:
         _deny(conn, actor, version_id, decision.reason, 403)

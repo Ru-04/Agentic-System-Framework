@@ -61,6 +61,7 @@ class StrictBody(BaseModel):
 
 class RunStartBody(StrictBody):
     expected_project_revision: int
+    idempotency_key: uuid.UUID | None = None  # H-62
 
 
 class RunControlBody(StrictBody):
@@ -70,6 +71,7 @@ class RunControlBody(StrictBody):
 class ReparseBody(StrictBody):
     reason: str
     expected_source_revision: int
+    idempotency_key: uuid.UUID | None = None  # H-62
 
 
 def current_actor(request: Request) -> uuid.UUID:
@@ -279,7 +281,11 @@ async def start(
         return run_in_transaction(
             engine,
             lambda conn: runs.start_run(
-                conn, proof, project, expected_project_revision=body.expected_project_revision
+                conn,
+                proof,
+                project,
+                expected_project_revision=body.expected_project_revision,
+                idempotency_key=body.idempotency_key,
             ),
         )
 
@@ -339,6 +345,7 @@ async def reparse(
                 version,
                 reason=body.reason,
                 expected_source_revision=body.expected_source_revision,
+                idempotency_key=body.idempotency_key,
             ),
         )
 

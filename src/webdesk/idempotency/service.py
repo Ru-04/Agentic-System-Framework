@@ -101,6 +101,45 @@ def record(
         raise IdempotencyError(409, "concurrent_request") from exc
 
 
+def run_keyed(
+    conn: Connection,
+    *,
+    actor: uuid.UUID,
+    endpoint: str,
+    key: uuid.UUID,
+    payload: Mapping[str, Any],
+    operation: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """Run ``operation`` and store its response under ``key`` in one savepoint (H-62).
+
+    The caller looks the key up first (``lookup``), once the actor is known and before any
+    authorization or revision check. The mutation and the key row then share a savepoint:
+
+    - A lost race on the key rolls the mutation back and raises 409 ``concurrent_request``. The
+      transaction runner commits on that refusal, so the mutation must not be left in it.
+    - A refusal raised by ``operation`` releases the savepoint instead of rolling it back, so the
+      denial audit the service wrote before refusing survives (C-2). ``run_idempotent`` would roll
+      that audit back.
+    - A database error raised by ``operation`` rolls the savepoint back and is re-raised.
+    """
+    savepoint = conn.begin_nested()
+    try:
+        response = operation()
+    except SQLAlchemyError:
+        savepoint.rollback()
+        raise
+    except BaseException:
+        savepoint.commit()
+        raise
+    try:
+        record(conn, actor=actor, endpoint=endpoint, key=key, payload=payload, response=response)
+    except IdempotencyError:
+        savepoint.rollback()
+        raise
+    savepoint.commit()
+    return response
+
+
 def run_idempotent(
     conn: Connection,
     *,
