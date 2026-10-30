@@ -148,6 +148,9 @@ def ingest_source(
         raise IngestError(422, "classification_invalid")
 
     actor = actor_for(conn, proof, "source.upload", project)
+    if source_trust == "approved_reference":
+        # H-66: an uploader never assigns approved trust, whichever caller reaches the service.
+        _deny(conn, actor, "source.upload.denied", "trust_not_permitted", 422)
     # H-60: the size and type checks run before the idempotency lookup, the authorization and the
     # revision check, so an oversized or wrong-type file is refused (and audited) whatever the
     # revision.

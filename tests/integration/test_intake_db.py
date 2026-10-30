@@ -241,6 +241,42 @@ def test_a_spoofed_upload_leaves_no_source_and_is_audited(
     assert refused == 1
 
 
+def test_h66_the_service_refuses_approved_reference_trust_with_an_audited_denial(
+    conn: Connection, store: ContentStore
+) -> None:
+    """H-66: the service itself refuses approved trust, not only the HTTP route."""
+    ids = _setup(conn)
+    with pytest.raises(IngestError) as exc:
+        ingest_source(
+            conn,
+            store,
+            prove(conn, ids["analyst"], "source.upload", ids["project"]),
+            ids["project"],
+            title="Approved?",
+            source_type="client_brief",
+            source_trust="approved_reference",
+            access_classification="internal",
+            filename="notes.txt",
+            declared_mime="text/plain",
+            data=NOTES,
+            expected_project_revision=_project_revision(conn, ids["project"]),
+        )
+    assert (exc.value.status, exc.value.reason) == (422, "trust_not_permitted")
+    count = conn.execute(
+        text("SELECT count(*) FROM sources WHERE project_id = :p"), {"p": ids["project"]}
+    ).scalar_one()
+    denied = conn.execute(
+        text(
+            """SELECT count(*) FROM audit_events WHERE event_type = 'source.upload.denied'
+               AND error_class = 'trust_not_permitted' AND outcome = 'denied'
+               AND actor_id_or_service = :a"""
+        ),
+        {"a": str(ids["analyst"])},
+    ).scalar_one()
+    assert count == 0
+    assert denied == 1
+
+
 def test_classification_below_the_project_is_refused(conn: Connection, store: ContentStore) -> None:
     ids = _setup(conn)
     conn.execute(text("RESET ROLE"))
