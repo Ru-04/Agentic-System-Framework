@@ -142,6 +142,18 @@ def _rev(conn: Connection, source: uuid.UUID) -> int:
     return int(_source_row(conn, source)[1])
 
 
+def _denial_refs(conn: Connection, reason: str) -> list[tuple[Any, Any]]:
+    """H-77: the (project_id, record_refs) of each matching reassessment denial."""
+    rows = conn.execute(
+        text(
+            """SELECT project_id, record_refs FROM audit_events
+               WHERE event_type = 'classification.reassess.denied' AND error_class = :r"""
+        ),
+        {"r": reason},
+    ).all()
+    return [(None if r[0] is None else uuid.UUID(str(r[0])), list(r[1])) for r in rows]
+
+
 def test_an_administrator_raises_a_source_classification_with_an_audit_record(
     conn: Connection, store: ContentStore
 ) -> None:
@@ -187,9 +199,7 @@ def test_an_analyst_cannot_reassess_and_the_refusal_is_audited(
         )
     assert exc.value.reason == "proof_permission_not_held"
     denied = conn.execute(
-        text(
-            "SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'"
-        )
+        text("SELECT count(*) FROM audit_events WHERE event_type = 'authority.proof.refused'")
     ).scalar_one()
     assert denied == 1
 
@@ -207,6 +217,9 @@ def test_a_justification_is_required(conn: Connection, store: ContentStore) -> N
             expected_source_revision=_rev(conn, result.source_id),
         )
     assert exc.value.status == 422
+    assert _denial_refs(conn, "justification_required") == [
+        (ids["project"], [str(result.source_id), str(ids["project"])])
+    ]
 
 
 def test_a_stale_source_revision_is_refused(conn: Connection, store: ContentStore) -> None:
@@ -222,6 +235,9 @@ def test_a_stale_source_revision_is_refused(conn: Connection, store: ContentStor
             expected_source_revision=99,
         )
     assert exc.value.reason == "revision_conflict"
+    assert _denial_refs(conn, "revision_conflict") == [
+        (ids["project"], [str(result.source_id), str(ids["project"])])
+    ]
 
 
 def test_no_classification_below_the_project_floor_is_allowed(

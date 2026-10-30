@@ -31,13 +31,21 @@ class ReassessError(Exception):
         self.reason = reason
 
 
-def _deny(conn: Connection, actor: uuid.UUID, reason: str, status: int) -> None:
+def _deny(conn: Connection, actor: uuid.UUID, source: uuid.UUID, reason: str, status: int) -> None:
+    # H-77: the denial names the source and, when the source exists, its project.
+    value = conn.execute(
+        text("SELECT project_id FROM sources WHERE source_id = :s"), {"s": source}
+    ).scalar_one_or_none()
+    project = None if value is None else uuid.UUID(str(value))
+    refs = [str(source)] + ([str(project)] if project is not None else [])
     record_event(
         conn,
         actor_type="human",
         actor_id=str(actor),
         event_type="classification.reassess.denied",
         outcome="denied",
+        project_id=project,
+        record_refs=refs,
         error_class=reason,
     )
     raise ReassessError(status, reason)
@@ -57,11 +65,11 @@ def reassess_source_classification(
         SqlAuthorizationStore(conn), actor, Permission.CLASSIFICATION_REASSESS.value
     )
     if not decision.allowed:
-        _deny(conn, actor, decision.reason, 403)
+        _deny(conn, actor, source, decision.reason, 403)
     if not justification.strip():
-        _deny(conn, actor, "justification_required", 422)
+        _deny(conn, actor, source, "justification_required", 422)
     if new_class not in CLASS_RANK:
-        _deny(conn, actor, "classification_invalid", 422)
+        _deny(conn, actor, source, "classification_invalid", 422)
 
     row = conn.execute(
         text(
@@ -80,13 +88,13 @@ def reassess_source_classification(
         str(row[3]),
     )
     if project_status != "active":
-        _deny(conn, actor, "project_archived", 409)
+        _deny(conn, actor, source, "project_archived", 409)
     if revision != expected_source_revision:
-        _deny(conn, actor, "revision_conflict", 409)
+        _deny(conn, actor, source, "revision_conflict", 409)
     if new_class == old_class:
-        _deny(conn, actor, "no_change", 409)
+        _deny(conn, actor, source, "no_change", 409)
     if CLASS_RANK[new_class] < CLASS_RANK[project_class]:
-        _deny(conn, actor, "classification_below_project", 422)
+        _deny(conn, actor, source, "classification_below_project", 422)
     if new_class == "restricted":
         not_pending = conn.execute(
             text(
@@ -96,7 +104,7 @@ def reassess_source_classification(
             {"s": source},
         ).first()
         if not_pending is not None:
-            _deny(conn, actor, "restricted_requires_pending_versions", 409)
+            _deny(conn, actor, source, "restricted_requires_pending_versions", 409)
 
     # Only the guard-owner function applies the change. It re-checks the Administrator role,
     # the justification, the revision, the project floor and the restricted rule (H-03).

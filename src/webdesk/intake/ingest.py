@@ -93,13 +93,26 @@ class IngestResult:
     parse_status: str
 
 
-def _deny(conn: Connection, actor: uuid.UUID, event: str, reason: str, status: int) -> None:
+def _deny(
+    conn: Connection,
+    actor: uuid.UUID,
+    event: str,
+    reason: str,
+    status: int,
+    *,
+    project: uuid.UUID,
+    supersedes: uuid.UUID | None,
+) -> None:
+    # H-77: the denial names the project and, for a new version, the superseded source.
+    refs = [str(project)] + ([str(supersedes)] if supersedes is not None else [])
     record_event(
         conn,
         actor_type="human",
         actor_id=str(actor),
         event_type=event,
         outcome="denied",
+        project_id=project,
+        record_refs=refs,
         error_class=reason,
     )
     raise IngestError(status, reason)
@@ -111,10 +124,13 @@ def _authorize(
     permission: Permission,
     resource: ResourceRef,
     event: str,
+    *,
+    project: uuid.UUID,
+    supersedes: uuid.UUID | None,
 ) -> None:
     decision = authorize(SqlAuthorizationStore(conn), actor, permission.value, resource)
     if not decision.allowed:
-        _deny(conn, actor, event, decision.reason, 403)
+        _deny(conn, actor, event, decision.reason, 403, project=project, supersedes=supersedes)
 
 
 def ingest_source(
@@ -150,14 +166,30 @@ def ingest_source(
     actor = actor_for(conn, proof, "source.upload", project)
     if source_trust == "approved_reference":
         # H-66: an uploader never assigns approved trust, whichever caller reaches the service.
-        _deny(conn, actor, "source.upload.denied", "trust_not_permitted", 422)
+        _deny(
+            conn,
+            actor,
+            "source.upload.denied",
+            "trust_not_permitted",
+            422,
+            project=project,
+            supersedes=supersedes_source_id,
+        )
     # H-60: the size and type checks run before the idempotency lookup, the authorization and the
     # revision check, so an oversized or wrong-type file is refused (and audited) whatever the
     # revision.
     try:
         validated = validate_upload(filename, declared_mime, data)
     except UploadRefusal as exc:
-        _deny(conn, actor, "source.upload.refused", exc.reason, exc.status)
+        _deny(
+            conn,
+            actor,
+            "source.upload.refused",
+            exc.reason,
+            exc.status,
+            project=project,
+            supersedes=supersedes_source_id,
+        )
         raise  # unreachable; _deny raises IngestError
     endpoint = f"POST /projects/{project}/sources"
     digest = hashlib.sha256(data).hexdigest()
@@ -191,10 +223,19 @@ def ingest_source(
         permission,
         ResourceRef(project_id=project, data_class=access_classification),
         "source.upload.denied",
+        project=project,
+        supersedes=supersedes_source_id,
     )
     # A plain read, so refusals found here happen before any bytes are stored. The guard checks
     # again under its row lock.
-    _precheck_project(conn, actor, project, access_classification, expected_project_revision)
+    _precheck_project(
+        conn,
+        actor,
+        project,
+        access_classification,
+        expected_project_revision,
+        supersedes_source_id,
+    )
 
     response = _admit(
         conn,
@@ -237,6 +278,7 @@ def _precheck_project(
     project: uuid.UUID,
     access_classification: str,
     expected_project_revision: int,
+    supersedes_source_id: uuid.UUID | None,
 ) -> None:
     row = conn.execute(
         text("SELECT status, data_classification, revision FROM projects WHERE project_id = :p"),
@@ -245,7 +287,15 @@ def _precheck_project(
     if row is None:
         raise IngestError(404, "project_not_found")
     if str(row[0]) != "active":
-        _deny(conn, actor, "source.upload.denied", "project_archived", 409)
+        _deny(
+            conn,
+            actor,
+            "source.upload.denied",
+            "project_archived",
+            409,
+            project=project,
+            supersedes=supersedes_source_id,
+        )
     if CLASS_RANK[access_classification] < CLASS_RANK[str(row[1])]:
         raise IngestError(422, "classification_below_project")
     if int(row[2]) != expected_project_revision:
@@ -308,11 +358,27 @@ def _admit(
         if reason in PROJECT_REFUSALS or reason in ADMISSION_REFUSALS:
             status, event = {**PROJECT_REFUSALS, **ADMISSION_REFUSALS}[reason]
             if event is not None:
-                _deny(conn, actor, event, reason, status)
+                _deny(
+                    conn,
+                    actor,
+                    event,
+                    reason,
+                    status,
+                    project=project,
+                    supersedes=supersedes_source_id,
+                )
             raise IngestError(status, reason) from exc
         original = str(getattr(exc, "orig", exc))
         refused = "source_limit_reached" if "limit" in original else "database_refused"
-        _deny(conn, actor, "source.upload.refused", refused, 409)
+        _deny(
+            conn,
+            actor,
+            "source.upload.refused",
+            refused,
+            409,
+            project=project,
+            supersedes=supersedes_source_id,
+        )
 
     # H-63: write the bytes only now that the admission row exists (see above).
     store.put(project, data)

@@ -43,13 +43,28 @@ class ReparseError(Exception):
         self.reason = reason
 
 
-def _deny(conn: Connection, actor: uuid.UUID, reason: str, status: int) -> None:
+def _project_of(conn: Connection, version_id: uuid.UUID) -> uuid.UUID | None:
+    value = conn.execute(
+        text("SELECT project_id FROM source_versions WHERE source_version_id = :v"),
+        {"v": version_id},
+    ).scalar_one_or_none()
+    return None if value is None else uuid.UUID(str(value))
+
+
+def _deny(
+    conn: Connection, actor: uuid.UUID, version_id: uuid.UUID, reason: str, status: int
+) -> None:
+    # H-77: the denial names the version and, when the version exists, its project.
+    project = _project_of(conn, version_id)
+    refs = [str(version_id)] + ([str(project)] if project is not None else [])
     record_event(
         conn,
         actor_type="human",
         actor_id=str(actor),
         event_type="source.reparse.denied",
         outcome="denied",
+        project_id=project,
+        record_refs=refs,
         error_class=reason,
     )
     raise ReparseError(status, reason)
@@ -66,9 +81,9 @@ def reparse_source_version(
     actor = actor_for(conn, proof, "source.reparse", version_id)
     decision = authorize(SqlAuthorizationStore(conn), actor, Permission.SOURCE_REPARSE.value)
     if not decision.allowed:
-        _deny(conn, actor, decision.reason, 403)
+        _deny(conn, actor, version_id, decision.reason, 403)
     if not reason.strip():
-        _deny(conn, actor, "reason_required", 422)
+        _deny(conn, actor, version_id, "reason_required", 422)
 
     try:
         consume_with(
@@ -83,7 +98,7 @@ def reparse_source_version(
             raise ReparseError(404, refusal) from exc
         if refusal not in GUARD_REFUSAL_STATUS:
             raise
-        _deny(conn, actor, refusal, GUARD_REFUSAL_STATUS[refusal])
+        _deny(conn, actor, version_id, refusal, GUARD_REFUSAL_STATUS[refusal])
 
     project = conn.execute(
         text("SELECT project_id FROM source_versions WHERE source_version_id = :v"),

@@ -15,7 +15,7 @@ unformatted when they were committed. They are **not** reformatted, for these re
 | `migrations/versions/0020_r1_r2_n1_hardening.py` | 740b169 | Frozen migration. Exception. |
 | `migrations/versions/0040_last_administrator_lock.py` | 82585db | Committed revision, reverted to its committed text rather than reformatted. Exception. |
 | `tests/hardening/test_privilege_hardening.py` | e615eff | Test not otherwise edited. Exception. |
-| `tests/integration/test_reassessment.py` | 5d79269 | Test not otherwise edited. Exception. |
+| `tests/integration/test_reassessment.py` | 5d79269 | Edited and formatted by Phase 7 H-77. No longer an exception. |
 
 Files this work created or edited are formatted: `migrations/versions/0041_ai_read_v1.py`, `tests/hardening/test_privilege_audit.py`, and every file under `src/webdesk` and
 the new AI tests.

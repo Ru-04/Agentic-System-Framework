@@ -157,6 +157,18 @@ def _ingest(
     )
 
 
+def _denial_refs(conn: Connection, event: str, reason: str) -> list[tuple[Any, Any]]:
+    """H-77: the (project_id, record_refs) of each matching denial audit."""
+    rows = conn.execute(
+        text(
+            """SELECT project_id, record_refs FROM audit_events
+               WHERE event_type = :e AND error_class = :r AND outcome = 'denied'"""
+        ),
+        {"e": event, "r": reason},
+    ).all()
+    return [(None if r[0] is None else uuid.UUID(str(r[0])), list(r[1])) for r in rows]
+
+
 # --- I-3 / I-5: upload authorization, refusals and revisions ----------------------------------
 
 
@@ -167,6 +179,9 @@ def test_an_administrator_cannot_upload_without_a_content_grant(
     with pytest.raises(IngestError) as exc:
         _ingest(conn, store, ids["admin"], ids["project"])
     assert (exc.value.status, exc.value.reason) == (403, "content_grant_missing")
+    assert _denial_refs(conn, "source.upload.denied", "content_grant_missing") == [
+        (ids["project"], [str(ids["project"])])
+    ]
 
 
 def test_an_assigned_analyst_admits_a_source_and_the_project_revision_moves(
@@ -211,6 +226,9 @@ def test_an_archived_project_refuses_uploads(conn: Connection, store: ContentSto
     with pytest.raises(IngestError) as exc:
         _ingest(conn, store, ids["analyst"], ids["project"])
     assert (exc.value.status, exc.value.reason) == (409, "project_archived")
+    assert _denial_refs(conn, "source.upload.denied", "project_archived") == [
+        (ids["project"], [str(ids["project"])])
+    ]
 
 
 def test_a_spoofed_upload_leaves_no_source_and_is_audited(
@@ -239,6 +257,9 @@ def test_a_spoofed_upload_leaves_no_source_and_is_audited(
     ).scalar_one()
     assert count == 0
     assert refused == 1
+    assert _denial_refs(conn, "source.upload.refused", "signature_mismatch") == [
+        (ids["project"], [str(ids["project"])])
+    ]
 
 
 def test_h66_the_service_refuses_approved_reference_trust_with_an_audited_denial(
@@ -275,6 +296,9 @@ def test_h66_the_service_refuses_approved_reference_trust_with_an_audited_denial
     ).scalar_one()
     assert count == 0
     assert denied == 1
+    assert _denial_refs(conn, "source.upload.denied", "trust_not_permitted") == [
+        (ids["project"], [str(ids["project"])])
+    ]
 
 
 def test_classification_below_the_project_is_refused(conn: Connection, store: ContentStore) -> None:
@@ -366,6 +390,23 @@ def test_superseding_requires_the_current_source_revision_and_builds_a_chain(
             expected_source_revision=99,
         )
     assert exc.value.reason == "source_revision_conflict"
+    with pytest.raises(IngestError) as spoofed:
+        _ingest(
+            conn,
+            store,
+            ids["analyst"],
+            ids["project"],
+            filename="v2.pdf",
+            mime="application/pdf",
+            data=b"not a pdf",
+            supersedes_source_id=source,
+            expected_source_revision=_source_revision(conn, source),
+        )
+    assert spoofed.value.reason == "signature_mismatch"
+    # H-77: a refused new version names the project and the source it would supersede.
+    assert _denial_refs(conn, "source.upload.refused", "signature_mismatch") == [
+        (ids["project"], [str(ids["project"]), str(source)])
+    ]
     second, _ = _ingest(
         conn,
         store,

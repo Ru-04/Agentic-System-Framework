@@ -326,6 +326,15 @@ def test_reparse_refuses_a_quarantined_version(conn: Connection, store: ContentS
             expected_source_revision=1,
         )
     assert exc.value.reason == "quarantined"
+    # H-77: the denial names the version and its project.
+    denial = conn.execute(
+        text(
+            """SELECT project_id, record_refs FROM audit_events
+               WHERE event_type = 'source.reparse.denied' AND error_class = 'quarantined'"""
+        )
+    ).one()
+    assert uuid.UUID(str(denial[0])) == ids["project"]
+    assert list(denial[1]) == [str(version.source_version_id), str(ids["project"])]
 
 
 def test_a_reparse_proof_is_spent_by_its_first_accepted_reparse(
