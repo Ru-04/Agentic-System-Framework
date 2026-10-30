@@ -99,11 +99,13 @@ def record_worker_event(
     error_class: str | None = None,
     record_refs: Iterable[str] = (),
     details: Mapping[str, Any] | None = None,
+    project_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Insert one system audit event through the worker guard.
 
     The worker role has no table insert. Redaction and the audit columns are the same as
-    ``record_event``. Only system events use this path.
+    ``record_event``. Only system events use this path. ``project_id`` fills the audit row's
+    project (H-70); events with no project, such as outbox deliveries, pass None.
     """
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown outcome: {outcome!r}")
@@ -115,9 +117,10 @@ def record_worker_event(
     row = conn.execute(
         text(
             """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
-                   :error, CAST(:refs AS jsonb), CAST(:details AS jsonb))"""
+                   :error, CAST(:refs AS jsonb), CAST(:details AS jsonb), CAST(:project AS uuid))"""
         ),
         {
+            "project": project_id,
             "actor": actor_id,
             "event": event_type,
             "outcome": outcome,

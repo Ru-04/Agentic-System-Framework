@@ -613,3 +613,140 @@ def _run_rev(conn: Connection, run: uuid.UUID) -> int:
             text("SELECT revision FROM workflow_runs WHERE run_id = :r"), {"r": run}
         ).scalar_one()
     )
+
+
+# --- H-70: every run audit names its project ----------------------------------------------------
+
+
+def _run_audits(conn: Connection, run: uuid.UUID) -> list[tuple[str, Any]]:
+    """(event_type, project_id) of every audit row that references the run."""
+    conn.execute(text("RESET ROLE"))
+    rows = conn.execute(
+        text(
+            """SELECT event_type, project_id FROM audit_events
+               WHERE record_refs @> jsonb_build_array(CAST(:r AS text))
+               ORDER BY occurred_at, event_type"""
+        ),
+        {"r": str(run)},
+    ).all()
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    return [(str(r[0]), None if r[1] is None else uuid.UUID(str(r[1]))) for r in rows]
+
+
+def test_h70_a_parked_run_audits_claim_transitions_park_and_marks_with_its_project(
+    conn: Connection, store: ContentStore
+) -> None:
+    ids = _setup(conn)
+    _ingest(conn, store, ids)
+    run = _start(conn, ids)
+    with pytest.raises(RunError):
+        _start(conn, ids)  # active_run_exists: a run.start.denied with no run reference
+    _ingest(conn, store, ids, data=b"arrived during the run\n")  # inputs change mid-run
+    assert as_worker(conn, jobs.process_one, conn, store, "worker-h70") == "completed"
+    runs.cancel_run(
+        conn,
+        prove(conn, ids["admin"], "run.cancel", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
+    audits = _run_audits(conn, run)
+    kinds = [event for event, _ in audits]
+    assert "run.start.succeeded" in kinds
+    assert "job.claimed" in kinds
+    assert kinds.count("run.transitioned") == 3
+    assert "run.parked" in kinds
+    assert "run.stale_marked" in kinds  # inputs_changed_during_run
+    assert "run.cancel.succeeded" in kinds
+    assert all(project == ids["project"] for _, project in audits), audits
+    conn.execute(text("RESET ROLE"))
+    denied = conn.execute(
+        text(
+            """SELECT project_id FROM audit_events WHERE event_type = 'run.start.denied'
+               AND error_class = 'active_run_exists'"""
+        )
+    ).all()
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    assert [uuid.UUID(str(r[0])) for r in denied] == [ids["project"]]
+
+
+def test_h70_a_failed_run_audits_requeues_failure_retry_and_denials_with_its_project(
+    conn: Connection, store: ContentStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ids = _setup(conn)
+    _ingest(conn, store, ids)
+    run = _start(conn, ids)
+
+    def boom(*args: object, **kwargs: object) -> ParseResult:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(jobs, "parse_version", boom)
+    for _ in range(3):
+        conn.execute(text("RESET ROLE"))
+        conn.execute(
+            text(
+                "UPDATE workflow_jobs SET available_at = now() - interval '1 second' "
+                "WHERE run_id = :r"
+            ),
+            {"r": run},
+        )
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        as_worker(conn, jobs.process_one, conn, store, "worker-h70f")
+    monkeypatch.undo()
+    runs.retry_run(
+        conn,
+        prove(conn, ids["admin"], "run.retry", run),
+        run,
+        expected_run_revision=_run_rev(conn, run),
+    )
+    audits = _run_audits(conn, run)
+    kinds = [event for event, _ in audits]
+    assert kinds.count("job.claimed") == 3
+    assert kinds.count("job.requeued") == 2
+    assert "run.failed" in kinds
+    assert "run.transitioned" in kinds  # to failed
+    assert "run.retry.succeeded" in kinds
+    assert all(project == ids["project"] for _, project in audits), audits
+
+
+def test_h70_a_superseded_input_marks_the_run_stale_with_its_project(
+    conn: Connection, store: ContentStore
+) -> None:
+    ids = _setup(conn)
+    first = _ingest(conn, store, ids)
+    run = _start(conn, ids)
+    source_revision = conn.execute(
+        text("SELECT revision FROM sources WHERE source_id = :s"), {"s": first.source_id}
+    ).scalar_one()
+    _ingest(
+        conn,
+        store,
+        ids,
+        data=b"a newer version\n",
+        supersedes_source_id=first.source_id,
+        expected_source_revision=int(source_revision),
+    )
+    audits = _run_audits(conn, run)
+    assert ("run.stale_marked", ids["project"]) in audits
+    assert all(project == ids["project"] for _, project in audits), audits
+
+
+def test_h70_a_denied_control_names_the_run_project(conn: Connection) -> None:
+    ids = _setup(conn)
+    run = _start(conn, ids)
+    with pytest.raises(RunError) as exc:
+        runs.retry_run(
+            conn,
+            prove(conn, ids["admin"], "run.retry", run),
+            run,
+            expected_run_revision=_run_rev(conn, run),
+        )
+    assert exc.value.reason == "not_retryable"
+    conn.execute(text("RESET ROLE"))
+    denied = conn.execute(
+        text(
+            """SELECT project_id FROM audit_events WHERE event_type LIKE '%retry.denied'
+               AND error_class = 'not_retryable'"""
+        )
+    ).all()
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    assert [uuid.UUID(str(r[0])) for r in denied] == [ids["project"]]

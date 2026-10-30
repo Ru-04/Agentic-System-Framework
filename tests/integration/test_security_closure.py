@@ -140,3 +140,59 @@ def test_a_bootstrap_token_is_single_use_superseded_and_audited(conn: Connection
         {"u": str(second)},
     ).scalar_one()
     assert issued == 2
+
+
+# --- H-70: the worker audit function with a project ID ------------------------------------------
+
+_AUDIT_7 = "webdesk_guard.fn_worker_record_audit(text,text,text,text,text,jsonb,jsonb)"
+_AUDIT_8 = "webdesk_guard.fn_worker_record_audit(text,text,text,text,text,jsonb,jsonb,uuid)"
+
+
+def _record_in_project(
+    conn: Connection, actor_type: str, actor_id: str, project: uuid.UUID
+) -> uuid.UUID:
+    def call() -> uuid.UUID:
+        with conn.begin_nested():
+            value = conn.execute(
+                text(
+                    "SELECT webdesk_guard.fn_worker_record_audit(:t, :a, 'worker.test', 'success',"
+                    " NULL, '[]'::jsonb, '{}'::jsonb, :p)"
+                ),
+                {"t": actor_type, "a": actor_id, "p": project},
+            ).scalar_one()
+        return uuid.UUID(str(value))
+
+    return as_worker(conn, call)
+
+
+def test_h70_the_project_audit_function_has_exactly_the_grantees_of_the_original(
+    conn: Connection,
+) -> None:
+    def grantees(signature: str) -> set[str]:
+        acl = conn.execute(
+            text("SELECT proacl::text FROM pg_proc WHERE oid = CAST(:s AS regprocedure)"),
+            {"s": signature},
+        ).scalar_one()
+        return {entry.split("=", 1)[0] for entry in str(acl).strip("{}").split(",")}
+
+    assert grantees(_AUDIT_8) == grantees(_AUDIT_7)
+    assert grantees(_AUDIT_8) == {"webdesk_guard_owner", "webdesk_worker", "webdesk_outbox"}
+
+
+def test_h70_the_project_audit_function_writes_the_project(conn: Connection) -> None:
+    project = uuid.uuid4()
+    event = _record_in_project(conn, "system", f"run:{uuid.uuid4()}", project)
+    stored = conn.execute(
+        text("SELECT project_id FROM audit_events WHERE event_id = :e"), {"e": event}
+    ).scalar_one()
+    assert uuid.UUID(str(stored)) == project
+
+
+def test_h70_the_project_audit_function_keeps_the_system_only_checks(conn: Connection) -> None:
+    account = active_user(conn)
+    with pytest.raises(DBAPIError) as exc:
+        _record_in_project(conn, "human", "worker", uuid.uuid4())
+    assert "system events" in str(exc.value.orig)
+    with pytest.raises(DBAPIError) as exc:
+        _record_in_project(conn, "system", str(account), uuid.uuid4())
+    assert "may not name an account" in str(exc.value.orig)

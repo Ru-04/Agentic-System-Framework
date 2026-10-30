@@ -8,6 +8,7 @@
 - After intake the run parks in ``blocked_pending_decision`` (Gate 1). Its job completes and its
   active-run slot is released.
 - Every state change checks the lease owner, so a worker whose lease was reclaimed cannot write.
+- Every claim, requeue and transition is audited with the run's project (H-70).
 
 The worker runs as ``webdesk_worker``. It holds no table write. Every write is a ``webdesk_guard``
 worker function (migration 0031), and the worker reads only the tables it needs. Transition legality
@@ -66,12 +67,22 @@ def claim(conn: Connection, owner: str) -> JobClaim | None:
     ).one_or_none()
     if row is None:
         return None
-    return JobClaim(
+    job = JobClaim(
         job_id=uuid.UUID(str(row[0])),
         run_id=uuid.UUID(str(row[1])),
         project_id=uuid.UUID(str(row[2])),
         attempts=int(row[3]),
     )
+    record_worker_event(
+        conn,
+        actor_id=owner,
+        event_type="job.claimed",
+        outcome="success",
+        record_refs=[str(job.job_id), str(job.run_id)],
+        details={"attempts": job.attempts},
+        project_id=job.project_id,
+    )
+    return job
 
 
 def renew(conn: Connection, job_id: uuid.UUID, owner: str) -> bool:
@@ -109,6 +120,8 @@ def _transition(
     new_state: str,
     status: str,
     *,
+    owner: str,
+    project_id: uuid.UUID,
     failure_class: str | None = None,
     parked: bool = False,
 ) -> None:
@@ -127,6 +140,15 @@ def _transition(
             "parked": parked,
         },
     )
+    record_worker_event(
+        conn,
+        actor_id=owner,
+        event_type="run.transitioned",
+        outcome="success",
+        record_refs=[str(run_id)],
+        details={"from": expected_state, "to": new_state, "status": status},
+        project_id=project_id,
+    )
 
 
 def _finish_job(conn: Connection, job: JobClaim, owner: str, status: str) -> None:
@@ -142,7 +164,15 @@ def _finish_job(conn: Connection, job: JobClaim, owner: str, status: str) -> Non
 def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: str) -> None:
     run = _lock_run(conn, job.run_id)
     if run.state == "intake_pending":
-        _transition(conn, run.run_id, "intake_pending", "parsing", "running")
+        _transition(
+            conn,
+            run.run_id,
+            "intake_pending",
+            "parsing",
+            "running",
+            owner=owner,
+            project_id=job.project_id,
+        )
     elif run.state != "parsing":
         raise RunError(409, "state_mismatch")
 
@@ -189,13 +219,23 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         {"r": job.run_id},
     ).scalar_one()
 
-    _transition(conn, job.run_id, "parsing", "intake_complete", "running")
+    _transition(
+        conn,
+        job.run_id,
+        "parsing",
+        "intake_complete",
+        "running",
+        owner=owner,
+        project_id=job.project_id,
+    )
     _transition(
         conn,
         job.run_id,
         "intake_complete",
         "blocked_pending_decision",
         "blocked_pending_decision",
+        owner=owner,
+        project_id=job.project_id,
         parked=True,
     )
     if stale:
@@ -228,6 +268,7 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
             "failed_versions": [str(v[0]) for v in failed],
             "stale": bool(stale),
         },
+        project_id=job.project_id,
     )
 
 
@@ -243,7 +284,16 @@ def record_failure(
     if not retryable or job.attempts >= MAX_ATTEMPTS:
         _finish_job(conn, job, owner, "failed")
         run = _lock_run(conn, job.run_id)
-        _transition(conn, job.run_id, run.state, "failed", "failed", failure_class="system_failure")
+        _transition(
+            conn,
+            job.run_id,
+            run.state,
+            "failed",
+            "failed",
+            owner=owner,
+            project_id=job.project_id,
+            failure_class="system_failure",
+        )
         record_worker_event(
             conn,
             actor_id=owner,
@@ -251,8 +301,10 @@ def record_failure(
             outcome="error",
             error_class=reason,
             record_refs=[str(job.run_id)],
+            project_id=job.project_id,
         )
         return "failed"
+    delay = backoff_seconds(job.attempts)
     requeued = _guard(
         conn,
         "SELECT webdesk_guard.fn_worker_requeue_job(:j, :owner, :reason, :delay)",
@@ -260,7 +312,7 @@ def record_failure(
             "j": job.job_id,
             "owner": owner,
             "reason": reason,
-            "delay": backoff_seconds(job.attempts),
+            "delay": delay,
         },
     ).scalar_one()
     if not requeued:
@@ -269,6 +321,16 @@ def record_failure(
         conn,
         "SELECT webdesk_guard.fn_worker_set_run_status(:r, 'queued')",
         {"r": job.run_id},
+    )
+    record_worker_event(
+        conn,
+        actor_id=owner,
+        event_type="job.requeued",
+        outcome="error",
+        error_class=reason,
+        record_refs=[str(job.job_id), str(job.run_id)],
+        details={"attempts": job.attempts, "delay_seconds": delay},
+        project_id=job.project_id,
     )
     return "requeued"
 

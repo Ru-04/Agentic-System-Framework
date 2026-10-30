@@ -96,17 +96,29 @@ def _audit(
     refs: list[str],
     error: str | None = None,
     details: dict[str, object] | None = None,
+    *,
+    project: uuid.UUID | None,
 ) -> None:
+    # H-70: every run audit names its project (None only when the run does not exist).
     record_event(
         conn,
         actor_type="human" if isinstance(actor, uuid.UUID) else "system",
         actor_id=str(actor),
         event_type=event,
         outcome="success" if outcome == "success" else outcome,
+        project_id=project,
         error_class=error,
         record_refs=refs,
         details=details,
     )
+
+
+def _run_project(conn: Connection, run_id: uuid.UUID) -> uuid.UUID | None:
+    """The project of a run, or None when the run does not exist (H-70)."""
+    value = conn.execute(
+        text("SELECT project_id FROM workflow_runs WHERE run_id = :r"), {"r": run_id}
+    ).scalar_one_or_none()
+    return None if value is None else uuid.UUID(str(value))
 
 
 def load_run(conn: Connection, run_id: uuid.UUID) -> RunRef:
@@ -135,8 +147,16 @@ def _check_revision(run: RunRef, expected: int) -> None:
         raise RunError(409, "revision_conflict")
 
 
-def _deny(conn: Connection, actor: uuid.UUID, event: str, reason: str, status: int) -> None:
-    _audit(conn, actor, event, "denied", [], error=reason)
+def _deny(
+    conn: Connection,
+    actor: uuid.UUID,
+    event: str,
+    reason: str,
+    status: int,
+    *,
+    project: uuid.UUID | None,
+) -> None:
+    _audit(conn, actor, event, "denied", [], error=reason, project=project)
     raise RunError(status, reason)
 
 
@@ -163,10 +183,12 @@ def _authorize(
     permission: Permission,
     resource: ResourceRef | None,
     event: str,
+    *,
+    project: uuid.UUID | None,
 ) -> None:
     decision = authorize(SqlAuthorizationStore(conn), actor, permission.value, resource)
     if not decision.allowed:
-        _deny(conn, actor, event, decision.reason, 403)
+        _deny(conn, actor, event, decision.reason, 403, project=project)
 
 
 def start_run(
@@ -226,9 +248,10 @@ def _start(
         Permission.RUN_START,
         ResourceRef(project_id=project, data_class=classification),
         "run.start.denied",
+        project=project,
     )
     if status != "active":
-        _deny(conn, actor, "run.start.denied", "project_archived", 409)
+        _deny(conn, actor, "run.start.denied", "project_archived", 409, project=project)
     if expected_project_revision != revision:
         raise RunError(409, "revision_conflict")
 
@@ -264,10 +287,10 @@ def _start(
         if refusal == "revision_conflict":
             raise RunError(409, refusal) from exc
         if refusal in ("project_archived", "snapshot_changed"):
-            _deny(conn, actor, "run.start.denied", refusal, 409)
+            _deny(conn, actor, "run.start.denied", refusal, 409, project=project)
         integrity = _integrity_refusal(exc)
         if integrity is not None:
-            _deny(conn, actor, "run.start.denied", integrity, 409)
+            _deny(conn, actor, "run.start.denied", integrity, 409, project=project)
         raise
     run_uuid = uuid.UUID(str(run_id))
     _audit(
@@ -277,6 +300,7 @@ def _start(
         "success",
         [str(run_uuid), str(project)],
         details={"input_revision_hash": digest, "snapshot_size": len(tuples)},
+        project=project,
     )
     return run_uuid
 
@@ -323,6 +347,8 @@ def _control(
     operation: str,
     call: str,
     params: dict[str, object],
+    *,
+    project: uuid.UUID | None,
 ) -> None:
     """Run one control guard. Map its named refusals to a status, auditing the denials."""
     try:
@@ -334,10 +360,17 @@ def _control(
             # integrity error, is an audited 409, not an unaudited 500.
             integrity = _integrity_refusal(exc)
             if integrity is not None:
-                _deny(conn, actor, f"run.{operation}.denied", integrity, 409)
+                _deny(conn, actor, f"run.{operation}.denied", integrity, 409, project=project)
             raise
         if refusal in DENIED_REASONS:
-            _deny(conn, actor, f"run.{operation}.denied", refusal, CONTROL_STATUS[refusal])
+            _deny(
+                conn,
+                actor,
+                f"run.{operation}.denied",
+                refusal,
+                CONTROL_STATUS[refusal],
+                project=project,
+            )
         raise RunError(CONTROL_STATUS[refusal], refusal) from exc
 
 
@@ -345,15 +378,17 @@ def cancel_run(
     conn: Connection, proof: uuid.UUID, run_id: uuid.UUID, *, expected_run_revision: int
 ) -> None:
     actor = actor_for(conn, proof, "run.cancel", run_id)
-    _authorize(conn, actor, Permission.RUN_CANCEL, None, "run.cancel.denied")
+    project = _run_project(conn, run_id)
+    _authorize(conn, actor, Permission.RUN_CANCEL, None, "run.cancel.denied", project=project)
     _control(
         conn,
         actor,
         "run.cancel",
         CANCEL_SQL,
         {"p": proof, "run": run_id, "rev": expected_run_revision},
+        project=project,
     )
-    _audit(conn, actor, "run.cancel.succeeded", "success", [str(run_id)])
+    _audit(conn, actor, "run.cancel.succeeded", "success", [str(run_id)], project=project)
 
 
 def retry_run(
@@ -361,15 +396,17 @@ def retry_run(
 ) -> None:
     """Requeue a failed run after a system failure. Refused if a newer run exists (I-12)."""
     actor = actor_for(conn, proof, "run.retry", run_id)
-    _authorize(conn, actor, Permission.RUN_RETRY, None, "run.retry.denied")
+    project = _run_project(conn, run_id)
+    _authorize(conn, actor, Permission.RUN_RETRY, None, "run.retry.denied", project=project)
     _control(
         conn,
         actor,
         "run.retry",
         RETRY_SQL,
         {"p": proof, "run": run_id, "rev": expected_run_revision},
+        project=project,
     )
-    _audit(conn, actor, "run.retry.succeeded", "success", [str(run_id)])
+    _audit(conn, actor, "run.retry.succeeded", "success", [str(run_id)], project=project)
 
 
 def resume_run(
@@ -381,12 +418,26 @@ def resume_run(
     refusal, which the transaction runner commits, so the proof is spent.
     """
     actor = actor_for(conn, proof, "run.resume", run_id)
-    _authorize(conn, actor, Permission.RUN_RESUME, None, "run.resume.denied")
+    _authorize(
+        conn,
+        actor,
+        Permission.RUN_RESUME,
+        None,
+        "run.resume.denied",
+        project=_run_project(conn, run_id),
+    )
     run = load_run(conn, run_id)
     _check_revision(run, expected_run_revision)
     if run.status == "blocked_pending_decision":
-        _deny(conn, actor, "run.resume.denied", "parked_run_not_resumable", 409)
+        _deny(
+            conn,
+            actor,
+            "run.resume.denied",
+            "parked_run_not_resumable",
+            409,
+            project=run.project_id,
+        )
     if run.status != "waiting_human":
-        _deny(conn, actor, "run.resume.denied", "not_waiting_human", 409)
+        _deny(conn, actor, "run.resume.denied", "not_waiting_human", 409, project=run.project_id)
     consume_with(conn, "run.resume", RESUME_SQL, {"p": proof, "run": run_id})
     raise RunError(409, "resume_not_supported_in_gate_1")

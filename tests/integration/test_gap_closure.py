@@ -211,7 +211,17 @@ def test_an_unlisted_transition_is_refused(conn: Connection) -> None:
     ids = _setup(conn)
     run = _start(conn, ids)
     with pytest.raises(RunError) as exc:
-        as_worker(conn, jobs._transition, conn, run, "created", "parsing", "running")
+        as_worker(
+            conn,
+            jobs._transition,
+            conn,
+            run,
+            "created",
+            "parsing",
+            "running",
+            owner="worker-f09",
+            project_id=ids["project"],
+        )
     assert exc.value.reason == "illegal_transition"
 
 
