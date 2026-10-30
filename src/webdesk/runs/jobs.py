@@ -180,6 +180,8 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
                    WHERE v.project_id = r.project_id
                      AND v.scan_status <> 'quarantined'
                      AND v.parse_status = 'pending'
+                     AND NOT EXISTS (SELECT 1 FROM source_versions n
+                                     WHERE n.supersedes_version_id = v.source_version_id)
                      AND NOT EXISTS (SELECT 1 FROM run_input_snapshots s
                                      WHERE s.run_id = :r
                                        AND s.source_version_id = v.source_version_id))"""

@@ -18,10 +18,10 @@ from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from webdesk.audit.service import record_event
-from webdesk.authority.proofs import actor_for, consume_with
+from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -287,12 +287,26 @@ def archive_project(
             error_class="active_run_exists",
         )
         raise ProjectServiceError(409, "active_run_exists")
-    changed = consume_with(
-        conn,
-        "project.archive",
-        "SELECT webdesk_guard.fn_archive_project_with_proof(:p, :project)",
-        {"p": proof, "project": project},
-    )
+    try:
+        changed = consume_with(
+            conn,
+            "project.archive",
+            "SELECT webdesk_guard.fn_archive_project_with_proof(:p, :project)",
+            {"p": proof, "project": project},
+        )
+    except DBAPIError as exc:
+        # The guard rechecks active runs under the project lock (H-42).
+        if wrapper_refusal(exc) != "active_run_exists":
+            raise
+        record_event(
+            conn,
+            actor_type="human",
+            actor_id=str(actor),
+            event_type="project.archive.denied",
+            outcome="denied",
+            error_class="active_run_exists",
+        )
+        raise ProjectServiceError(409, "active_run_exists") from exc
     if changed != 1:
         raise ProjectServiceError(409, "project_not_active")
     record_event(
