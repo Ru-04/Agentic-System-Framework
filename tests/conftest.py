@@ -73,10 +73,13 @@ def _drop_when_detached(conn: Connection, name: str) -> None:
     application name. ``DROP ... WITH (FORCE)`` is not used: it masks the leak, and this role
     lacks the rights to terminate other roles' sessions.
     """
+    # Only client backends count. Background processes such as an autovacuum worker analysing a
+    # freshly cloned database appear with a NULL role and state, and are not test sessions.
     attached = conn.execute(
         text(
             "SELECT usename, application_name, state FROM pg_stat_activity"
             " WHERE datname = :d AND pid <> pg_backend_pid()"
+            " AND backend_type = 'client backend'"
         ),
         {"d": name},
     ).all()
