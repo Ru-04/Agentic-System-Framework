@@ -1,0 +1,29 @@
+{
+  "dataset_id": "sprint5-scenarios-v2-2026-10-30",
+  "sha256": "306e6fba744621cbfbbfef43788520ee7cb27bcd292d725cdf61e191593782eb",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-draft-2026-10-28",
+    "file": "sprint5_scenarios_draft.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-001",
+      "from": "INVESTIGATE",
+      "to": "UNSUPPORTED_SOURCE",
+      "reason": "No active Shopify source (register: no source active for Shopify). Rule: an unsupported source is not investigated."
+    },
+    {
+      "scenario_id": "S5-004",
+      "from": "INVESTIGATE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "The requirement states no version. Rule: requested version not stated gives INVESTIGATE_WITH_UNKNOWNS."
+    },
+    {
+      "scenario_id": "S5-008",
+      "from": "INVESTIGATE",
+      "to": "UNSUPPORTED_SOURCE",
+      "reason": "Adobe Commerce exact pages are approved but inactive (register B3). No active source."
+    }
+  ],
+  "note": "Frozen manifest. Expectations follow the current source-activation register and the deterministic rules; re-amend under a new manifest on any activation change. Not approved as acceptance criteria."
+}

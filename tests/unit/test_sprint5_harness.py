@@ -167,3 +167,36 @@ def test_a_specialist_without_an_active_source_is_unsupported_not_investigated()
         )
     ).scenarios[0]
     assert observe(shopify).outcome is Outcome.UNSUPPORTED_SOURCE
+
+
+V2_DATASET = DATA / "sprint5_scenarios_v2.json"
+V2_MANIFEST = DATA / "sprint5_scenarios_v2.manifest.json"
+
+
+def test_the_v2_dataset_matches_its_manifest_and_records_three_amendments() -> None:
+    dataset = load_dataset(V2_DATASET, V2_MANIFEST)
+    manifest = json.loads(V2_MANIFEST.read_text(encoding="utf-8"))
+    assert dataset.dataset_id == "sprint5-scenarios-v2-2026-10-30"
+    assert sorted(change["scenario_id"] for change in manifest["changes"]) == [
+        "S5-001",
+        "S5-004",
+        "S5-008",
+    ]
+
+
+def test_v2_changes_only_the_three_recorded_expectations() -> None:
+    v1 = {s.scenario_id: s for s in load_dataset(DATASET, MANIFEST).scenarios}
+    v2 = {s.scenario_id: s for s in load_dataset(V2_DATASET, V2_MANIFEST).scenarios}
+    changed = {sid for sid in v1 if v1[sid].expected != v2[sid].expected}
+    assert changed == {"S5-001", "S5-004", "S5-008"}
+    for sid in v1:
+        assert v1[sid].requirement == v2[sid].requirement
+        assert v1[sid].specialist_id == v2[sid].specialist_id
+
+
+def test_the_v2_runner_result_is_eight_of_eleven_with_three_unresolved_mismatches() -> None:
+    from webdesk.evaluation.runner import observe
+
+    report = evaluate(load_dataset(V2_DATASET, V2_MANIFEST), observe)
+    mismatched = {r.scenario_id for r in report.results if not r.matched}
+    assert mismatched == {"S5-005", "S5-006", "S5-007"}

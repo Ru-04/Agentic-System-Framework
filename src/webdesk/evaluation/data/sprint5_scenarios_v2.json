@@ -1,0 +1,93 @@
+{
+  "dataset_id": "sprint5-scenarios-v2-2026-10-30",
+  "scenarios": [
+    {
+      "scenario_id": "S5-001",
+      "specialist_id": "shopify",
+      "category": "synthetic_fixture",
+      "requirement": "Check whether the Shopify plan includes a given feature.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "Synthetic. Real evidence blocked: Shopify source inactive; human labels 0 of 55. Amended in v2: No active Shopify source (register: no source active for Shopify). Rule: an unsupported source is not investigated."
+    },
+    {
+      "scenario_id": "S5-002",
+      "specialist_id": "shopify",
+      "category": "synthetic_fixture",
+      "requirement": "Make the storefront more pleasant.",
+      "expected": "CLARIFY",
+      "note": "No recognisable feature in the requirement."
+    },
+    {
+      "scenario_id": "S5-003",
+      "specialist_id": "shift4shop",
+      "category": "synthetic_fixture",
+      "requirement": "Read products through the Shift4Shop product API.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "No approved source. Vendor source ownership unresolved."
+    },
+    {
+      "scenario_id": "S5-004",
+      "specialist_id": "wordpress_woocommerce",
+      "category": "synthetic_fixture",
+      "requirement": "Price each product variation differently on WooCommerce.",
+      "expected": "INVESTIGATE_WITH_UNKNOWNS",
+      "note": "Synthetic. Variation pricing stays UNKNOWN on real evidence. Amended in v2: The requirement states no version. Rule: requested version not stated gives INVESTIGATE_WITH_UNKNOWNS."
+    },
+    {
+      "scenario_id": "S5-005",
+      "specialist_id": "wordpress_woocommerce",
+      "category": "synthetic_fixture",
+      "requirement": "Follow a redirect from the WooCommerce docs to an unapproved host.",
+      "expected": "REFUSE",
+      "note": "Redirect leaving the approved boundary."
+    },
+    {
+      "scenario_id": "S5-006",
+      "specialist_id": "bigcommerce",
+      "category": "synthetic_fixture",
+      "requirement": "Read a single product through the BigCommerce product page.",
+      "expected": "INVESTIGATE",
+      "note": "Sibling pages refused. Claim limited to single-product retrieval."
+    },
+    {
+      "scenario_id": "S5-007",
+      "specialist_id": "bigcommerce",
+      "category": "synthetic_fixture",
+      "requirement": "Read order data through the BigCommerce API.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "Not in the approved boundary."
+    },
+    {
+      "scenario_id": "S5-008",
+      "specialist_id": "magento_adobe_commerce",
+      "category": "synthetic_fixture",
+      "requirement": "Read products through the Adobe Commerce REST API.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "Edition stated as Adobe Commerce. Exact pages inactive. Amended in v2: Adobe Commerce exact pages are approved but inactive (register B3). No active source."
+    },
+    {
+      "scenario_id": "S5-009",
+      "specialist_id": "magento_adobe_commerce",
+      "category": "synthetic_fixture",
+      "requirement": "Import a catalog on Magento Open Source.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "Release notes do not support feature claims."
+    },
+    {
+      "scenario_id": "S5-010",
+      "specialist_id": "standalone_applications",
+      "category": "synthetic_fixture",
+      "requirement": "Select an architecture for a new application.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "No technology selected. No approved source."
+    },
+    {
+      "scenario_id": "S5-011",
+      "specialist_id": "middleware_applications",
+      "category": "synthetic_fixture",
+      "requirement": "Deliver webhooks with retry on failure.",
+      "expected": "UNSUPPORTED_SOURCE",
+      "note": "No product selected. No approved source."
+    }
+  ]
+}
