@@ -1,0 +1,17 @@
+{
+  "dataset_id": "sprint5-scenarios-v3-2026-10-30",
+  "sha256": "36dcbd6ac32f9764191e6e0cb004282b245be26f49b496d5c5e875913023df38",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v2-2026-10-30",
+    "file": "sprint5_scenarios_v2.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-006",
+      "from": "INVESTIGATE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "The requirement states no version. Rule: requested version not stated gives INVESTIGATE_WITH_UNKNOWNS (same as S5-004)."
+    }
+  ],
+  "note": "Frozen manifest. Expectations follow the current source-activation register and the deterministic rules; re-amend under a new manifest on any activation change. Not approved as acceptance criteria."
+}

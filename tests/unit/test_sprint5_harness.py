@@ -220,3 +220,30 @@ def test_order_data_does_not_match_the_bigcommerce_capability() -> None:
     from webdesk.specialists.catalog import SpecialistId
 
     assert matched_capabilities(SpecialistId.BIGCOMMERCE, "Read order data through the API") == ()
+
+
+V3_DATASET = DATA / "sprint5_scenarios_v3.json"
+V3_MANIFEST = DATA / "sprint5_scenarios_v3.manifest.json"
+
+
+def test_the_v3_dataset_matches_its_manifest_and_records_one_amendment() -> None:
+    dataset = load_dataset(V3_DATASET, V3_MANIFEST)
+    manifest = json.loads(V3_MANIFEST.read_text(encoding="utf-8"))
+    assert dataset.dataset_id == "sprint5-scenarios-v3-2026-10-30"
+    assert [change["scenario_id"] for change in manifest["changes"]] == ["S5-006"]
+
+
+def test_v3_changes_only_the_single_recorded_expectation_against_v2() -> None:
+    v2 = {s.scenario_id: s for s in load_dataset(V2_DATASET, V2_MANIFEST).scenarios}
+    v3 = {s.scenario_id: s for s in load_dataset(V3_DATASET, V3_MANIFEST).scenarios}
+    changed = {sid for sid in v2 if v2[sid].expected != v3[sid].expected}
+    assert changed == {"S5-006"}
+    assert v3["S5-006"].requirement == v2["S5-006"].requirement
+
+
+def test_the_v3_runner_result_is_nine_of_eleven_with_two_unresolved_mismatches() -> None:
+    from webdesk.evaluation.runner import observe
+
+    report = evaluate(load_dataset(V3_DATASET, V3_MANIFEST), observe)
+    mismatched = {r.scenario_id for r in report.results if not r.matched}
+    assert mismatched == {"S5-005", "S5-007"}
