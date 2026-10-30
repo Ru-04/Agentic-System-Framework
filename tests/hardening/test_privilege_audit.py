@@ -155,6 +155,7 @@ OUTBOX_EXECUTE = frozenset(
         "fn_outbox_dead_letter",
         "fn_outbox_mark_sent",
         "fn_outbox_open_ciphertext",
+        "fn_outbox_record_alert",
         "fn_outbox_renew",
         "fn_outbox_retry",
         "fn_worker_record_audit",

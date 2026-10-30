@@ -20,7 +20,19 @@ from webdesk.audit.service import record_event
 
 
 def sweep_expired(conn: Connection) -> dict[str, int]:
+    """Run the sweep, then restore the caller's role (H-51: the role change does not leak).
+
+    The restore runs only after success. A failed sweep leaves the transaction aborted, and the
+    caller rolls it back, so the role change cannot survive a failure either.
+    """
+    previous = conn.execute(text("SELECT current_user")).scalar_one()
     conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+    counts = _sweep(conn)
+    conn.execute(text(f'SET LOCAL ROLE "{previous}"'))
+    return counts
+
+
+def _sweep(conn: Connection) -> dict[str, int]:
     counts = {"requests": 0, "appointments": 0, "tokens_revoked": 0}
 
     expired = conn.execute(

@@ -126,6 +126,11 @@ class OutboxWorker:
             )
 
     def _alert(self, conn: Connection, notice: Claimed, reason: str) -> None:
+        """Audit the alert and write the in-app alert row (H-52, H-DEC-8 option 1).
+
+        Both run in the dead-letter transaction, so a rolled-back dead letter leaves neither. The
+        alert row is unique per notice, so a repeated dead letter adds no second alert.
+        """
         record_worker_event(
             conn,
             actor_id="outbox-worker",
@@ -134,6 +139,23 @@ class OutboxWorker:
             error_class=reason,
             record_refs=[str(notice.notice_id), str(notice.user_id)],
         )
+        conn.execute(
+            text("SELECT webdesk_guard.fn_outbox_record_alert(:n, :u, :r)"),
+            {"n": notice.notice_id, "u": notice.user_id, "r": reason},
+        )
+
+    def _audit_failure(self, notice: Claimed, reason: str) -> None:
+        """Audit one failed send attempt (H-52). Only the reason code is recorded."""
+        with self._engine.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_outbox"))
+            record_worker_event(
+                conn,
+                actor_id="outbox-worker",
+                event_type="outbox.delivery.failed",
+                outcome="error",
+                error_class=reason,
+                record_refs=[str(notice.notice_id), str(notice.user_id)],
+            )
 
     def _dead_letter(self, notice: Claimed, reason: str) -> bool:
         with self._engine.begin() as conn:
@@ -175,6 +197,9 @@ class OutboxWorker:
         if destination is None:
             self._dead_letter(notice, "destination_unavailable")
             return "dead_letter"
+        # H-52: renew immediately before the send, so the lease covers the send itself.
+        if not self.renew(notice.notice_id):
+            return "lease_lost"
         try:
             self._transport.send(
                 to=destination,
@@ -183,9 +208,14 @@ class OutboxWorker:
                 idempotency_key=str(notice.notice_id),
             )
         except TransportUnavailable:
-            self._retry_or_dead_letter(notice, "transport_unavailable")
-            return "retry"
-        return "sent" if self._mark_sent(notice) else "lease_lost"
+            reason = "transport_unavailable"
+        except Exception:  # noqa: BLE001 - H-52: every transport failure is audited and retried
+            reason = "transport_error"
+        else:
+            return "sent" if self._mark_sent(notice) else "lease_lost"
+        self._audit_failure(notice, reason)
+        self._retry_or_dead_letter(notice, reason)
+        return "retry"
 
     def run_once(self, limit: int = 10) -> list[str]:
         return [self.deliver(notice) for notice in self.claim(limit)]

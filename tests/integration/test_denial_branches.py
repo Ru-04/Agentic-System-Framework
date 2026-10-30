@@ -307,6 +307,7 @@ def test_recovery_with_zero_active_administrators_is_refused_and_audited(conn: C
                 display_name="",
                 owner_approval_ref="OWNER",
                 owner_identity_ref="owner:test",
+                verifier_id="verifier-recovery-test",
                 authorization_digest="z" * 64,
             ),
             operator_id="op",

@@ -48,6 +48,7 @@ class RecoveryRequest:
     display_name: str
     owner_approval_ref: str
     owner_identity_ref: str
+    verifier_id: str  # from the signed artifact (H-50), never a constant
     authorization_digest: str
 
 
@@ -80,12 +81,16 @@ def prepare_recovery(settings: Settings, path: Path, clock: Clock) -> RecoveryRe
         email = policy_from_settings(settings).normalize(str(contact["email"]))
     except EmailPolicyError as exc:
         raise InstallationError(f"contact_refused:{exc.reason}") from exc
+    verifier_id = str(payload.get("independent_verifier_id", "")).strip()
+    if not verifier_id:
+        raise InstallationError("authorization_malformed")
     return RecoveryRequest(
         request_type=request_type,
         email=email,
         display_name=str(contact.get("display_name", "")).strip() or "WDS user",
         owner_approval_ref=str(payload.get("owner_approval_ref", "")).strip(),
         owner_identity_ref=str(payload.get("owner_identity_ref", "")).strip(),
+        verifier_id=verifier_id,
         authorization_digest=digest,
     )
 
@@ -151,33 +156,9 @@ def apply_recovery(
         if reserved > 0:
             raise _refuse(conn, operator_id, "replacement_reserved", 409)
 
-        ceremony_id = uuid.UUID(
-            str(
-                conn.execute(
-                    text(
-                        """INSERT INTO setup_trust_ceremonies (kind, owner_approval_ref,
-                               signed_authorization_digest, owner_identity_ref,
-                               independent_verifier_id, deployment_operator_id,
-                               effective_admin_count_at_start, authorized_user_ids,
-                               activation_deadline, started_at, status)
-                           VALUES ('recover', :ref, :digest, :owner, 'verifier-recovery',
-                               :operator, :active, '{}', :deadline, :now, 'initiated')
-                           RETURNING ceremony_id"""
-                    ),
-                    {
-                        "ref": request.owner_approval_ref,
-                        "digest": request.authorization_digest,
-                        "owner": request.owner_identity_ref,
-                        "operator": operator_id,
-                        "active": active,
-                        "now": now,
-                        "deadline": deadline,
-                    },
-                ).scalar_one()
-            )
-        )
-
-        # An appointment approves an existing user; a replacement approves a new contact.
+        # H-50: every refusal is decided before the first insert, so no initiated ceremony row is
+        # left behind. An appointment approves an existing user; a replacement approves a new
+        # contact.
         if request.request_type == "appointment":
             row = conn.execute(
                 text(
@@ -202,6 +183,36 @@ def apply_recovery(
                 {"e": request.email},
             ).first():
                 raise _refuse(conn, operator_id, "contact_reserved", 409)
+            user_id = None
+
+        ceremony_id = uuid.UUID(
+            str(
+                conn.execute(
+                    text(
+                        """INSERT INTO setup_trust_ceremonies (kind, owner_approval_ref,
+                               signed_authorization_digest, owner_identity_ref,
+                               independent_verifier_id, deployment_operator_id,
+                               effective_admin_count_at_start, authorized_user_ids,
+                               activation_deadline, started_at, status)
+                           VALUES ('recover', :ref, :digest, :owner, :verifier,
+                               :operator, :active, '{}', :deadline, :now, 'initiated')
+                           RETURNING ceremony_id"""
+                    ),
+                    {
+                        "ref": request.owner_approval_ref,
+                        "digest": request.authorization_digest,
+                        "owner": request.owner_identity_ref,
+                        "verifier": request.verifier_id,
+                        "operator": operator_id,
+                        "active": active,
+                        "now": now,
+                        "deadline": deadline,
+                    },
+                ).scalar_one()
+            )
+        )
+
+        if user_id is None:
             user_id = uuid.UUID(
                 str(
                     conn.execute(
