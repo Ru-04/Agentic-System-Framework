@@ -30,7 +30,7 @@ from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from webdesk.audit.service import record_event
 from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
@@ -74,6 +74,8 @@ CONTROL_STATUS: dict[str, int] = {
 DENIED_REASONS = frozenset(
     {"not_cancellable", "project_archived", "not_retryable", "newer_run_exists"}
 )
+# The partial unique index that holds a project's one active run (migration 0007).
+ACTIVE_RUN_INDEX = "workflow_runs_one_active"
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,23 @@ def _check_revision(run: RunRef, expected: int) -> None:
 def _deny(conn: Connection, actor: uuid.UUID, event: str, reason: str, status: int) -> None:
     _audit(conn, actor, event, "denied", [], error=reason)
     raise RunError(status, reason)
+
+
+def _integrity_refusal(exc: DBAPIError) -> str | None:
+    """H-71: the refusal for a database integrity error, or None for any other database error.
+
+    Only a unique violation of the active-run index is ``active_run_exists``. Every other integrity
+    error is ``database_refused``, so it is audited and refused rather than left as a 500.
+    """
+    if not isinstance(exc, IntegrityError):
+        return None
+    diag = getattr(exc.orig, "diag", None)
+    if (
+        getattr(exc.orig, "sqlstate", None) == "23505"
+        and getattr(diag, "constraint_name", None) == ACTIVE_RUN_INDEX
+    ):
+        return "active_run_exists"
+    return "database_refused"
 
 
 def _authorize(
@@ -246,8 +265,9 @@ def _start(
             raise RunError(409, refusal) from exc
         if refusal in ("project_archived", "snapshot_changed"):
             _deny(conn, actor, "run.start.denied", refusal, 409)
-        if getattr(exc.orig, "sqlstate", None) == "23505":
-            _deny(conn, actor, "run.start.denied", "active_run_exists", 409)
+        integrity = _integrity_refusal(exc)
+        if integrity is not None:
+            _deny(conn, actor, "run.start.denied", integrity, 409)
         raise
     run_uuid = uuid.UUID(str(run_id))
     _audit(
@@ -310,6 +330,11 @@ def _control(
     except DBAPIError as exc:
         refusal = wrapper_refusal(exc)
         if refusal not in CONTROL_STATUS:
+            # H-71: a retry that races a start can hit the active-run index. That, and any other
+            # integrity error, is an audited 409, not an unaudited 500.
+            integrity = _integrity_refusal(exc)
+            if integrity is not None:
+                _deny(conn, actor, f"run.{operation}.denied", integrity, 409)
             raise
         if refusal in DENIED_REASONS:
             _deny(conn, actor, f"run.{operation}.denied", refusal, CONTROL_STATUS[refusal])

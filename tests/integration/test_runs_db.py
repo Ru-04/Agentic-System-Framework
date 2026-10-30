@@ -220,6 +220,39 @@ def test_a_second_run_is_refused_while_one_is_active(conn: Connection) -> None:
     assert (exc.value.status, exc.value.reason) == (409, "active_run_exists")
 
 
+def test_h71_another_unique_violation_is_an_audited_database_refusal(conn: Connection) -> None:
+    """H-71: only the active-run index maps to active_run_exists. Any other integrity error, here a
+    unique index added by the test, is an audited 409 ``database_refused``, not a 500.
+    """
+    ids = _setup(conn)
+    first = _start(conn, ids)
+    runs.cancel_run(
+        conn,
+        prove(conn, ids["admin"], "run.cancel", first),
+        first,
+        expected_run_revision=_run_rev(conn, first),
+    )
+    conn.execute(text("RESET ROLE"))
+    conn.execute(
+        text(
+            f"CREATE UNIQUE INDEX h71_probe_one_run ON workflow_runs (project_id)"
+            f" WHERE project_id = '{ids['project']}'"
+        )
+    )
+    conn.execute(text("SET LOCAL ROLE webdesk_app"))
+    with pytest.raises(RunError) as exc:
+        _start(conn, ids)
+    assert (exc.value.status, exc.value.reason) == (409, "database_refused")
+    denied = conn.execute(
+        text(
+            """SELECT count(*) FROM audit_events WHERE event_type = 'run.start.denied'
+               AND error_class = 'database_refused' AND actor_id_or_service = :a"""
+        ),
+        {"a": str(ids["analyst"])},
+    ).scalar_one()
+    assert denied == 1
+
+
 def test_quarantined_and_failed_versions_are_excluded_from_the_snapshot(
     conn: Connection, store: ContentStore
 ) -> None:
