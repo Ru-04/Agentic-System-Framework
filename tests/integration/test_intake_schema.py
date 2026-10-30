@@ -385,6 +385,53 @@ def test_checkpoints_hold_identifiers_and_flags_only(conn: Connection) -> None:
         )
 
 
+_CHECKPOINT = text(
+    """INSERT INTO workflow_checkpoints (run_id, project_id, node, refs, flags)
+       VALUES (:r, :p, 'intake', CAST(:refs AS jsonb), CAST(:flags AS jsonb))"""
+)
+
+
+def test_h69_checkpoint_values_of_the_right_type_are_accepted(conn: Connection) -> None:
+    user = _user(conn)
+    project = _project(conn, user)
+    run = _run(conn, project, user)
+    refs = f'{{"source_version_ids": ["{uuid.uuid4()}", "{uuid.uuid4()}"], "segment_ids": []}}'
+    conn.execute(
+        _CHECKPOINT,
+        {"r": run, "p": project, "refs": refs, "flags": '{"parked": true, "stale": false}'},
+    )
+    stored = conn.execute(
+        text("SELECT count(*) FROM workflow_checkpoints WHERE run_id = :r"), {"r": run}
+    ).scalar_one()
+    assert stored == 1
+
+
+@pytest.mark.parametrize(
+    ("refs", "flags"),
+    [
+        pytest.param('{"segment_ids": "client text"}', "{}", id="reference-is-a-string"),
+        pytest.param('{"segment_ids": 42}', "{}", id="reference-is-a-number"),
+        pytest.param('{"segment_ids": ["not-a-uuid"]}', "{}", id="element-is-not-a-uuid"),
+        pytest.param('{"segment_ids": [42]}', "{}", id="element-is-a-number"),
+        pytest.param("{}", '{"stale": "true"}', id="flag-is-a-string"),
+        pytest.param("{}", '{"stale": 1}', id="flag-is-a-number"),
+    ],
+)
+def test_h69_checkpoint_values_of_the_wrong_type_are_refused(
+    conn: Connection, refs: str, flags: str
+) -> None:
+    user = _user(conn)
+    project = _project(conn, user)
+    run = _run(conn, project, user)
+    with pytest.raises(DBAPIError) as exc, conn.begin_nested():
+        conn.execute(_CHECKPOINT, {"r": run, "p": project, "refs": refs, "flags": flags})
+    assert getattr(exc.value.orig, "sqlstate", None) == "23514"  # check_violation
+    stored = conn.execute(
+        text("SELECT count(*) FROM workflow_checkpoints WHERE run_id = :r"), {"r": run}
+    ).scalar_one()
+    assert stored == 0
+
+
 def test_dependency_edges_refuse_cycles_and_self_loops(conn: Connection) -> None:
     user = _user(conn)
     project = _project(conn, user)
