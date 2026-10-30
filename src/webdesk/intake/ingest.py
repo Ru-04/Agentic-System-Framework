@@ -1,9 +1,9 @@
 """Source ingest, supersession and quarantined reads (I-4, I-5; EVAL-F02, F03, F05).
 
-Ingest order: authorize, check the project state, validate the upload, store the bytes, then admit
+Ingest order: validate the upload (size and type, H-60), authorize, check the project state, admit
 the
-source or version through ``webdesk_guard.fn_admit_source_with_proof``. Any refusal happens before a
-row is
+source or version through ``webdesk_guard.fn_admit_source_with_proof``, then store the bytes. Any
+refusal happens before a row is
 written. The refusal is audited and then raised, so the API can keep the audit (C-2).
 
 The actor is the account the ``source.upload`` operation proof was issued to. No caller supplies an
@@ -148,6 +148,14 @@ def ingest_source(
         raise IngestError(422, "classification_invalid")
 
     actor = actor_for(conn, proof, "source.upload", project)
+    # H-60: the size and type checks run before the idempotency lookup, the authorization and the
+    # revision check, so an oversized or wrong-type file is refused (and audited) whatever the
+    # revision.
+    try:
+        validated = validate_upload(filename, declared_mime, data)
+    except UploadRefusal as exc:
+        _deny(conn, actor, "source.upload.refused", exc.reason, exc.status)
+        raise  # unreachable; _deny raises IngestError
     endpoint = f"POST /projects/{project}/sources"
     digest = hashlib.sha256(data).hexdigest()
     payload: dict[str, Any] = {
@@ -195,8 +203,7 @@ def ingest_source(
         source_type=source_type,
         source_trust=source_trust,
         access_classification=access_classification,
-        filename=filename,
-        declared_mime=declared_mime,
+        mime_type=validated.mime_type,
         data=data,
         expected_project_revision=expected_project_revision,
         supersedes_source_id=supersedes_source_id,
@@ -263,19 +270,12 @@ def _admit(
     source_type: str,
     source_trust: str,
     access_classification: str,
-    filename: str,
-    declared_mime: str,
+    mime_type: str,
     data: bytes,
     expected_project_revision: int,
     supersedes_source_id: uuid.UUID | None,
     expected_source_revision: int | None,
 ) -> IngestResult:
-    try:
-        validated = validate_upload(filename, declared_mime, data)
-    except UploadRefusal as exc:
-        _deny(conn, actor, "source.upload.refused", exc.reason, exc.status)
-        raise  # unreachable; _deny raises IngestError
-
     # H-63: the admission is recorded first and the bytes are written after it. A refusal therefore
     # leaves no file behind. A failed write raises a non-domain error, so the admission rolls back.
     storage_key = ContentStore.key_for(data)
@@ -296,7 +296,7 @@ def _admit(
                 "tr": source_trust,
                 "ac": access_classification,
                 "k": storage_key,
-                "m": validated.mime_type,
+                "m": mime_type,
                 "size": len(data),
             },
         )

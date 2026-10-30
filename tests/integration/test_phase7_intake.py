@@ -167,3 +167,58 @@ def test_h60_an_oversized_body_is_refused_with_413_before_parsing(
     )
     assert response.status_code == 413
     assert _source_count(http) == 0
+
+
+def _audit_count(http: dict[str, object], event: str, reason: str) -> int:  # noqa: F811
+    engine = http["engine"]
+    assert isinstance(engine, Engine)
+    with engine.connect() as conn:
+        return int(
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM audit_events"
+                    " WHERE event_type = :e AND error_class = :r AND outcome = 'denied'"
+                ),
+                {"e": event, "r": reason},
+            ).scalar_one()
+        )
+
+
+def test_h60_a_file_just_over_the_limit_is_413_and_audited_even_with_a_stale_revision(
+    http: dict[str, object],  # noqa: F811
+) -> None:
+    """Over 20 MiB but under the route's body limit: the service size check runs first."""
+    client = _client(http)
+    engine = http["engine"]
+    assert isinstance(engine, Engine)
+    stale = _revision(engine, str(http["project"])) + 7
+    oversized = b"x" * (20 * 1024 * 1024 + 1)
+    response = client.post(
+        f"/projects/{http['project']}/sources",
+        headers=_auth(str(http["analyst_token"])),
+        data={**FIELDS, "expected_project_revision": str(stale)},
+        files={"file": ("big.txt", oversized, "text/plain")},
+    )
+    assert response.status_code == 413, response.text
+    assert response.json() == {"error": "too_large"}
+    assert _audit_count(http, "source.upload.refused", "too_large") == 1
+    assert _source_count(http) == 0
+
+
+def test_h60_a_wrong_type_file_is_415_even_with_a_stale_revision(
+    http: dict[str, object],  # noqa: F811
+) -> None:
+    client = _client(http)
+    engine = http["engine"]
+    assert isinstance(engine, Engine)
+    stale = _revision(engine, str(http["project"])) + 7
+    response = client.post(
+        f"/projects/{http['project']}/sources",
+        headers=_auth(str(http["analyst_token"])),
+        data={**FIELDS, "expected_project_revision": str(stale)},
+        files={"file": ("tool.exe", b"MZ not a document\n", "application/octet-stream")},
+    )
+    assert response.status_code == 415, response.text
+    assert response.json() == {"error": "unsupported_type"}
+    assert _audit_count(http, "source.upload.refused", "unsupported_type") == 1
+    assert _source_count(http) == 0
