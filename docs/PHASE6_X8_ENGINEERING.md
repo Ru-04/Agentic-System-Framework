@@ -69,3 +69,22 @@ Implementation commit: **e644669** (on `feature/foundation-phase-6`, from `featu
 | Recovery artifact format (new required field) | Owner signing process | Artifacts must be re-signed with `independent_verifier_id` |
 | Migration ancestry: 0044 on 0043 on Phase 5 head | Integration | Reconcile before any merge |
 | Phase 5 Finding 5 (`fn_worker_mark_inputs_changed`) | Phase 3 | Unchanged by Phase 6 |
+
+## Independent QA and acceptance status
+
+- Engineering frozen SHA: **9a9e8d3** (`feature/foundation-phase-6`). Full suite: 681 passed, 0 errors,
+  0 failed, 0 skipped, exit 0 (two runs by the reviewer, both clean).
+- Independent QA verdict on 9a9e8d3: **QA PASSED — eligible for WDS Phase 6 acceptance** (reviewer
+  assessment, not WDS acceptance). Reviewer checkout detached at 9a9e8d3; QA cluster `webdesk-p6-qa-postgres`,
+  port 5483, system identifier 7702493747633016870.
+- Commit history of the review: e644669 (QA FAILED: five findings) → 207b780 (findings fixed; one
+  intermittent teardown error, QA FAILED) → 538ac10 (guard counts client backends only) → 9a9e8d3
+  (guard tests added; QA PASSED).
+- WDS formal acceptance: **PENDING** (requires WDS decision).
+- Open informational items, not blockers: `recover` exit 0 through the command line is covered only at
+  the service level; the verifier is not checked for distinctness from the operator or owner; the
+  periodic heartbeat (H-22) is a Phase 3 dependency; alert-function wrong-owner refusal has no
+  permanent test (verified by the reviewer with a scratch test).
+- Teardown root cause, evidence-based: pg_stat_activity background processes have NULL usename and NULL
+  state; the guard now counts only client backends (538ac10), and tests/integration/test_session_leak_guard.py
+  checks that a live client session still blocks the drop.
