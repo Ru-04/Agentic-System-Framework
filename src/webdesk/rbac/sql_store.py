@@ -67,7 +67,9 @@ class SqlAuthorizationStore:
                        WHERE user_id = :u AND revoked_at IS NULL
                          AND (expires_at IS NULL OR expires_at > now())
                          AND ((resource_type = 'project' AND resource_id = :p)
-                              OR (resource_type = 'source' AND resource_id = :s))"""
+                              OR (resource_type = 'source' AND resource_id = :s
+                                  AND EXISTS (SELECT 1 FROM sources
+                                              WHERE source_id = :s AND project_id = :p)))"""
                 ),
                 {"u": user_id, "p": resource.project_id, "s": resource.source_id},
             ).first()

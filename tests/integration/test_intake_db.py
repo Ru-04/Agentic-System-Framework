@@ -32,7 +32,9 @@ from webdesk.intake.parse_service import ParseRefused
 from webdesk.intake.parsers import ParseResult, SegmentDraft
 from webdesk.projects import service as projects
 from webdesk.rbac.assign import assign_role
+from webdesk.rbac.engine import ResourceRef
 from webdesk.rbac.matrix import Role
+from webdesk.rbac.sql_store import SqlAuthorizationStore
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
@@ -314,6 +316,37 @@ def test_classification_below_the_project_is_refused(conn: Connection, store: Co
     with pytest.raises(IngestError) as exc:
         _ingest(conn, store, ids["analyst"], ids["project"], access="internal")
     assert (exc.value.status, exc.value.reason) == (422, "classification_below_project")
+
+
+def test_h75_a_source_grant_does_not_authorize_that_source_under_another_project(
+    conn: Connection, store: ContentStore
+) -> None:
+    """H-75: a source-scoped restricted grant binds the source to its own project."""
+    ids = _setup(conn)
+    result, _ = _ingest(conn, store, ids["analyst"], ids["project"])
+    other_project = projects.create_project(
+        conn,
+        prove(conn, ids["admin"], "project.create"),
+        name="Other project",
+        data_classification="internal",
+    )
+    projects.grant_restricted(
+        conn,
+        prove(conn, ids["admin"], "restricted.grant", result.source_id),
+        resource_type="source",
+        resource_id=result.source_id,
+        user=ids["analyst"],
+        reason="source review",
+    )
+    store_ = SqlAuthorizationStore(conn)
+    own = ResourceRef(
+        project_id=ids["project"], data_class="restricted", source_id=result.source_id
+    )
+    foreign = ResourceRef(
+        project_id=other_project, data_class="restricted", source_id=result.source_id
+    )
+    assert store_.has_restricted_grant(ids["analyst"], own)
+    assert not store_.has_restricted_grant(ids["analyst"], foreign)
 
 
 # --- I-4: quarantine ----------------------------------------------------------------------------

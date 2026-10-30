@@ -221,6 +221,28 @@ def grant_restricted(
     if actor == user:
         _deny(conn, actor, "grant.denied", "self_grant", 403)
     _authorized(conn, actor, Permission.RESTRICTED_GRANT_MANAGE, "grant.denied")
+    # H-75: the resource must exist, its project must be active and the grantee must be active.
+    if resource_type == "project":
+        project_status = conn.execute(
+            text("SELECT status FROM projects WHERE project_id = :r"), {"r": resource_id}
+        ).scalar_one_or_none()
+    else:
+        project_status = conn.execute(
+            text(
+                """SELECT p.status FROM sources s JOIN projects p ON p.project_id = s.project_id
+                   WHERE s.source_id = :r"""
+            ),
+            {"r": resource_id},
+        ).scalar_one_or_none()
+    if project_status is None:
+        _deny(conn, actor, "grant.denied", "resource_not_found", 404)
+    if project_status != "active":
+        _deny(conn, actor, "grant.denied", "project_archived", 409)
+    grantee_status = conn.execute(
+        text("SELECT status FROM users WHERE user_id = :u"), {"u": user}
+    ).scalar_one_or_none()
+    if grantee_status != "active":
+        _deny(conn, actor, "grant.denied", "grantee_not_active", 409)
     grant = uuid.UUID(
         str(
             consume_with(

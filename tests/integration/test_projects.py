@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
-from tests.support.people import active_user
+from tests.support.people import active_user, user_in_state
 from tests.support.privileged import ceremony_insert
 from tests.support.proofs import prove
 from webdesk.authority.proofs import ProofRefused
@@ -240,6 +240,90 @@ def test_restricted_grant_refuses_self_and_empty_reason(conn: Connection) -> Non
         expires_at=None,
     )
     assert grant is not None
+
+
+def _grant_denials(conn: Connection, reason: str) -> int:
+    return int(
+        conn.execute(
+            text(
+                """SELECT count(*) FROM audit_events WHERE event_type = 'grant.denied'
+                   AND error_class = :r AND outcome = 'denied'"""
+            ),
+            {"r": reason},
+        ).scalar_one()
+    )
+
+
+def _restricted_grants(conn: Connection, user: uuid.UUID) -> int:
+    return int(
+        conn.execute(
+            text("SELECT count(*) FROM restricted_content_grants WHERE user_id = :u"), {"u": user}
+        ).scalar_one()
+    )
+
+
+@pytest.mark.parametrize("resource_type", ["project", "source"])
+def test_h75_a_restricted_grant_on_a_missing_resource_is_an_audited_404(
+    conn: Connection, resource_type: str
+) -> None:
+    first, second = _two_admins(conn)
+    missing = uuid.uuid4()
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.grant_restricted(
+            conn,
+            prove(conn, first, "restricted.grant", missing),
+            resource_type=resource_type,
+            resource_id=missing,
+            user=second,
+            reason="review",
+        )
+    assert (exc.value.status, exc.value.reason) == (404, "resource_not_found")
+    assert _grant_denials(conn, "resource_not_found") == 1
+    assert _restricted_grants(conn, second) == 0
+
+
+def test_h75_a_restricted_grant_on_an_archived_project_is_an_audited_409(
+    conn: Connection,
+) -> None:
+    first, second = _two_admins(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="P", data_classification="restricted"
+    )
+    projects.archive_project(conn, prove(conn, first, "project.archive", project), project)
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.grant_restricted(
+            conn,
+            prove(conn, first, "restricted.grant", project),
+            resource_type="project",
+            resource_id=project,
+            user=second,
+            reason="review",
+        )
+    assert (exc.value.status, exc.value.reason) == (409, "project_archived")
+    assert _grant_denials(conn, "project_archived") == 1
+    assert _restricted_grants(conn, second) == 0
+
+
+def test_h75_a_restricted_grant_to_an_inactive_grantee_is_an_audited_409(
+    conn: Connection,
+) -> None:
+    first, _second = _two_admins(conn)
+    pending, _email_address = user_in_state(conn, "pending_activation")
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="P", data_classification="restricted"
+    )
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.grant_restricted(
+            conn,
+            prove(conn, first, "restricted.grant", project),
+            resource_type="project",
+            resource_id=project,
+            user=pending,
+            reason="review",
+        )
+    assert (exc.value.status, exc.value.reason) == (409, "grantee_not_active")
+    assert _grant_denials(conn, "grantee_not_active") == 1
+    assert _restricted_grants(conn, pending) == 0
 
 
 def test_archive_makes_the_project_read_only_for_membership_and_grants(conn: Connection) -> None:
