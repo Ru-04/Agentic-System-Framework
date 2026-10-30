@@ -508,6 +508,27 @@ def test_only_one_install_ceremony_can_exist(conn: Connection) -> None:
         )
 
 
+def test_h74_two_ceremonies_cannot_share_a_signed_authorization_digest(
+    conn: Connection,
+) -> None:
+    install_two_contacts(conn)
+    conn.exec_driver_sql("RESET ROLE")
+    used = q(conn, "SELECT signed_authorization_digest FROM setup_trust_ceremonies LIMIT 1")
+    with pytest.raises(UniqueViolation) as exc:
+        x(
+            conn,
+            """INSERT INTO setup_trust_ceremonies (kind, owner_approval_ref,
+                   signed_authorization_digest, owner_identity_ref, independent_verifier_id,
+                   deployment_operator_id, effective_admin_count_at_start, authorized_user_ids,
+                   activation_deadline, status)
+               VALUES ('recover', 'owner-ref', %s, 'owner-id', 'verifier-1', 'operator-1',
+                   1, '{}', now() + interval '24 hours', 'initiated')""",
+            (used,),
+            role="webdesk_ceremony",
+        )
+    assert "setup_trust_ceremonies_digest_unique" in str(exc.value)
+
+
 def test_ceremony_approvals_cannot_be_created_by_the_application_role(conn: Connection) -> None:
     _first, _second, _appointment = install_two_contacts(conn)
     conn.exec_driver_sql("RESET ROLE")

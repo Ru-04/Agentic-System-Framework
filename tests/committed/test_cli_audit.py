@@ -50,13 +50,18 @@ def owner(tmp_path: Path) -> tuple[Ed25519PrivateKey, Path]:
     return private, path
 
 
-def _authorization(tmp_path: Path, key: Ed25519PrivateKey, name: str = "auth.json") -> Path:
+def _authorization(
+    tmp_path: Path, key: Ed25519PrivateKey, name: str = "auth.json", operator: str = "op-cli"
+) -> Path:
     payload = {
         "kind": "install",
         "owner_approval_ref": "OWNER-CLI",
         "owner_identity_ref": "owner:cli",
         "expires_at": "2099-01-01T00:00:00+00:00",
         "nonce": uuid.uuid4().hex,
+        # H-74: the operator and the verifier are bound into the signed payload.
+        "deployment_operator_id": operator,
+        "independent_verifier_id": "v-cli",
         "contacts": [
             {"email": f"{uuid.uuid4().hex}@wds-test.example", "display_name": "A"},
             {"email": f"{uuid.uuid4().hex}@wds-test.example", "display_name": "B"},
@@ -169,3 +174,28 @@ def test_a_missing_database_url_is_refused_to_stderr_only(
     )
     assert code == 2
     assert "WEBDESK_DATABASE_URL" in capsys.readouterr().err
+
+
+def test_h74_an_install_by_another_operator_is_refused_and_audited(
+    monkeypatch: pytest.MonkeyPatch,
+    committed_engine: Engine,
+    owner: tuple[Ed25519PrivateKey, Path],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private, public = owner
+    _env(monkeypatch, committed_engine, public)
+    before = _denials(committed_engine, "operator_mismatch")
+    code = main(
+        [
+            "--authorization",
+            str(_authorization(tmp_path, private, operator="op-signed")),
+            "--operator",
+            "op-cli",
+            "--verifier",
+            "v-cli",
+        ]
+    )
+    assert code == 2
+    assert "operator_mismatch" in capsys.readouterr().err
+    assert _denials(committed_engine, "operator_mismatch") == before + 1

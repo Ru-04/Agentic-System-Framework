@@ -26,7 +26,12 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
-from webdesk.ceremony.install import Clock, InstallationError, load_signed_authorization
+from webdesk.ceremony.install import (
+    Clock,
+    InstallationError,
+    load_signed_authorization,
+    signed_identifier,
+)
 from webdesk.config import Settings
 from webdesk.identity.email import EmailPolicyError, policy_from_settings
 
@@ -59,8 +64,13 @@ class RecoveryResult:
     user_id: uuid.UUID
 
 
-def prepare_recovery(settings: Settings, path: Path, clock: Clock) -> RecoveryRequest:
-    """Verify the owner signature and the request shape. No database access."""
+def prepare_recovery(
+    settings: Settings, path: Path, clock: Clock, *, operator_id: str
+) -> RecoveryRequest:
+    """Verify the owner signature and the request shape. No database access.
+
+    ``operator_id`` is the CLI value. It must equal the signed ``deployment_operator_id`` (H-74).
+    """
     missing = list(settings.onboarding_capability().missing) + list(
         settings.ceremony_capability().missing
     )
@@ -84,6 +94,7 @@ def prepare_recovery(settings: Settings, path: Path, clock: Clock) -> RecoveryRe
     verifier_id = str(payload.get("independent_verifier_id", "")).strip()
     if not verifier_id:
         raise InstallationError("authorization_malformed")
+    signed_identifier(payload, "deployment_operator_id", operator_id, "operator_mismatch")
     return RecoveryRequest(
         request_type=request_type,
         email=email,
@@ -148,6 +159,12 @@ def apply_recovery(
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         conn.execute(text("SELECT pg_advisory_xact_lock(727272)"))
+        # H-74: a signed authorization is used once. The unique digest index backs this check.
+        if conn.execute(
+            text("SELECT 1 FROM setup_trust_ceremonies WHERE signed_authorization_digest = :d"),
+            {"d": request.authorization_digest},
+        ).first():
+            raise _refuse(conn, operator_id, "authorization_already_used", 409)
         active, reserved = _coverage(conn)
         if active == 0:
             raise _refuse(conn, operator_id, "zero_active_administrators", 409)

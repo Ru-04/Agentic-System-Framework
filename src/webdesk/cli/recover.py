@@ -59,7 +59,7 @@ def run_recovery_audited(
         request: RecoveryRequest
         try:
             # Validation happens before any insert: the artifact check reads no database rows.
-            request = prepare_recovery(settings, authorization_path, clock)
+            request = prepare_recovery(settings, authorization_path, clock, operator_id=operator_id)
         except (ConfigurationError, InstallationError) as exc:
             reason = exc.reason if isinstance(exc, InstallationError) else "configuration_invalid"
             _refuse(conn, operator_id, str(reason))

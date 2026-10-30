@@ -63,7 +63,13 @@ def run_install_audited(
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         try:
             settings.validate_for_profile()
-            prepared = prepare_install(settings, authorization_path, clock)
+            prepared = prepare_install(
+                settings,
+                authorization_path,
+                clock,
+                operator_id=operator_id,
+                verifier_id=verifier_id,
+            )
         except ConfigurationError as exc:
             _refuse(conn, operator_id, "configuration_invalid")
             raise InstallationError("configuration_invalid") from exc

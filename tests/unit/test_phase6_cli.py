@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from tests.unit.test_install_authorization import (  # noqa: F401 - fixtures and helpers
+    OPERATOR,
     FixedClock,
     _payload,
     _settings,
@@ -39,6 +40,9 @@ def _recovery(**overrides: Any) -> dict[str, Any]:
         contacts=[],
         **overrides,
     )
+    # A recovery artifact names its own verifier (H-50): none unless the test supplies one.
+    if "independent_verifier_id" not in overrides:
+        del payload["independent_verifier_id"]
     return payload
 
 
@@ -49,7 +53,7 @@ def test_recovery_artifact_without_a_verifier_is_refused(
     private, public = owner_key
     path = _write(tmp_path, private, _recovery())
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock())
+        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
     assert exc.value.reason == "authorization_malformed"
 
 
@@ -59,7 +63,7 @@ def test_recovery_artifact_supplies_the_verifier_it_names(
 ) -> None:
     private, public = owner_key
     path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-07"))
-    request = prepare_recovery(_settings(public), path, FixedClock())
+    request = prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
     assert request.verifier_id == "verifier-signed-07"
     assert request.email == "ada@wds-test.example"
 
@@ -98,7 +102,7 @@ def test_a_malformed_owner_key_is_a_refusal_not_a_traceback(
     path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-q1"))
     public.write_bytes(b"this is not a PEM public key")
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock())
+        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
     assert exc.value.reason == "owner_key_invalid"
 
 
@@ -129,3 +133,27 @@ def test_the_outbox_cli_refuses_production_with_a_capture_transport(
         "WEBDESK_OUTBOX_ENCRYPTION_KEY", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
     )
     assert outbox_cli.main([]) == 2
+
+
+def test_h74_a_recovery_artifact_without_a_signed_operator_is_refused(
+    tmp_path: Path,
+    owner_key: tuple[Any, Path],  # noqa: F811
+) -> None:
+    private, public = owner_key
+    payload = _recovery(independent_verifier_id="verifier-signed-h74")
+    del payload["deployment_operator_id"]
+    path = _write(tmp_path, private, payload)
+    with pytest.raises(InstallationError) as exc:
+        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
+    assert exc.value.reason == "authorization_malformed"
+
+
+def test_h74_the_recovery_cli_operator_must_match_the_signed_operator(
+    tmp_path: Path,
+    owner_key: tuple[Any, Path],  # noqa: F811
+) -> None:
+    private, public = owner_key
+    path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-h74"))
+    with pytest.raises(InstallationError) as exc:
+        prepare_recovery(_settings(public), path, FixedClock(), operator_id="op-other")
+    assert exc.value.reason == "operator_mismatch"

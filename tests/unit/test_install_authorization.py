@@ -25,6 +25,9 @@ from webdesk.cli.install import main
 from webdesk.config import Settings
 
 NOW = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+# H-74: the signed payload names the operator and the verifier, and the CLI values must match.
+OPERATOR = "op-1"
+VERIFIER = "verifier-1"
 
 
 class FixedClock:
@@ -57,6 +60,8 @@ def _payload(**overrides: Any) -> dict[str, Any]:
         "owner_identity_ref": "owner:wds-sign-off",
         "expires_at": (NOW + timedelta(hours=1)).isoformat(),
         "nonce": "n-001",
+        "deployment_operator_id": OPERATOR,
+        "independent_verifier_id": VERIFIER,
         "contacts": [
             {"email": "Ada@WDS-Test.example", "display_name": "Ada"},
             {"email": "grace@wds-test.example", "display_name": "Grace"},
@@ -71,6 +76,10 @@ def _write(tmp_path: Path, key: Ed25519PrivateKey, payload: dict[str, Any]) -> P
     path = tmp_path / "authorization.json"
     path.write_text(json.dumps({"payload": payload, "signature": signature}), encoding="utf-8")
     return path
+
+
+def _prepare(settings: Settings, path: Path) -> Any:
+    return prepare_install(settings, path, FixedClock(), operator_id=OPERATOR, verifier_id=VERIFIER)
 
 
 def _settings(public_key: Path, **overrides: Any) -> Settings:
@@ -98,7 +107,7 @@ def test_valid_authorization_prepares_two_normalized_contacts(
 ) -> None:
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
-    prepared = prepare_install(_settings(public), path, FixedClock())
+    prepared = _prepare(_settings(public), path)
     assert prepared.contacts == (
         ("ada@wds-test.example", "Ada"),
         ("grace@wds-test.example", "Grace"),
@@ -115,7 +124,7 @@ def test_tampered_payload_is_refused(
     document["payload"]["contacts"][1]["email"] = "mallory@wds-test.example"
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "signature_invalid"
 
 
@@ -126,7 +135,7 @@ def test_signature_from_another_key_is_refused(
     impostor = Ed25519PrivateKey.generate()
     path = _write(tmp_path, impostor, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "signature_invalid"
 
 
@@ -137,7 +146,7 @@ def test_expired_authorization_is_refused(
     stale = _payload(expires_at=(NOW - timedelta(minutes=1)).isoformat())
     path = _write(tmp_path, private, stale)
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "authorization_expired"
 
 
@@ -151,7 +160,7 @@ def test_identical_contacts_are_refused(
     ]
     path = _write(tmp_path, private, _payload(contacts=same))
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "contacts_not_distinct"
 
 
@@ -161,7 +170,7 @@ def test_exactly_two_contacts_are_required(
     private, public = owner_key
     path = _write(tmp_path, private, _payload(contacts=[{"email": "ada@wds-test.example"}]))
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "exactly_two_contacts_required"
 
 
@@ -177,16 +186,14 @@ def test_contact_outside_allowlist_is_refused(
     )
     path = _write(tmp_path, private, bad)
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public), path, FixedClock())
+        _prepare(_settings(public), path)
     assert exc.value.reason == "contact_refused:domain_not_allowed"
 
 
 def test_missing_owner_key_fails_closed_before_reading_anything(tmp_path: Path) -> None:
     path = tmp_path / "does-not-matter.json"
     with pytest.raises(InstallationError) as exc:
-        prepare_install(
-            _settings(tmp_path / "absent.pem", owner_public_key_path=None), path, FixedClock()
-        )
+        _prepare(_settings(tmp_path / "absent.pem", owner_public_key_path=None), path)
     assert exc.value.reason.startswith("configuration_incomplete")
     assert "WEBDESK_OWNER_PUBLIC_KEY_PATH" in exc.value.reason
 
@@ -197,7 +204,7 @@ def test_missing_allowlist_fails_closed(
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(_settings(public, email_domain_allowlist=None), path, FixedClock())
+        _prepare(_settings(public, email_domain_allowlist=None), path)
     assert "WEBDESK_EMAIL_DOMAIN_ALLOWLIST" in exc.value.reason
 
 
@@ -209,3 +216,63 @@ def test_cli_refuses_without_database_configuration(
     code = main(["--authorization", str(path), "--operator", "op-1", "--verifier", "v-1"])
     assert code == 2
     assert "WEBDESK_DATABASE_URL" in capsys.readouterr().err
+
+
+# --- H-74: the operator and the verifier are bound into the signed payload ---------------------
+
+
+@pytest.mark.parametrize("field", ["deployment_operator_id", "independent_verifier_id"])
+def test_h74_an_install_artifact_without_a_signed_identifier_is_refused(
+    tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path], field: str
+) -> None:
+    private, public = owner_key
+    payload = _payload()
+    del payload[field]
+    path = _write(tmp_path, private, payload)
+    with pytest.raises(InstallationError) as exc:
+        _prepare(_settings(public), path)
+    assert exc.value.reason == "authorization_malformed"
+
+
+def test_h74_the_cli_operator_must_match_the_signed_operator(
+    tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path]
+) -> None:
+    private, public = owner_key
+    path = _write(tmp_path, private, _payload())
+    with pytest.raises(InstallationError) as exc:
+        prepare_install(
+            _settings(public), path, FixedClock(), operator_id="op-other", verifier_id=VERIFIER
+        )
+    assert exc.value.reason == "operator_mismatch"
+
+
+def test_h74_the_cli_verifier_must_match_the_signed_verifier(
+    tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path]
+) -> None:
+    private, public = owner_key
+    path = _write(tmp_path, private, _payload())
+    with pytest.raises(InstallationError) as exc:
+        prepare_install(
+            _settings(public), path, FixedClock(), operator_id=OPERATOR, verifier_id="v-other"
+        )
+    assert exc.value.reason == "verifier_mismatch"
+
+
+# An EC public key on secp112r1, a curve the cryptography library does not support. Loading it
+# raises UnsupportedAlgorithm, which is neither a ValueError nor a TypeError.
+UNSUPPORTED_CURVE_PEM = (
+    b"-----BEGIN PUBLIC KEY-----\n"
+    b"MDIwEAYHKoZIzj0CAQYFK4EEAAYDHgAEAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==\n"
+    b"-----END PUBLIC KEY-----\n"
+)
+
+
+def test_h74_an_owner_key_of_an_unsupported_algorithm_is_owner_key_invalid(
+    tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path]
+) -> None:
+    private, public = owner_key
+    path = _write(tmp_path, private, _payload())
+    public.write_bytes(UNSUPPORTED_CURVE_PEM)
+    with pytest.raises(InstallationError) as exc:
+        _prepare(_settings(public), path)
+    assert exc.value.reason == "owner_key_invalid"

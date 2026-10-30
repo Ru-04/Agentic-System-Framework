@@ -315,3 +315,37 @@ def test_recovery_with_zero_active_administrators_is_refused_and_audited(conn: C
         )
     assert exc.value.reason == "zero_active_administrators"
     assert _audit(conn, "ceremony.recover.denied", "zero_active_administrators") == 1
+
+
+def test_h74_a_signed_authorization_cannot_start_a_second_ceremony(conn: Connection) -> None:
+    """H-74: a recovery that reuses an authorization digest is refused and audited before any row.
+
+    The unique digest index (migration 0046_p7_ceremony_digest_unique) backs the check.
+    """
+    _first, second = _admins(conn)
+    external_loss_of_access(conn, second)  # one active Administrator: recovery is otherwise open
+    conn.execute(text("RESET ROLE"))
+    used = str(
+        conn.execute(
+            text("SELECT signed_authorization_digest FROM setup_trust_ceremonies LIMIT 1")
+        ).scalar_one()
+    )
+    with pytest.raises(RecoveryError) as exc:
+        apply_recovery(
+            conn,
+            RecoveryRequest(
+                request_type="replacement",
+                email=_email(),
+                display_name="Replay",
+                owner_approval_ref="OWNER-REPLAY",
+                owner_identity_ref="owner:test",
+                verifier_id="verifier-recovery-test",
+                authorization_digest=used,
+            ),
+            operator_id="op-replay",
+            clock=SystemClock(),
+        )
+    assert (exc.value.status, exc.value.reason) == (409, "authorization_already_used")
+    assert _audit(conn, "ceremony.recover.denied", "authorization_already_used") == 1
+    ceremonies = conn.execute(text("SELECT count(*) FROM setup_trust_ceremonies")).scalar_one()
+    assert ceremonies == 1

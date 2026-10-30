@@ -49,7 +49,7 @@ def engine(committed_engine: Engine) -> Engine:
     return committed_engine
 
 
-def _recovery_artifact(tmp_path: Path, owner: Any, email: str) -> Path:
+def _recovery_artifact(tmp_path: Path, owner: Any, email: str, operator: str = "op-h50") -> Path:
     private, _ = owner
     payload = _payload(
         kind="recover",
@@ -57,6 +57,7 @@ def _recovery_artifact(tmp_path: Path, owner: Any, email: str) -> Path:
         contact={"email": email, "display_name": "Target"},
         contacts=[],
         independent_verifier_id="verifier-signed-h50",
+        deployment_operator_id=operator,  # H-74: the operator is bound into the signed payload
     )
     return _write(tmp_path, private, payload)
 
@@ -108,6 +109,34 @@ def test_h50_a_refused_appointment_leaves_no_initiated_ceremony_row(
         "AND error_class = 'appointment_target_ineligible'",
     )
     assert denied == 1
+
+
+def test_h74_a_recovery_with_another_operator_is_refused_and_audited(
+    engine: Engine,
+    committed_admins: tuple[uuid.UUID, uuid.UUID],
+    owner_key: tuple[Any, Path],  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    _, public = owner_key
+    path = _recovery_artifact(
+        tmp_path, owner_key, "nobody-here@wds-test.example", operator="op-signed"
+    )
+    with pytest.raises(RecoveryError) as exc:
+        run_recovery_audited(
+            engine,
+            _settings(public),
+            path,
+            operator_id="op-not-signed",
+            clock=FixedClock(),
+        )
+    assert (exc.value.status, exc.value.reason) == (422, "operator_mismatch")
+    denied = _count(
+        engine,
+        "SELECT count(*) FROM audit_events WHERE event_type = 'ceremony.recover.denied' "
+        "AND error_class = 'operator_mismatch' AND actor_id_or_service = 'op-not-signed'",
+    )
+    assert denied == 1
+    assert _count(engine, "SELECT count(*) FROM setup_trust_ceremonies WHERE kind = 'recover'") == 0
 
 
 # --- H-51: the sweep restores the caller's role --------------------------------------------

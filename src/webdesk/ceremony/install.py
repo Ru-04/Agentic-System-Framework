@@ -8,7 +8,8 @@ activation (T11). The ceremony is closed in the same transaction, so it cannot r
 failure rolls back the whole transaction.
 
 Authorization is an Ed25519 signature by the configured owner key over canonical JSON (sorted
-keys, no whitespace, UTF-8). No signing key is stored in this repository.
+keys, no whitespace, UTF-8). No signing key is stored in this repository. The signed payload names
+the deployment operator and the independent verifier (H-74). The CLI values must match them.
 
 Two steps keep the transaction testable: ``prepare_install`` verifies everything that needs no
 database, and ``apply_install`` runs the transaction on a caller-supplied connection.
@@ -25,7 +26,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from sqlalchemy import text
@@ -97,7 +98,8 @@ def load_signed_authorization(
 
     try:
         key = load_pem_public_key(owner_public_key_path.read_bytes())
-    except (OSError, ValueError, TypeError) as exc:
+    except (OSError, ValueError, TypeError, UnsupportedAlgorithm) as exc:
+        # H-74: a key the library cannot load, whatever the reason, is the audited refusal.
         raise InstallationError("owner_key_invalid") from exc
     if not isinstance(key, Ed25519PublicKey):
         raise ConfigurationError("owner public key must be Ed25519")
@@ -116,8 +118,30 @@ def load_signed_authorization(
     return payload, hashlib.sha256(body).hexdigest()
 
 
-def prepare_install(settings: Settings, authorization_path: Path, clock: Clock) -> PreparedInstall:
-    """Fail closed on configuration, then verify the authorization and the two contacts."""
+def signed_identifier(payload: dict[str, Any], field: str, supplied: str, mismatch: str) -> str:
+    """H-74: an identifier the owner signed. Missing is malformed; a different CLI value is
+    refused with ``mismatch``."""
+    signed = str(payload.get(field, "")).strip()
+    if not signed:
+        raise InstallationError("authorization_malformed")
+    if signed != supplied:
+        raise InstallationError(mismatch)
+    return signed
+
+
+def prepare_install(
+    settings: Settings,
+    authorization_path: Path,
+    clock: Clock,
+    *,
+    operator_id: str,
+    verifier_id: str,
+) -> PreparedInstall:
+    """Fail closed on configuration, then verify the authorization and the two contacts.
+
+    ``operator_id`` and ``verifier_id`` are the CLI values. Each must equal the value the owner
+    signed (``deployment_operator_id``, ``independent_verifier_id``).
+    """
     missing = list(settings.onboarding_capability().missing) + list(
         settings.ceremony_capability().missing
     )
@@ -139,6 +163,8 @@ def prepare_install(settings: Settings, authorization_path: Path, clock: Clock) 
     owner_identity = str(payload.get("owner_identity_ref", "")).strip()
     if not owner_ref or not owner_identity:
         raise InstallationError("authorization_malformed")
+    signed_identifier(payload, "deployment_operator_id", operator_id, "operator_mismatch")
+    signed_identifier(payload, "independent_verifier_id", verifier_id, "verifier_mismatch")
 
     normalized: list[tuple[str, str]] = []
     for contact in contacts:
@@ -322,7 +348,9 @@ def run_install(
     clock: Clock,
 ) -> InstallResult:
     """Verify, then run the one-time installation as a single all-or-nothing transaction."""
-    prepared = prepare_install(settings, authorization_path, clock)
+    prepared = prepare_install(
+        settings, authorization_path, clock, operator_id=operator_id, verifier_id=verifier_id
+    )
     with engine.begin() as conn:
         return apply_install(
             conn, prepared, operator_id=operator_id, verifier_id=verifier_id, clock=clock
