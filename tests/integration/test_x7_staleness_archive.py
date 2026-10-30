@@ -257,8 +257,8 @@ def committed_project(
     return {"ids": ids, "store": store, "url": committed_url, "engine": committed_engine}
 
 
-def _wait_for_lock_waiter(url: str, timeout: float = 15.0) -> None:
-    """Return once some session is blocked on a lock. Polls the catalogue, no fixed sleep."""
+def _wait_for_lock_waiter(url: str, waiter_pid: int, timeout: float = 15.0) -> None:
+    """Return once the given backend is blocked on a lock. Polls the catalogue, no fixed sleep."""
     monitor = create_engine(url.replace("postgresql://", "postgresql+psycopg://"))
     deadline = time.monotonic() + timeout
     try:
@@ -267,15 +267,16 @@ def _wait_for_lock_waiter(url: str, timeout: float = 15.0) -> None:
                 waiting = probe.execute(
                     text(
                         "SELECT count(*) FROM pg_stat_activity "
-                        "WHERE wait_event_type = 'Lock' AND datname = current_database()"
-                    )
+                        "WHERE pid = :pid AND wait_event_type = 'Lock'"
+                    ),
+                    {"pid": waiter_pid},
                 ).scalar_one()
             if int(waiting) >= 1:
                 return
             time.sleep(0.02)
     finally:
         monitor.dispose()
-    raise AssertionError("no session blocked on the project lock")
+    raise AssertionError(f"backend {waiter_pid} never blocked on the project lock")
 
 
 def _run_in_thread(
@@ -320,10 +321,11 @@ def test_h42_start_first_then_archive_is_refused_with_active_run(
         )
         assert run is not None
         archive_proof = prove(archive_conn, ids["admin"], "project.archive", project)
+        archive_pid = archive_conn.execute(text("SELECT pg_backend_pid()")).scalar_one()
         thread, outcome = _run_in_thread(
             projects.archive_project, archive_conn, archive_proof, project
         )
-        _wait_for_lock_waiter(url)
+        _wait_for_lock_waiter(url, int(archive_pid))
         start_tx.commit()
         thread.join(timeout=30)
         assert not thread.is_alive()
@@ -365,10 +367,11 @@ def test_h42_archive_first_then_start_is_refused_as_archived(
         projects.archive_project(archive_conn, archive_proof, project)
         start_proof = prove(start_conn, ids["analyst"], "run.start", project)
         expected = _revision(start_conn, project)
+        start_pid = start_conn.execute(text("SELECT pg_backend_pid()")).scalar_one()
         thread, outcome = _run_in_thread(
             runs.start_run, start_conn, start_proof, project, expected_project_revision=expected
         )
-        _wait_for_lock_waiter(url)
+        _wait_for_lock_waiter(url, int(start_pid))
         archive_tx.commit()
         thread.join(timeout=30)
         assert not thread.is_alive()
