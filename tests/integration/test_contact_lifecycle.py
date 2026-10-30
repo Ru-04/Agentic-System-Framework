@@ -340,6 +340,23 @@ def test_withdrawal_disables_the_pending_account_and_releases_the_contact(
         conn, prove(conn, creator, "contact.withdraw", user_id), user_id, "duplicate request", 1
     )
     assert withdrawal is not None
+    # H-73: the withdrawal names its audit event, which records that a reason was given and its
+    # length, never the free text. The reason itself stays in user_withdrawals.
+    conn.execute(text("RESET ROLE"))
+    recorded = conn.execute(
+        text(
+            """SELECT w.reason, w.audit_event_id, a.event_type, a.redacted_details
+               FROM user_withdrawals w JOIN audit_events a ON a.event_id = w.audit_event_id
+               WHERE w.withdrawal_id = :w"""
+        ),
+        {"w": withdrawal},
+    ).one()
+    assert recorded[0] == "duplicate request"
+    assert recorded[1] is not None
+    assert recorded[2] == "user.withdraw.succeeded"
+    assert recorded[3] == {"reason_given": True, "reason_length": len("duplicate request")}
+    assert "duplicate request" not in str(recorded[3])
+    _as_app(conn)
 
     row = conn.execute(
         text("SELECT status, normalized_email FROM users WHERE user_id = :u"), {"u": user_id}

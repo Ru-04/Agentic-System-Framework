@@ -458,6 +458,54 @@ def test_withdrawal_refused_once_contact_was_ever_approved(conn: Connection) -> 
         )
 
 
+def test_h73_a_withdrawal_without_an_audit_event_is_refused(conn: Connection) -> None:
+    admin, _second = two_admins(conn)
+    target = new_user(conn, status="pending_contact_approval")
+    conn.exec_driver_sql("RESET ROLE")
+    with pytest.raises(NotNullViolation):
+        x(
+            conn,
+            """INSERT INTO user_withdrawals (user_id, actor_user_id, reason,
+                   expected_user_revision, audit_event_id)
+               VALUES (%s, %s, 'duplicate request', 1, NULL)""",
+            (target, admin),
+        )
+
+
+def test_h73_the_not_null_migration_refuses_existing_null_rows(conn: Connection) -> None:
+    """The 0048 upgrade checks for NULL rows first and fails with a clear message (no back-fill)."""
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / "versions"
+        / "0048_p7_withdrawal_audit_notnull.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0048_p7", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    admin, _second = two_admins(conn)
+    target = new_user(conn, status="pending_contact_approval")
+    conn.exec_driver_sql("RESET ROLE")
+    # Rolled back with the test: the pre-0048 schema, holding one row without an audit event.
+    x(conn, "ALTER TABLE user_withdrawals ALTER COLUMN audit_event_id DROP NOT NULL")
+    x(
+        conn,
+        """INSERT INTO user_withdrawals (user_id, actor_user_id, reason,
+               expected_user_revision, audit_event_id)
+           VALUES (%s, %s, 'legacy row', 1, NULL)""",
+        (target, admin),
+    )
+    with pytest.raises(psycopg.errors.RaiseException) as exc:
+        x(conn, migration.UPGRADE_SQL)
+    assert "H-73" in str(exc.value)
+    assert "NULL audit_event_id" in str(exc.value)
+
+
 # --- EVAL-F11f / F11h: ceremony, bootstrap and appointments --------------------------------
 
 

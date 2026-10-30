@@ -406,7 +406,9 @@ def withdraw(
                 actor,
                 "user.withdraw.succeeded",
                 record_refs=[str(user_id)],
-                details={"reason": reason.strip()},
+                # H-73: the free-text reason stays in user_withdrawals; the audit records only
+                # that one was given and its length.
+                details={"reason_given": True, "reason_length": len(reason.strip())},
             )
             withdrawal_id = uuid.UUID(
                 str(
