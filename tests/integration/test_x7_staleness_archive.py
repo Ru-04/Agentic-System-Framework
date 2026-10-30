@@ -137,6 +137,17 @@ def test_h40_repeated_supersession_keeps_the_first_mark(
     assert marked[1] == "superseded"
 
 
+def test_h40_the_superseded_reason_survives_worker_intake(
+    conn: Connection, store: ContentStore
+) -> None:
+    ids = _setup(conn)
+    first = _ingest(conn, store, ids)
+    run = _start(conn, ids)
+    _supersede(conn, store, ids, first, b"second version\n")
+    as_worker(conn, jobs.process_one, conn, store, "worker-h40")
+    assert _stale(conn, run)[:2] == (True, "superseded")
+
+
 def test_h40_a_new_unrelated_source_does_not_mark_a_run_stale(
     conn: Connection, store: ContentStore
 ) -> None:
@@ -321,6 +332,14 @@ def test_h42_start_first_then_archive_is_refused_with_active_run(
         assert error.reason == "active_run_exists"
         # The refused archive keeps its durable denial audit.
         archive_tx.commit()
+        with committed_project["engine"].connect() as check:
+            denied = check.execute(
+                text(
+                    "SELECT count(*) FROM audit_events WHERE event_type = 'project.archive.denied' "
+                    "AND error_class = 'active_run_exists' AND outcome = 'denied'"
+                )
+            ).scalar_one()
+        assert int(denied) >= 1
     finally:
         for c in (archive_conn, start_conn):
             c.close()
