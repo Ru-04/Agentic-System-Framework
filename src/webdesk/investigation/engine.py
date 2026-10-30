@@ -115,6 +115,9 @@ class Capability:
     edition: Edition
     claim_kind: ClaimKind
     required_terms: tuple[str, ...]
+    # Each entry is a further set of terms that also satisfies the capability, all of them
+    # required together. A requirement matches when it contains required_terms or any entry here.
+    alternative_terms: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True)

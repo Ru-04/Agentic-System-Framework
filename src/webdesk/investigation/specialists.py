@@ -56,7 +56,13 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
     ),
     SpecialistId.BIGCOMMERCE: (
         Capability(
-            "product catalog read", "bigcommerce", NA, ClaimKind.FEATURE, ("product", "catalog")
+            "product catalog read",
+            "bigcommerce",
+            NA,
+            ClaimKind.FEATURE,
+            ("product", "catalog"),
+            # Single-product retrieval is the approved pilot scope (S4-PILOT-EVIDENCE-01).
+            alternative_terms=(("single product",),),
         ),
     ),
     SpecialistId.MAGENTO_ADOBE_COMMERCE: (
@@ -155,10 +161,15 @@ class Decision(StrEnum):
 def matched_capabilities(specialist: SpecialistId, task: str) -> tuple[Capability, ...]:
     """Capabilities whose every required term appears in the requirement text."""
     text = task.lower()
+
+    def satisfied(terms: tuple[str, ...]) -> bool:
+        return all(term_in_text(term, text) for term in terms)
+
     return tuple(
         capability
         for capability in CATALOG[specialist]
-        if all(term_in_text(term, text) for term in capability.required_terms)
+        if satisfied(capability.required_terms)
+        or any(satisfied(alternative) for alternative in capability.alternative_terms)
     )
 
 

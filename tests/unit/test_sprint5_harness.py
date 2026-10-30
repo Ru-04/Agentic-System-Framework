@@ -200,3 +200,23 @@ def test_the_v2_runner_result_is_eight_of_eleven_with_three_unresolved_mismatche
     report = evaluate(load_dataset(V2_DATASET, V2_MANIFEST), observe)
     mismatched = {r.scenario_id for r in report.results if not r.matched}
     assert mismatched == {"S5-005", "S5-006", "S5-007"}
+    by_id = {r.scenario_id: r for r in report.results}
+    # S5-006 now matches the capability; it stays a mismatch because no version is stated.
+    assert by_id["S5-006"].observed == "INVESTIGATE_WITH_UNKNOWNS"
+
+
+def test_a_single_product_requirement_matches_the_bigcommerce_capability() -> None:
+    from webdesk.investigation.specialists import matched_capabilities
+    from webdesk.specialists.catalog import SpecialistId
+
+    matched = matched_capabilities(
+        SpecialistId.BIGCOMMERCE, "Read a single product through the BigCommerce product page."
+    )
+    assert [c.name for c in matched] == ["product catalog read"]
+
+
+def test_order_data_does_not_match_the_bigcommerce_capability() -> None:
+    from webdesk.investigation.specialists import matched_capabilities
+    from webdesk.specialists.catalog import SpecialistId
+
+    assert matched_capabilities(SpecialistId.BIGCOMMERCE, "Read order data through the API") == ()
