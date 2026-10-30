@@ -36,7 +36,7 @@ from webdesk.intake.validation import UploadRefusal, validate_upload
 from webdesk.rbac.engine import ResourceRef, authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
-from webdesk.storage.content_store import ByteStoreError, ContentStore
+from webdesk.storage.content_store import ContentStore
 
 SOURCE_TYPES = frozenset(
     {
@@ -276,10 +276,9 @@ def _admit(
         _deny(conn, actor, "source.upload.refused", exc.reason, exc.status)
         raise  # unreachable; _deny raises IngestError
 
-    try:
-        storage_key = store.put(project, data)
-    except ByteStoreError as exc:
-        raise IngestError(422, exc.reason) from exc
+    # H-63: the admission is recorded first and the bytes are written after it. A refusal therefore
+    # leaves no file behind. A failed write raises a non-domain error, so the admission rolls back.
+    storage_key = ContentStore.key_for(data)
 
     try:
         row = consume_row(
@@ -312,6 +311,8 @@ def _admit(
         refused = "source_limit_reached" if "limit" in original else "database_refused"
         _deny(conn, actor, "source.upload.refused", refused, 409)
 
+    # H-63: write the bytes only now that the admission row exists (see above).
+    store.put(project, data)
     source_id = uuid.UUID(str(row[0]))
     version_id = uuid.UUID(str(row[1]))
     version = int(row[2])

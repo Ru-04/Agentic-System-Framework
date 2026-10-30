@@ -41,12 +41,17 @@ class ContentStore:
             raise ByteStoreError("storage_key_invalid")
         return self._root / str(project_id) / key
 
+    @staticmethod
+    def key_for(data: bytes) -> str:
+        """The content key of ``data``: its SHA-256 digest, known before any byte is written."""
+        return hashlib.sha256(data).hexdigest()
+
     def put(self, project_id: uuid.UUID, data: bytes) -> str:
         if not data:
             raise ByteStoreError("empty_content")
         if len(data) > MAX_BYTES:
             raise ByteStoreError("too_large")
-        key = hashlib.sha256(data).hexdigest()
+        key = self.key_for(data)
         target = self._path(project_id, key)
         if target.exists():
             if hashlib.sha256(target.read_bytes()).hexdigest() != key:

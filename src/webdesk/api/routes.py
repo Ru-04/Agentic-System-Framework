@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
-from starlette.datastructures import UploadFile
+from starlette.datastructures import FormData, UploadFile
+from starlette.types import Message
 
 from webdesk.api.errors import DOMAIN_ERRORS
 from webdesk.api.transactions import run_in_transaction
@@ -33,22 +34,25 @@ from webdesk.storage.content_store import ContentStore
 router = APIRouter()
 
 
-SERVER_OWNED_FIELDS = frozenset(
+# H-61: only these multipart fields are accepted. Anything else, including every server-owned
+# column, is refused before any work is done.
+ACCEPTED_UPLOAD_FIELDS = frozenset(
     {
-        "uploaded_by_user_id",
-        "ingested_by_user_id",
-        "storage_key",
-        "content_hash",
-        "scan_status",
-        "parse_status",
-        "revision",
-        "source_id",
-        "source_version_id",
-        "version",
-        "file_size_bytes",
-        "mime_type",
+        "file",
+        "title",
+        "source_type",
+        "source_trust",
+        "access_classification",
+        "expected_project_revision",
+        "supersedes_source_id",
+        "expected_source_revision",
+        "idempotency_key",
     }
 )
+
+# H-60: the body limit is the approved 20 MiB file limit plus room for multipart framing.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 
 
 class StrictBody(BaseModel):
@@ -125,12 +129,40 @@ def _uuid(value: str) -> uuid.UUID:
         raise IngestError(422, "identifier_invalid") from exc
 
 
+async def _bounded_form(request: Request) -> FormData:
+    """Read the request body under a size limit, then parse the multipart form (H-60).
+
+    The limit is enforced before parsing, so an oversized request is refused with 413 whatever its
+    revision, authorization or fields.
+    """
+    limit = MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise IngestError(413, "too_large")
+    chunks: list[bytes] = []
+    received = 0
+    async for chunk in request.stream():
+        received += len(chunk)
+        if received > limit:
+            raise IngestError(413, "too_large")
+        chunks.append(chunk)
+    body = b"".join(chunks)
+
+    async def replay() -> Message:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return await Request(request.scope, replay).form()
+
+
 @router.post("/projects/{project_id}/sources")
 async def upload_source(project_id: str, request: Request, token: Token) -> dict[str, Any]:
-    form = await request.form()
-    rejected = sorted(key for key in form if key in SERVER_OWNED_FIELDS)
+    form = await _bounded_form(request)
+    rejected = sorted(key for key in form if key not in ACCEPTED_UPLOAD_FIELDS)
     if rejected:
         raise IngestError(422, "server_field_rejected")
+    if str(form.get("source_trust", "")) == "approved_reference":
+        # H-66: approved trust is never set by an uploader.
+        raise IngestError(422, "trust_not_permitted")
     upload = form.get("file")
     if not isinstance(upload, UploadFile):
         raise IngestError(422, "file_required")
