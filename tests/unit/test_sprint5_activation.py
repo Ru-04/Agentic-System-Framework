@@ -221,3 +221,101 @@ def test_an_api_specification_block_can_carry_a_passage() -> None:
     )
     assert "catalog/products/1" in outcome.pages[0].text
     assert "Endpoint" not in outcome.pages[0].text
+
+
+# --- Sprint 5 Decision 4: rendered examples count only when they are in the page's own markup -----
+
+
+def _substantive(html: str) -> str:
+    from webdesk.investigation.retrieval import _substantive_text
+
+    return _substantive_text(html)
+
+
+def test_a_rendered_code_example_in_a_side_panel_is_kept() -> None:
+    html = (
+        '<html><body><aside><div><div data-language="bash">'
+        "<span>curl</span> <span>https://api.bigcommerce.com/stores/store_hash/v3/catalog/products/1</span>"
+        "</div></div></aside></body></html>"
+    )
+    assert "catalog/products/1" in _substantive(html)
+
+
+def test_prose_in_a_side_panel_is_not_kept() -> None:
+    html = "<html><body><aside><p>Navigation label text for the sidebar.</p></aside></body></html>"
+    assert _substantive(html) == ""
+
+
+def test_a_script_payload_is_never_a_passage() -> None:
+    html = (
+        "<html><body><script>"
+        'var d = {"path": "/catalog/products/1", "note": "single product read example text here"};'
+        "</script></body></html>"
+    )
+    assert _substantive(html) == ""
+
+
+def test_a_heading_inside_a_code_example_is_not_kept() -> None:
+    html = (
+        '<html><body><div data-language="bash"><h2>Heading</h2>'
+        "<span>GET /v3/catalog/products</span></div></body></html>"
+    )
+    text = _substantive(html)
+    assert "Heading" not in text
+    assert "GET /v3/catalog/products" in text
+
+
+# --- WDS decision: Standalone and Middleware are technology-neutral and project-driven ----------
+
+
+def test_a_project_named_stack_is_routed_as_a_technology_claim_not_a_clarification() -> None:
+    from webdesk.investigation.specialists import Decision, decide
+    from webdesk.specialists.catalog import SpecialistId
+
+    decision, reason = decide(
+        SpecialistId.STANDALONE_APPLICATIONS,
+        "Build a Node.js application with an API and PostgreSQL.",
+        requested_version=None,
+        operator_confirmed=True,
+    )
+    assert decision is Decision.UNSUPPORTED_SOURCE
+    assert "selection is project-driven" in reason
+
+
+def test_a_recognised_middleware_requirement_is_investigated_only_if_a_source_is_active() -> None:
+    from webdesk.investigation.specialists import Decision, decide
+    from webdesk.specialists.catalog import SpecialistId
+
+    decision, _ = decide(
+        SpecialistId.MIDDLEWARE_APPLICATIONS,
+        "Synchronise BigCommerce orders to the ERP with webhook retry.",
+        requested_version=None,
+        operator_confirmed=True,
+    )
+    # The decision is the requirement rule. The runner and the investigation path then find no
+    # active middleware source, so the evidence outcome is UNSUPPORTED_SOURCE.
+    assert decision is Decision.INVESTIGATE_WITH_UNKNOWNS
+
+
+def test_the_middleware_path_asks_for_missing_context_without_changing_the_outcome() -> None:
+    from webdesk.investigation.specialists import InvestigationProvider
+    from webdesk.specialists.catalog import SpecialistId
+    from webdesk.specialists.contract import SpecialistInput
+
+    provider = InvestigationProvider(
+        SpecialistId.MIDDLEWARE_APPLICATIONS, pages=(), requested_version=None
+    )
+    request = SpecialistInput.model_validate(
+        {
+            "contract_version": "1.0.0",
+            "request_id": "req-1",
+            "workspace_id": "ws-1",
+            "specialist_id": "middleware_applications",
+            "task": "Deliver webhooks with retry on failure.",
+            "requirement_ids": ["REQ-1"],
+        }
+    )
+    response = provider.run(request)
+    unknowns = " ".join(response["unknowns"])  # type: ignore[index]
+    assert "integration context is missing" in unknowns
+    assert "retry" in unknowns and "recognised" in unknowns

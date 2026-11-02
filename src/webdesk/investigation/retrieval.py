@@ -220,39 +220,68 @@ _MIN_PROSE_WORDS: Final = 4
 _SPECIFICATION_TAGS: Final[frozenset[str]] = frozenset({"pre", "code"})
 
 
+# Renderers mark code examples with these attributes (for example a highlighted curl sample in a
+# documentation page built from divs). Such a block is a rendered documentation example.
+_CODE_BLOCK_ATTRIBUTES: Final[frozenset[str]] = frozenset(
+    {"data-language", "data-code-highlighted"}
+)
+_VOID_TAGS: Final[frozenset[str]] = frozenset(
+    {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "wbr"}
+)
+
+
 class _SubstantiveExtractor(HTMLParser):
-    """Collects one passage per outermost substantive block, and nothing else."""
+    """Collects one passage per outermost substantive block, and nothing else.
+
+    Each open element is tracked, so the end of a block is the end of its own element. Text inside
+    a non-body element (heading, navigation, script) never counts, even inside a substantive block.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self._skip = 0
-        self._depth = 0
+        self._stack: list[str] = []
+        self._block_depth: int | None = None
         self._specification = False
         self._buffer: list[str] = []
         self.parts: list[str] = []
 
+    def _skipping(self) -> bool:
+        # An aside is a side panel. It can hold prose chrome, so prose inside it is skipped. A code
+        # example inside it is a documented example, so it is kept.
+        skipped = any(tag in _NON_BODY_TAGS and tag != "aside" for tag in self._stack)
+        if self._specification:
+            return skipped
+        return skipped or "aside" in self._stack
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in _NON_BODY_TAGS:
-            self._skip += 1
-        elif tag in _SUBSTANTIVE_TAGS:
-            if self._depth == 0:
-                self._buffer = []
-                self._specification = False
-            self._depth += 1
-            if tag in _SPECIFICATION_TAGS:
-                self._specification = True
+        if tag in _VOID_TAGS:
+            return
+        code_block = tag in _SPECIFICATION_TAGS or any(
+            name in _CODE_BLOCK_ATTRIBUTES for name, _ in attrs
+        )
+        substantive = code_block or tag in _SUBSTANTIVE_TAGS
+        if substantive and self._block_depth is None:
+            self._block_depth = len(self._stack)
+            self._buffer = []
+            self._specification = False
+        if code_block and self._block_depth is not None:
+            self._specification = True
+        self._stack.append(tag)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in _NON_BODY_TAGS and self._skip:
-            self._skip -= 1
-        elif tag in _SUBSTANTIVE_TAGS and self._depth:
-            self._depth -= 1
-            if self._depth == 0:
+        if tag in _VOID_TAGS or tag not in self._stack:
+            return
+        while self._stack:
+            name = self._stack.pop()
+            if self._block_depth is not None and len(self._stack) == self._block_depth:
                 self._flush()
+                self._block_depth = None
+            if name == tag:
+                return
 
     def handle_data(self, data: str) -> None:
         text = data.strip()
-        if text and self._depth and not self._skip:
+        if text and self._block_depth is not None and not self._skipping():
             self._buffer.append(text)
 
     def _flush(self) -> None:

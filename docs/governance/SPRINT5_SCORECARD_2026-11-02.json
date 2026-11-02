@@ -48,7 +48,7 @@
       "dimension": "clarification behaviour",
       "metric": "match rate, CLARIFY expected",
       "rule": "min 0.95",
-      "scenarios": 8,
+      "scenarios": 10,
       "value": 1.0,
       "verdict": "MET"
     },
@@ -67,8 +67,8 @@
       "verdict": "THRESHOLD PENDING"
     }
   ],
-  "dataset_id": "sprint5-scenarios-v6-2026-11-02",
-  "dataset_sha256": "6ccdb9ad9d7b85a20959501216a0026c6aa780913a8187ad119c72b240754a57",
+  "dataset_id": "sprint5-scenarios-v7-2026-11-02",
+  "dataset_sha256": "a94ce0beeab857ca2bb2bbbac8f4d88c7e97c4fb685c4ef604602212abe9af48",
   "dimensions": [
     {
       "basis": "measured only through CLARIFY and capability matching",
@@ -164,12 +164,13 @@
     "middleware_applications": {
       "authorization_failures": 0,
       "dimensions_covered": {
-        "unknown and unsupported outcomes": 3
+        "clarification behaviour": 1,
+        "unknown and unsupported outcomes": 5
       },
       "failure_categories": {},
-      "matched": 3,
+      "matched": 6,
       "mismatched": [],
-      "scenarios": 3,
+      "scenarios": 6,
       "uncited_support": 0
     },
     "shift4shop": {
@@ -199,13 +200,13 @@
     "standalone_applications": {
       "authorization_failures": 0,
       "dimensions_covered": {
-        "clarification behaviour": 1,
-        "unknown and unsupported outcomes": 2
+        "clarification behaviour": 2,
+        "unknown and unsupported outcomes": 4
       },
       "failure_categories": {},
-      "matched": 3,
+      "matched": 6,
       "mismatched": [],
-      "scenarios": 3,
+      "scenarios": 6,
       "uncited_support": 0
     },
     "wordpress_woocommerce": {
@@ -224,9 +225,9 @@
     }
   },
   "totals": {
-    "matched": 30,
+    "matched": 36,
     "repeatable": true,
-    "scenarios": 30
+    "scenarios": 36
   },
   "verdicts": {
     "bigcommerce.false_positive_count": "THRESHOLD PENDING",

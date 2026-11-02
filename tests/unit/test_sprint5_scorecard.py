@@ -16,8 +16,8 @@ from webdesk.evaluation.scorecard import (
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "src" / "webdesk" / "evaluation" / "data"
-V4_DATASET = DATA / "sprint5_scenarios_v6.json"
-V4_MANIFEST = DATA / "sprint5_scenarios_v6.manifest.json"
+V4_DATASET = DATA / "sprint5_scenarios_v7.json"
+V4_MANIFEST = DATA / "sprint5_scenarios_v7.manifest.json"
 SHEET = ROOT / "docs" / "evaluation" / "HUMAN_REVIEW_SHEET_SPRINT2.md"
 COMMITTED = ROOT / "docs" / "governance" / "SPRINT5_SCORECARD_2026-11-02.json"
 

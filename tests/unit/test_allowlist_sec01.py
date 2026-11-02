@@ -83,8 +83,13 @@ def test_redirect_target_host_that_is_not_listed_is_refused() -> None:
     assert not BIGCOMMERCE_DOCS.permits("https://example.com/developer/docs/")
 
 
-def test_approved_bigcommerce_prefix_is_permitted() -> None:
+def test_bigcommerce_permits_only_the_exact_product_page() -> None:
+    # Narrowed to the pilot's exact page (B1 and S4-PILOT-EVIDENCE-01). The /developer/docs subtree
+    # listed in sources.json is not activated.
     assert BIGCOMMERCE_DOCS.permits(
+        "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product"
+    )
+    assert not BIGCOMMERCE_DOCS.permits(
         "https://docs.bigcommerce.com/developer/docs/overview/quick-start"
     )
 

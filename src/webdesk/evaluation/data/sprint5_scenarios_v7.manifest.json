@@ -1,0 +1,41 @@
+{
+  "dataset_id": "sprint5-scenarios-v7-2026-11-02",
+  "sha256": "a94ce0beeab857ca2bb2bbbac8f4d88c7e97c4fb685c4ef604602212abe9af48",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v6-2026-11-02",
+    "file": "sprint5_scenarios_v6.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-031",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    },
+    {
+      "scenario_id": "S5-032",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    },
+    {
+      "scenario_id": "S5-033",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    },
+    {
+      "scenario_id": "S5-034",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    },
+    {
+      "scenario_id": "S5-035",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    },
+    {
+      "scenario_id": "S5-036",
+      "change": "added",
+      "reason": "Representative technology-neutral scenario (WDS decision, Standalone and Middleware technology policy, 2 Nov 2026). Expected outcome from the policy and the specification, not from the runner."
+    }
+  ],
+  "note": "Frozen manifest. Adds representative project-driven scenarios. No earlier expectation changed. Not approved as acceptance criteria."
+}

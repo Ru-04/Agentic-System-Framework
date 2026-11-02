@@ -27,12 +27,15 @@ WOOCOMMERCE_DOCS: Final[VendorAllowlist] = VendorAllowlist(
     scoped=(ScopedHost("developer.woocommerce.com", ("/docs", "/guides")),),
 )
 
+# B1 and S4-PILOT-EVIDENCE-01: one exact single-product page. The pilot names only this page.
+# sources.json also records /developer/docs/* as approved (B1). That subtree is NOT activated: the
+# activation scope is the exact page, and the subtree conflict is flagged for WDS (Sprint 5).
 BIGCOMMERCE_DOCS: Final[VendorAllowlist] = VendorAllowlist(
     hosts=frozenset(),
     scoped=(
         ScopedHost(
             "docs.bigcommerce.com",
-            ("/developer/docs",),
+            (),
             exact_paths=("/developer/api-reference/rest/admin/catalog/products/get-product",),
         ),
     ),

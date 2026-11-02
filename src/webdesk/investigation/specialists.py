@@ -157,6 +157,28 @@ UNAPPROVED_CAPABILITIES: Final[dict[SpecialistId, tuple[tuple[str, ...], ...]]] 
     SpecialistId.BIGCOMMERCE: (("order data",),),
 }
 
+# WDS decision (Sprint 5, Decision 1): Standalone and Middleware are technology-neutral and
+# project-driven. These names are detected only, so that a project's stated technology is routed as
+# a technology claim with no approved source. They are not a list of permitted or required products.
+REPRESENTATIVE_TECHNOLOGY_TERMS: Final[tuple[str, ...]] = (
+    "node.js",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "kafka",
+    "rabbitmq",
+    "django",
+    "rails",
+    "spring",
+    "react",
+    "python",
+    "java",
+)
+TECHNOLOGY_NEUTRAL: Final[frozenset[SpecialistId]] = frozenset(
+    {SpecialistId.STANDALONE_APPLICATIONS, SpecialistId.MIDDLEWARE_APPLICATIONS}
+)
+
 # A version is stated when the requirement names one: "9.4", "2.4.7" or "version v3".
 _STATED_VERSION: Final = re.compile(r"\b(?:version\s+v?\d+(?:\.\d+)*|v?\d+(?:\.\d+)+)\b", re.I)
 
@@ -252,6 +274,13 @@ def decide(
             "followed); no investigation was run"
         )
     if not matched_capabilities(specialist, task):
+        if specialist in TECHNOLOGY_NEUTRAL and any(
+            term_in_text(term, task) for term in REPRESENTATIVE_TECHNOLOGY_TERMS
+        ):
+            return Decision.UNSUPPORTED_SOURCE, (
+                "the project names a technology; no technology source is approved, and the "
+                "selection is project-driven; no investigation was run"
+            )
         if _names(UNAPPROVED_CAPABILITIES.get(specialist, ()), task):
             return Decision.UNSUPPORTED_SOURCE, (
                 "the requirement names a capability with no approved source; no investigation "

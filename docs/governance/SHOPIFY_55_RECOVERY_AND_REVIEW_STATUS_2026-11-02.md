@@ -56,3 +56,12 @@ The machine-readable inventory without passage text is `docs/evaluation/SHOPIFY_
 4. **If the dataset cannot be used**, the replacement procedure needs WDS approval. The replacement must draw pairs from authorized source text, freeze them under a manifest, and record provenance per pair. I have not proposed a replacement, because that needs a sourcing decision.
 
 Nothing in this record is a label, a PG review or an approval.
+
+## 7. Reading document prepared (2 November 2026, second cycle)
+
+- Reading document for AS: `scratchpad/review_package_v2/READING_DOCUMENT_AS.md` (restricted; outside the repository), with `reviewer_labels_TO_FILL.csv`, `README.txt` and `MANIFEST.sha256` in the same folder. Dataset identifier used: `shopify-55-review-v2-2026-11-02`.
+- The reading document holds the 55 pairs (requirement, source ID, passage), the source table with URLs, character counts and SHA-256 prefixes, and the historical-provenance note. It does not hold the answer key, the agent labels or the `kind` field.
+- Source IDs used: 14 of the 16 corpus pages (`shopify-doc-07` and `shopify-doc-15` are not used by any pair).
+- Blind separation check: no agent-label reason appears in the reading document, and no key field appears.
+- The reading document is ready. It has **not** been sent to AS: the approved channel is not yet named by WDS.
+- Digests of the three files: listed in the package's `MANIFEST.sha256` (restricted copy). The inventory CSV in the repository carries per-pair passage digests, which AS can use to confirm a copy.

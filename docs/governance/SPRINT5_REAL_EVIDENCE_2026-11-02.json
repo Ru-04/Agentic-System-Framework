@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-11-02T08:30:29.372344+00:00",
+  "run_at": "2026-11-02T09:00:17.227564+00:00",
   "scope": "read-only retrieval of exact approved pages; redirects not followed",
   "results": [
     {
@@ -10,7 +10,7 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
+          "retrieved_at": "2026-11-02T09:00:17.227564+00:00"
         }
       ],
       "title": "Products API | WooCommerce developer docs",
@@ -35,20 +35,24 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
+          "retrieved_at": "2026-11-02T09:00:17.227564+00:00"
         }
       ],
       "title": "Get Product | BigCommerce Docs",
       "final_url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
-      "content_sha256": "3c4fc37bc63284662c72380134b07f2d441f5f40b8cbba5a771246f5cd23fa03",
+      "content_sha256": "3fbad4031d0c7bc1d2741b85aa8b151ddc0f041c79074621e0e3aed78c10247c",
       "capability": "product catalog read",
-      "outcome": "unknown_support",
-      "citations": [],
-      "passage": null,
-      "passage_digest": null,
-      "unknowns": [
-        "no approved page in the set states this capability for the requested version"
+      "outcome": "verified_support",
+      "citations": [
+        {
+          "url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
+          "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
+          "version": "v3"
+        }
       ],
+      "passage": "https://api.bigcommerce.com/stores/store_hash/v3/catalog/products/1",
+      "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
+      "unknowns": [],
       "refusals": []
     },
     {
@@ -59,7 +63,7 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
+          "retrieved_at": "2026-11-02T09:00:17.227564+00:00"
         }
       ],
       "title": "REST API Overview",
@@ -84,7 +88,7 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
+          "retrieved_at": "2026-11-02T09:00:17.227564+00:00"
         }
       ],
       "title": "GraphQL overview",
@@ -109,7 +113,7 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
+          "retrieved_at": "2026-11-02T09:00:17.227564+00:00"
         }
       ],
       "title": "Magento Open Source release notes | Adobe Commerce",
