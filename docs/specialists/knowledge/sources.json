@@ -70,8 +70,8 @@
       "domains": [
         "docs.bigcommerce.com"
       ],
-      "paths": "/developer/docs/* and the exact page /developer/api-reference/rest/admin/catalog/products/get-product only",
-      "approval_reference": "B1 (26 Oct 2026); SOURCE-01 (27 Oct 2026)",
+      "paths": "Exact page only: /developer/api-reference/rest/admin/catalog/products/get-product. The /developer/docs subtree is not activated (WDS, 2 Nov 2026: exact, capability-relevant paths only).",
+      "approval_reference": "B1 (26 Oct 2026); S4-PILOT-EVIDENCE-01; WDS restricted-source policy for BigCommerce (2 Nov 2026)",
       "ownership_status": "PUBLISHER-CONTROLLED (browser check); OWNER STATEMENT NOT FOUND",
       "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
