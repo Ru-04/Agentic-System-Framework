@@ -140,14 +140,12 @@ def record_worker_event(
         ).scalar_one()
     else:
         params["correlation"] = str(correlation_id)
-        params.pop("project")
-        # The 0052 correlated function has no project argument. The project of a correlated
-        # event is reconciled by a later integration migration.
+        # Migration 0056: the correlated audit also carries the project (G-7 with H-70).
         row = conn.execute(
             text(
                 """SELECT webdesk_guard.fn_worker_record_audit_correlated('system', :actor,
                        :event, :outcome, :error, CAST(:refs AS jsonb), CAST(:details AS jsonb),
-                       CAST(:correlation AS uuid))"""
+                       CAST(:correlation AS uuid), CAST(:project AS uuid))"""
             ),
             params,
         ).scalar_one()

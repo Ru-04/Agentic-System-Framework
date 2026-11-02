@@ -194,7 +194,7 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
 
     Their runs fail with ``system_failure``.
 
-    One transaction. Each affected job and run is audited."""
+    One transaction. Each affected job and run is audited, with the run's project (H-70)."""
     reaped: list[Reaped] = []
     with engine.begin() as conn:
         _as_worker(conn)
@@ -209,6 +209,15 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
                 run_state=str(run_state),
             )
             reaped.append(item)
+            # H-70: the reaper's run audits name the run's project (the worker may read runs).
+            project = uuid.UUID(
+                str(
+                    conn.execute(
+                        text("SELECT project_id FROM workflow_runs WHERE run_id = :r"),
+                        {"r": item.run_id},
+                    ).scalar_one()
+                )
+            )
             record_worker_event(
                 conn,
                 actor_id=owner,
@@ -220,6 +229,7 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
                     "attempts": item.attempts,
                     "correlation_id": f"{item.run_id}/{item.job_id}/{item.attempts}",
                 },
+                project_id=project,
                 correlation_id=correlation_uuid(item.run_id, item.job_id, item.attempts),
             )
             if item.run_state in ("intake_pending", "parsing"):
@@ -231,6 +241,7 @@ def reap_expired(engine: Engine, owner: str, max_attempts: int = jobs.MAX_ATTEMP
                     error_class="system_failure",
                     record_refs=[str(item.run_id)],
                     details={"correlation_id": f"{item.run_id}/{item.job_id}/{item.attempts}"},
+                    project_id=project,
                     correlation_id=correlation_uuid(item.run_id, item.job_id, item.attempts),
                 )
     return reaped
