@@ -33,6 +33,7 @@ timestamp is recorded here.
 | 2 | "Treat as attachment" | H-64: a part with a Content-Type `name=` parameter is an attachment, never the body | `9628f4d`: Phase 4 EML parser |
 | 3 | "Keep approval_refused" | A losing create approval keeps 409 `approval_refused`; no behaviour change | `baa0b49` unchanged; `fc53073` pins the lost-race outcome of `reject_create` and `cancel_change` |
 | 4 | "Rollback stops at merge" | Supported rollback runs from head down to the integration merge revisions; downgrading a single phase branch below them is unsupported | `db7d6f1`: the Phase 3 cycle test covers only the supported range. See "Integrated rollback boundary" |
+| 5 | "Report as attachment" | QA F-1: a multipart part carrying a Content-Type `name=` (nested, or the message itself) is one unprocessed attachment and its children are not walked | `5cfba55`, `25e22d3` (typing), `6c458c8` (top-level case; size rule limited to named multipart parts). Independent delta reviews: 25e22d3 DELTA FAILED (D-F1, D-F2); 6c458c8 DELTA VERIFIED |
 
 ## Integrated rollback boundary (ruling 4)
 
@@ -179,7 +180,11 @@ Code HEAD `db7d6f1`. This record is the only later commit.
   frozen migrations; `mypy --strict` clean; single head 0059; supported rollback range verified on 16 scratch
   databases; no PUBLIC EXECUTE on any of 88 guard functions. Report: `docs/FOUNDATION_INTEGRATION_QA_REPORT_32c98f6.md`.
 - Verdict: **QA PASSED — INTEGRATION CANDIDATE TECHNICALLY VERIFIED** (technical assessment, not acceptance).
-- Open: QA F-1 (Medium), a non-leaf multipart part with `name=` is neither the body nor reported as an attachment;
-  needs a WDS clarification of ruling 2. F-2 to F-9 Low or Informational.
+- QA F-1 (Medium) closed under ruling 5 ("Report as attachment", WDS in chat, 2 November 2026). Delta reviews by the
+  same reviewer: 25e22d3 DELTA FAILED (D-F1 top-level case, D-F2 size change too broad); remediated in 6c458c8,
+  **DELTA VERIFIED — 6c458c8 TECHNICALLY VERIFIED** (full suite 1031 passed, exit 0, on the QA cluster).
+- Current integration code HEAD: 6c458c8. Open: D-F3 (Low), a named `message/rfc822` part reports its serialized size
+  (Python `is_multipart()` is true for it); size metadata only, read by nothing in `src`. D-I1 (Informational), a Phase 3
+  test-harness reader-thread race warning. F-2 to F-9 Low or Informational.
 - Promotion of this candidate requires recorded WDS acceptance of Phases 2, 3, 4 and 6 (not recorded in the
   repository). Production readiness: **NOT VERIFIED**; see `docs/FOUNDATION_PRODUCTION_READINESS_ASSESSMENT.md`.
