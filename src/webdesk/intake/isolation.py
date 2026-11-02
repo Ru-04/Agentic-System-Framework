@@ -12,10 +12,13 @@ reaches the child, so a parser holds no database privilege (H-32).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -55,21 +58,80 @@ def _limit_memory() -> None:  # pragma: no cover - runs in the child on POSIX on
     resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
 
 
-def _run_child(command: list[str], data: bytes) -> subprocess.CompletedProcess[bytes]:
-    options: dict[str, Any] = {
-        "input": data,
-        "capture_output": True,
-        "timeout": limits.PARSER_TIMEOUT_SECONDS,
-        "env": child_environment(),
-        "cwd": _src_root(),
-        "check": False,
-    }
+_READ_CHUNK = 64 * 1024
+
+
+def _spawn_options() -> dict[str, Any]:
     if sys.platform == "win32":
         # No console window for the child. The process timeout is the bound on Windows (H-DEC-4).
-        return subprocess.run(  # noqa: S603 - fixed argv, no shell
-            command, creationflags=subprocess.CREATE_NO_WINDOW, **options
-        )
-    return subprocess.run(command, preexec_fn=_limit_memory, **options)  # noqa: S603
+        return {"creationflags": subprocess.CREATE_NO_WINDOW}
+    return {"preexec_fn": _limit_memory}
+
+
+def _run_child(command: list[str], data: bytes) -> tuple[int, bytes]:
+    """Run one child with ``data`` on stdin. Return its exit code and its stdout.
+
+    Stdout is read while the child runs and never holds more than ``PARSER_OUTPUT_BYTES + 1``
+    bytes (F-6). Past that the child is killed and ``ParserFailure(PARSER_OUTPUT_LIMIT)`` is raised,
+    so the parent does not buffer an oversized output before it refuses it. The whole run is bounded
+    by ``PARSER_TIMEOUT_SECONDS``: a child over it is killed and reaped, and
+    ``subprocess.TimeoutExpired`` is raised.
+    """
+    cap = limits.PARSER_OUTPUT_BYTES
+    process = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=child_environment(),
+        cwd=_src_root(),
+        **_spawn_options(),
+    )
+    assert process.stdin is not None and process.stdout is not None
+    stdin, stdout = process.stdin, process.stdout
+    output = bytearray()
+    overflow = threading.Event()
+
+    def feed() -> None:
+        try:
+            stdin.write(data)
+        except OSError:
+            pass  # the child exited before it read all of its input; its exit status decides
+        finally:
+            with contextlib.suppress(OSError):
+                stdin.close()
+
+    def drain() -> None:
+        while True:
+            chunk = stdout.read1(min(_READ_CHUNK, cap + 1 - len(output)))
+            if not chunk:
+                return
+            output.extend(chunk)
+            if len(output) > cap:
+                overflow.set()
+                process.kill()
+                return
+
+    feeder = threading.Thread(target=feed, daemon=True)
+    reader = threading.Thread(target=drain, daemon=True)
+    deadline = time.monotonic() + limits.PARSER_TIMEOUT_SECONDS
+    try:
+        feeder.start()
+        reader.start()
+        reader.join(limits.PARSER_TIMEOUT_SECONDS)
+        if reader.is_alive():
+            raise subprocess.TimeoutExpired(command, limits.PARSER_TIMEOUT_SECONDS)
+        if overflow.is_set():
+            raise ParserFailure(limits.PARSER_OUTPUT_LIMIT)
+        returncode = process.wait(timeout=max(0.0, deadline - time.monotonic()))
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        feeder.join(timeout=5)
+        reader.join(timeout=5)
+        stdout.close()
+    return returncode, bytes(output)
 
 
 def run_isolated(mime: str, data: bytes) -> ParseResult:
@@ -78,19 +140,17 @@ def run_isolated(mime: str, data: bytes) -> ParseResult:
     # child must import this same source tree. The environment is an allowlist either way.
     command = [sys.executable, "-s", "-m", "webdesk.intake.parser_child", mime]
     try:
-        completed = _run_child(command, data)
+        returncode, stdout = _run_child(command, data)
     except subprocess.TimeoutExpired as exc:
         # subprocess.run kills the child and waits for it before raising.
         raise ParserFailure(limits.PARSER_TIMEOUT) from exc
     except OSError as exc:
         raise ParserFailure(limits.PARSER_CRASH) from exc
 
-    if len(completed.stdout) > limits.PARSER_OUTPUT_BYTES:
-        raise ParserFailure(limits.PARSER_OUTPUT_LIMIT)
-    if completed.returncode != 0:
+    if returncode != 0:
         raise ParserFailure(limits.PARSER_CRASH)
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
+        payload = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ParserFailure(limits.PARSER_CRASH) from exc
     if "failure" in payload:
@@ -119,17 +179,15 @@ def open_pdf_in_child(data: bytes) -> bool:
     """
     command = [sys.executable, "-s", "-m", "webdesk.intake.parser_child", ADMISSION_MODE]
     try:
-        completed = _run_child(command, data)
+        returncode, stdout = _run_child(command, data)
     except subprocess.TimeoutExpired as exc:
         raise ParserFailure(limits.PARSER_TIMEOUT) from exc
     except OSError as exc:
         raise ParserFailure(limits.PARSER_CRASH) from exc
-    if len(completed.stdout) > limits.PARSER_OUTPUT_BYTES:
-        raise ParserFailure(limits.PARSER_OUTPUT_LIMIT)
-    if completed.returncode != 0:
+    if returncode != 0:
         raise ParserFailure(limits.PARSER_CRASH)
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
+        payload = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ParserFailure(limits.PARSER_CRASH) from exc
     if "failure" in payload:

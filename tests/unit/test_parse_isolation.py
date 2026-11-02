@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import time
+from typing import Any
 
 import pytest
 
@@ -15,7 +17,7 @@ from tests.support.parse_corpus import (
     build_pdf,
     corpus,
 )
-from webdesk.intake import limits
+from webdesk.intake import isolation, limits
 from webdesk.intake.isolation import child_environment, run_in_process, run_isolated
 from webdesk.intake.parsers import ParserFailure, parse_docx, parse_eml, parse_pdf, parse_text
 
@@ -120,6 +122,61 @@ def test_an_oversized_child_output_fails_with_the_output_class(
     with pytest.raises(ParserFailure) as exc:
         run_isolated(TXT, b"alpha\nbeta\n")
     assert exc.value.reason == limits.PARSER_OUTPUT_LIMIT
+
+
+# --- F-6: the output cap is enforced while stdout is read, not after it is buffered ------------
+
+_ENDLESS_WRITER = [
+    sys.executable,
+    "-c",
+    "import sys\nchunk = 'x' * 65536\nwhile True:\n    sys.stdout.write(chunk)\n",
+]
+
+
+def test_f6_an_endless_child_output_is_stopped_at_the_cap_not_at_the_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Before the fix, stdout was buffered until the timeout, so the parent held unbounded output
+    and the run ended as parser_timeout. The cap must stop the child while it writes."""
+    monkeypatch.setattr(limits, "PARSER_OUTPUT_BYTES", 64 * 1024)
+    monkeypatch.setattr(limits, "PARSER_TIMEOUT_SECONDS", 20)
+    started = time.monotonic()
+    with pytest.raises(ParserFailure) as exc:
+        isolation._run_child(_ENDLESS_WRITER, b"")
+    assert exc.value.reason == limits.PARSER_OUTPUT_LIMIT
+    assert time.monotonic() - started < 10
+
+
+def test_f6_the_child_is_reaped_when_its_output_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(limits, "PARSER_OUTPUT_BYTES", 64 * 1024)
+    monkeypatch.setattr(limits, "PARSER_TIMEOUT_SECONDS", 20)
+    created: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    class RecordingPopen(real_popen):  # type: ignore[valid-type,misc]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+    monkeypatch.setattr(isolation.subprocess, "Popen", RecordingPopen)
+    with pytest.raises(ParserFailure):
+        isolation._run_child(_ENDLESS_WRITER, b"")
+    assert len(created) == 1
+    assert created[0].poll() is not None
+
+
+def test_f6_output_within_the_cap_is_returned_whole_with_the_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: a child whose output is under the cap is not refused."""
+    monkeypatch.setattr(limits, "PARSER_OUTPUT_BYTES", 64 * 1024)
+    returncode, stdout = isolation._run_child(
+        [sys.executable, "-c", "import sys; sys.stdout.write('alpha')"], b""
+    )
+    assert returncode == 0
+    assert stdout == b"alpha"
 
 
 # --- H-33: TXT offsets are exact and split on newline only -------------------------------------
