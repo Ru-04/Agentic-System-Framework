@@ -136,3 +136,35 @@ Commands, PostgreSQL identity, timestamps and totals are recorded there.
   test and the catalog test to fail) and against `db844ed` (expect all nine to pass).
 - Specific reproduction for the 0053 downgrade: upgrade to head, downgrade to `0052_audit_correlation`, compare
   `pg_get_functiondef` of the nine routines with the 0052 state, re-upgrade.
+
+## Remediation after the independent QA of `6e8f574` (2 November 2026)
+
+The independent QA of `6e8f574` returned QA FAILED with two confirmed findings. Both are fixed by migration `0055_approval_worker_fence`
+(additive; `0050` to `0054` are not edited).
+
+- **F-A (MAJOR, contact-approval liveness on triggers).** `webdesk_users_guard` (trigger on `users`, last defined in `0018`) and
+  `webdesk_role_guard` (trigger on `role_assignments`) still compared approval expiry with transaction-start `now()`. `0053` and
+  `0054` did not inventory trigger functions. `0055` changes the four approval predicates (three in `webdesk_users_guard`, one
+  administrator-appointment predicate in `webdesk_role_guard`) to `clock_timestamp()`. Token consumption (`consumed_at = now()`)
+  is intentionally unchanged, because it compares within one transaction. Owner (`webdesk_integration_owner`) and the trigger
+  bindings are unchanged. Regression test: `test_the_contact_and_role_triggers_use_the_database_clock`
+  (`tests/committed/test_contact_approval_expiry.py`), which fails on the `6e8f574` catalog.
+- **F-5 (Phase 5 Finding 5, `fn_worker_mark_inputs_changed`).** The function took only a run id and was executable by the worker
+  role. A worker login that had never claimed a run could mark it stale (reproduced: the call succeeded, and the run became stale).
+  `0055` re-issues it as `fn_worker_mark_inputs_changed(p_job uuid, p_owner text) RETURNS boolean`. It marks the run only when the
+  caller holds the job's unexpired lease. It takes the job's `FOR KEY SHARE` lock before the run update (lock order job, then run).
+  It returns false and changes nothing otherwise. The caller `finish_intake` raises `LeaseLost` on false. EXECUTE is granted to
+  `webdesk_worker` only, with PUBLIC revoked. Regression tests: `test_a_worker_cannot_mark_a_run_it_has_not_claimed` and
+  `test_the_claim_holder_marks_its_run_and_a_stale_holder_cannot` (`tests/committed/test_durable_execution.py`). Both fail on
+  `6e8f574` (the first records "DID NOT RAISE"; the second fails because the two-argument function does not exist there).
+
+Scope check: the remaining transaction-time `now()` uses in the effective catalog are session expiry, proof expiry, token lifetime,
+read-grant expiry and `released_at`/`stale_at` timestamps. They are outside the approval-liveness ruling (PH3-FC-01) and are unchanged.
+
+## Final state after the 0055 remediation (2 November 2026)
+
+- Candidate: `3065361`. Developer full regression: 747 passed, 0 failed, exit code 0. Ruff, format check and strict mypy pass.
+- Independent re-test: incomplete when written (partial report `phase3-indep-qa-report-3065361.md`). Pending: F-3 mutant rerun,
+  reviewer's full regression exit code, reviewer ruff and mypy, reviewer cluster teardown.
+- Owner-reported QA: no issues found. Recorded as reported; not an independent verdict.
+- WDS formal acceptance: not granted.

@@ -85,9 +85,15 @@ acceptance remain open.
 - F-1 (MINOR, fixed): the privilege audit depended on test order (a worker test login created by another module). Fixed in
   `071e228` by a per-process test worker login from one helper (`tests/support/worker_login.py`). Verified alone, after the
   durable file, and in the full suite on a fresh cluster (723 passed). Re-test: run the audit first on a fresh cluster.
-- F-2 (MINOR, disposition only): contact-liveness `now()` in `identity/contacts.py`. Database time, outside H-21's explicit
-  file list. No semantic change. WDS decision needed on whether H-76 covers it. Details: `docs/PHASE3_DECISION_EVIDENCE.md`
-  section 6.
+- F-2 (superseded): this handoff originally called it MINOR, disposition only. That was wrong. WDS ruled on 29 October 2026
+  that H-76 covers contact-approval liveness, so the predicates move to `clock_timestamp()` (`0053`, `0054`, and `0055` for the
+  trigger functions). The independent QA of `6e8f574` (FAILED) found the trigger functions `webdesk_users_guard` and
+  `webdesk_role_guard` still on `now()`. `0055` fixes them. The section 6 disposition in `docs/PHASE3_DECISION_EVIDENCE.md` is
+  superseded by this line.
+- F-5 (Phase 5 Finding 5, `fn_worker_mark_inputs_changed`): any worker login could mark any run stale, with no lease check. Fixed
+  by `0055`: the function now takes the job and the owner, marks the run only under the caller's unexpired lease, and takes the
+  job's KEY SHARE lock first. Regression tests: `test_a_worker_cannot_mark_a_run_it_has_not_claimed` and
+  `test_the_claim_holder_marks_its_run_and_a_stale_holder_cannot` in `tests/committed/test_durable_execution.py`.
 - F-7 (INFORMATIONAL): worker-role probes used `SET ROLE` from the integration owner, not a worker login. See the decision
   evidence, section 7.
 - Verdict for this remediation: PHASE 3 QA REMEDIATION COMPLETE — READY FOR INDEPENDENT RE-TEST. Not an acceptance.

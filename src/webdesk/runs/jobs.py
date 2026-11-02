@@ -308,11 +308,14 @@ def finish_intake(
         parked=True,
     )
     if stale:
-        _guard(
+        # Fenced by the caller's own unexpired lease (F-5): a refused mark means the lease was lost.
+        marked = _guard(
             conn,
-            "SELECT webdesk_guard.fn_worker_mark_inputs_changed(:r)",
-            {"r": job.run_id},
-        )
+            "SELECT webdesk_guard.fn_worker_mark_inputs_changed(:j, :o)",
+            {"j": job.job_id, "o": owner},
+        ).scalar_one()
+        if not marked:
+            raise LeaseLost()
     # F-8 checkpoint: identifiers and flags only, never text (trigger enforces the key set).
     snapshot_versions = conn.execute(
         text("SELECT source_version_id::text FROM run_input_snapshots WHERE run_id = :r"),

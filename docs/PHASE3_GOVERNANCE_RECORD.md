@@ -110,3 +110,19 @@ These fields are not available to the implementing agent. They are not filled in
   account identifier, any signature or approval link, the time of day of the approval (the timezone Asia/Kolkata is as
   stated in the directive), and WDS-assigned decision identifiers replacing the PH3-FC labels.
 - Final WDS acceptance is not part of this record and has not been granted.
+
+## Closure status (2 November 2026)
+
+- Technical status: Phase 3 is complete on `feature/foundation-phase-3` at commit `3065361` (migration `0055_approval_worker_fence`,
+  after `6e8f574`). Developer full regression on `3065361`: 747 passed, 0 failed, exit code 0, 9 min 24 s. Ruff check, the format
+  check on the changed files, and strict mypy on `src/webdesk` pass.
+- Findings closed in this remediation: F-A (approval triggers `webdesk_users_guard` and `webdesk_role_guard` on the database clock,
+  under PH3-FC-01) and F-5 (`fn_worker_mark_inputs_changed` fenced by the caller's unexpired lease).
+- Independent QA: the separate re-test of `3065361` was incomplete when this record was written. Its F-3 mutation rerun,
+  its own full regression exit code, its ruff and mypy runs, and cluster teardown were pending. Its partial report is
+  `phase3-indep-qa-report-3065361.md` in the shared notes folder. It is not a PASS verdict.
+- A separate QA review was also carried out by the project owner, who reports no issues found. That review is recorded as
+  reported. It is not an independent verdict and it does not replace the re-test above. The reviewer's identity and method are
+  not recorded here, because they were not supplied.
+- WDS formal acceptance: not granted. The attestation fields in "Fields that require administrative attestation" are still
+  outstanding and are not filled in.
