@@ -120,11 +120,47 @@ def test_d3_replacement_characters_flag_the_page_and_keep_the_segment_as_partial
         assert result.flagged_regions == []
 
 
+def test_d3_a_page_whose_only_extracted_text_is_replacement_characters_commits_no_segment() -> None:
+    """F-4: text pypdf cannot map (here, no font resource) must not become a committed segment of
+    U+FFFD. The page is flagged, and the garbage is not stored as requirement content."""
+    objects = {
+        1: CATALOG,
+        2: PAGES,
+        3: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        + b"/Resources << /XObject << /Fm0 6 0 R >> >> >>",
+        4: b"<< /Length 43 >>\nstream\nBT /F1 12 Tf 10 100 Td (Hello) Tj ET q /Fm0 Do Q\nendstream",
+        6: _stream(b"/Resources << /XObject << /Im1 7 0 R >> >>", b"/Im1 Do"),
+        7: b"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray "
+        + b"/BitsPerComponent 8 /Length 1 >>\nstream\n\x00\nendstream",
+    }
+    result = parse_pdf(_assemble(objects))
+    assert result.segments == []
+    assert result.flagged_regions == ["pdf_page:1"]
+    assert result.status == "unsupported"
+
+
 # --- D4: admission runs in a timed child ------------------------------------------------ ---
 
 
 def test_d4_admission_of_a_valid_pdf_runs_in_the_child_and_reports_not_encrypted() -> None:
     assert open_pdf_in_child(build_pdf(["admitted page"])) is False
+
+
+def test_f5_the_admission_child_refuses_an_oversized_page_before_any_version_exists() -> None:
+    content = b"BT /F1 12 Tf 10 100 Td (A) Tj ET\n" + b" " * (11 * 1024 * 1024)
+    data = _assemble(
+        {
+            1: CATALOG,
+            2: PAGES,
+            3: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            + b"/Resources << /Font << /F1 5 0 R >> >> >>",
+            4: b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+            5: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        }
+    )
+    with pytest.raises(ParserFailure) as exc:
+        open_pdf_in_child(data)
+    assert exc.value.reason == limits.PDF_STREAM_LIMIT
 
 
 def test_d4_the_admission_child_is_killed_at_the_bound_and_the_failure_is_classified(

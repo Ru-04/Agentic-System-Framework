@@ -42,6 +42,8 @@ from email.parser import BytesParser
 from typing import Any, cast
 
 from docx import Document
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 from pypdf.filters import (
     ASCII85Decode,
@@ -91,19 +93,6 @@ def _status(segments: list[SegmentDraft], flagged: list[str]) -> str:
     if segments:
         return "partial" if flagged else "succeeded"
     return "unsupported"
-
-
-def _has_image(page: Any) -> bool:
-    """True when the page's resources include an image XObject."""
-    resources = page.get("/Resources")
-    if resources is None:
-        return False
-    xobjects = resources.get_object().get("/XObject")
-    if xobjects is None:
-        return False
-    return any(
-        obj.get_object().get("/Subtype") == "/Image" for obj in xobjects.get_object().values()
-    )
 
 
 _TEXT_BLOCK = re.compile(rb"(?<![A-Za-z0-9])BT(?![A-Za-z0-9])")
@@ -326,6 +315,46 @@ def _annotations_have_text(page: Any, walk: _GraphWalk) -> bool:
     return found
 
 
+def _resources_have_image(resources: Any, walk: _GraphWalk, depth: int) -> bool:
+    """True when an image XObject is reachable from ``resources`` through the same forms, patterns
+    and Type 3 fonts that the text walk follows (F-1, QA-06)."""
+    if depth > _MAX_GRAPH_DEPTH:
+        raise _Unbounded
+    resources = None if resources is None else resources.get_object()
+    if resources is None:
+        return False
+    found = False
+    for category in ("/XObject", "/Pattern", "/Font"):
+        group = resources.get(category)
+        if group is None:
+            continue
+        for ref in group.get_object().values():
+            obj = ref.get_object()
+            if not walk.visit(obj):
+                continue
+            if category == "/XObject" and obj.get("/Subtype") == "/Image":
+                found = True
+            elif (
+                (category == "/XObject" and obj.get("/Subtype") == "/Form")
+                or (category == "/Pattern" and obj.get("/PatternType") == 1)
+                or (category == "/Font" and obj.get("/Subtype") == "/Type3")
+            ):
+                found = _resources_have_image(obj.get("/Resources"), walk, depth + 1) or found
+    return found
+
+
+def _has_image(page: Any) -> bool:
+    """True when the page, or a form, pattern or Type 3 glyph reachable from it, holds an image.
+
+    A walk that cannot finish within its bounds reports True, so the page is flagged and not read as
+    blank (F-1, QA-06).
+    """
+    try:
+        return _resources_have_image(page.get("/Resources"), _GraphWalk(), 0)
+    except _Unbounded:
+        return True
+
+
 def _page_has_hidden_text(page: Any) -> bool:
     """True when a form, pattern, Type 3 glyph or annotation reachable from the page has text.
 
@@ -389,6 +418,23 @@ def _bound_page_content(page: Any, meter: _DecodeMeter) -> None:
             raise ParserFailure(limits.PDF_STREAM_LIMIT)
 
 
+def _admit_page_bounds(pages: list[Any], meter: _DecodeMeter) -> None:
+    """Apply to every page the content bound the parser applies (F-5).
+
+    A file the parser would refuse as a whole (a page over the size bound, a corrupt stream) is
+    refused here, before a source version exists. A page the parser only flags, for an unsupported
+    filter or for any other fault, is admitted here as it is there.
+    """
+    for page in pages:
+        try:
+            _bound_page_content(page, meter)
+        except ParserFailure as exc:
+            if exc.reason != PDF_FILTER_UNSUPPORTED:
+                raise
+        except Exception:
+            continue  # the parser flags this page; it does not refuse the file
+
+
 def open_pdf_structure(data: bytes) -> bool:
     """Open a PDF the way the parser does, under the same meter, and report whether it is encrypted.
 
@@ -402,7 +448,7 @@ def open_pdf_structure(data: bytes) -> bool:
             reader = PdfReader(io.BytesIO(data))
             encrypted = bool(reader.is_encrypted)
             if not encrypted:
-                _ = len(reader.pages)
+                _admit_page_bounds(list(reader.pages), meter)
         except ParserFailure:
             raise
         except Exception as exc:
@@ -459,10 +505,13 @@ def _parse_pdf_metered(data: bytes, meter: _DecodeMeter) -> ParseResult:
         except Exception:
             flagged.append(f"pdf_page:{number}")
             continue
-        if text:
+        # Replacement characters alone are pypdf's placeholder for unmapped glyphs (D3). They are not
+        # content, so a page holding only them commits no segment (F-4).
+        valid = text.replace("�", "").strip()
+        if valid:
             segments.append(SegmentDraft("pdf_page", {"page_number": number}, text))
         unreliable = "�" in text  # pypdf could not map a glyph (D3): the text is not trustworthy
-        if hidden or unreliable or (not text and _has_image(page)):
+        if hidden or unreliable or (not valid and _has_image(page)):
             # H-33 and QA-06: text that pypdf cannot extract is flagged, never silently omitted. An
             # image-only page
             # holds content that is not text. There is no OCR, so it is reported, not read as blank.
@@ -513,6 +562,49 @@ def _check_archive(data: bytes) -> None:
                 raise ParserFailure("corrupt_structure")
 
 
+_MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+_MC_FALLBACK = f"{{{_MC_NS}}}Fallback"
+
+
+def _text_boxes(document: Any) -> list[Any]:
+    """The w:txbxContent elements of the body, in document order (F-3).
+
+    Word stores a text box twice, as a DrawingML choice and as a VML fallback. The fallback copy
+    is skipped, so its text is read once.
+    """
+    return [
+        box
+        for box in document.element.body.iter(qn("w:txbxContent"))
+        if not any(ancestor.tag == _MC_FALLBACK for ancestor in box.iterancestors())
+    ]
+
+
+def _story_text(part: Any) -> str:
+    return "".join(node.text or "" for node in part.element.iter(qn("w:t")))
+
+
+def _header_footer_regions(document: Any) -> list[str]:
+    """Headers and footers that hold text. Their text is not extracted (F-3), so each is flagged.
+
+    Every header and footer part is counted, including first-page and even-page ones, and numbered
+    by part name, so a region's flag names the same part on every parse.
+    """
+    flagged: list[str] = []
+    for kind in ("header", "footer"):
+        parts = sorted(
+            (
+                rel.target_part
+                for rel in document.part.rels.values()
+                if rel.reltype.endswith(f"/{kind}")
+            ),
+            key=lambda part: str(part.partname),
+        )
+        for number, part in enumerate(parts, start=1):
+            if _story_text(part).strip():
+                flagged.append(f"docx_{kind}:{number}")
+    return flagged
+
+
 def parse_docx(data: bytes) -> ParseResult:
     _check_archive(data)
     try:
@@ -539,7 +631,9 @@ def parse_docx(data: bytes) -> ParseResult:
     cell_paragraphs = sum(
         len(cell.paragraphs) for rows in tables for cells in rows for cell in cells if cell
     )
-    if len(document.paragraphs) + cell_paragraphs > limits.MAX_DOCX_ELEMENTS:
+    text_boxes = _text_boxes(document)
+    box_paragraphs = sum(len(box.findall(qn("w:p"))) for box in text_boxes)
+    if len(document.paragraphs) + cell_paragraphs + box_paragraphs > limits.MAX_DOCX_ELEMENTS:
         raise ParserFailure(limits.DOCX_ELEMENT_LIMIT)
 
     segments = [
@@ -568,6 +662,18 @@ def parse_docx(data: bytes) -> ParseResult:
                     flagged.append(
                         f"docx_nested_table:{table_index}.{row_index}.{cell_index}.{nested_index}"
                     )
+    # Text box paragraphs take the paragraph index within their box and the box index in document
+    # order (F-3). A table inside a box has no approved locator: it is flagged, and the box's own
+    # paragraphs are still read, as with a nested table in a cell.
+    for box_index, box in enumerate(text_boxes, start=1):
+        if box.find(qn("w:tbl")) is not None:
+            flagged.append(f"docx_textbox:{box_index}")
+        for paragraph_index, paragraph in enumerate(box.findall(qn("w:p")), start=1):
+            text = Paragraph(paragraph, document).text.strip()
+            if text:
+                locator = {"paragraph_index": paragraph_index, "textbox_index": box_index}
+                segments.append(SegmentDraft("docx_paragraph", locator, text))
+    flagged.extend(_header_footer_regions(document))
     return ParseResult(_status(segments, flagged), segments, flagged)
 
 

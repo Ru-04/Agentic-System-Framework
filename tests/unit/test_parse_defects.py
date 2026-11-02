@@ -16,6 +16,8 @@ from typing import Any
 
 import pytest
 from docx import Document
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
 from tests.support.parse_corpus import build_pdf
 from webdesk.intake import limits, parsers
@@ -30,6 +32,7 @@ from webdesk.intake.parsers import (
     _DecodeMeter,
     parse_docx,
     parse_eml,
+    open_pdf_structure,
     parse_pdf,
 )
 
@@ -214,6 +217,118 @@ def test_d3_a_nested_table_with_no_other_text_is_unsupported_with_its_region_as_
     assert result.flagged_regions == ["docx_nested_table:1.1.1.1"]
 
 
+# --- F-3: DOCX text boxes are extracted; headers and footers are flagged, not extracted. -----
+
+_DRAWING_NS = (
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"'
+)
+
+
+def _textbox_run(inner: str) -> str:
+    """A run holding a DrawingML text box whose w:txbxContent is ``inner``."""
+    return (
+        f'<w:r {nsdecls("w")} {_DRAWING_NS}><w:drawing><wp:inline>'
+        '<wp:extent cx="1" cy="1"/><a:graphic><a:graphicData '
+        'uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
+        f"<wps:wsp><wps:txbx><w:txbxContent>{inner}</w:txbxContent></wps:txbx></wps:wsp>"
+        "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"
+    )
+
+
+def _paragraph_xml(text: str) -> str:
+    return f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>"
+
+
+def _docx_bytes(document: Any) -> bytes:
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_f3_a_text_box_paragraph_is_a_segment_with_a_textbox_locator() -> None:
+    document = Document()
+    document.add_paragraph("Visible body paragraph.")
+    document.paragraphs[-1]._p.append(parse_xml(_textbox_run(_paragraph_xml("BOX_REQUIREMENT"))))
+    result = parse_docx(_docx_bytes(document))
+    assert [segment.text for segment in result.segments] == [
+        "Visible body paragraph.",
+        "BOX_REQUIREMENT",
+    ]
+    assert result.segments[1].locator == {"paragraph_index": 1, "textbox_index": 1}
+    assert result.flagged_regions == []
+    assert result.status == "succeeded"
+
+
+def test_f3_a_text_box_in_a_table_cell_is_extracted_once() -> None:
+    document = Document()
+    cell = document.add_table(rows=1, cols=1).rows[0].cells[0]
+    cell.paragraphs[0]._p.append(parse_xml(_textbox_run(_paragraph_xml("CELL_BOX_TEXT"))))
+    result = parse_docx(_docx_bytes(document))
+    assert [segment.text for segment in result.segments] == ["CELL_BOX_TEXT"]
+    assert result.flagged_regions == []
+
+
+def test_f3_a_text_box_offered_as_a_fallback_and_a_choice_is_extracted_once() -> None:
+    """A Word text box is stored twice: a DrawingML choice and a VML fallback. Only the choice is
+    read, so its text is not committed twice."""
+    alternate = (
+        '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+        'xmlns:v="urn:schemas-microsoft-com:vml">'
+        f'<mc:Choice Requires="wps">{_textbox_run(_paragraph_xml("ONCE_ONLY_TEXT"))}</mc:Choice>'
+        "<mc:Fallback><w:r><w:pict><v:shape><v:textbox><w:txbxContent>"
+        f"{_paragraph_xml('ONCE_ONLY_TEXT')}"
+        "</w:txbxContent></v:textbox></v:shape></w:pict></w:r></mc:Fallback>"
+        "</mc:AlternateContent>"
+    )
+    document = Document()
+    document.add_paragraph("Body.")
+    document.paragraphs[-1]._p.append(parse_xml(f"<w:wrap {nsdecls('w')}>{alternate}</w:wrap>")[0])
+    result = parse_docx(_docx_bytes(document))
+    assert [segment.text for segment in result.segments] == ["Body.", "ONCE_ONLY_TEXT"]
+
+
+def test_f3_a_text_box_holding_a_table_is_flagged_not_dropped() -> None:
+    document = Document()
+    document.add_paragraph("Body.")
+    table = "<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc>" + _paragraph_xml("T") + "</w:tc></w:tr></w:tbl>"
+    document.paragraphs[-1]._p.append(parse_xml(_textbox_run(table)))
+    result = parse_docx(_docx_bytes(document))
+    assert result.flagged_regions == ["docx_textbox:1"]
+    assert result.status == "partial"
+
+
+def test_f3_footer_text_is_flagged_as_an_unextracted_region_and_not_extracted() -> None:
+    document = Document()
+    document.add_paragraph("Visible body paragraph.")
+    document.sections[0].footer.paragraphs[0].text = "FOOTER_REQUIREMENT_TEXT"
+    result = parse_docx(_docx_bytes(document))
+    assert [segment.text for segment in result.segments] == ["Visible body paragraph."]
+    assert "FOOTER_REQUIREMENT_TEXT" not in [segment.text for segment in result.segments]
+    assert result.flagged_regions == ["docx_footer:1"]
+    assert result.status == "partial"
+
+
+def test_f3_header_text_is_flagged_as_an_unextracted_region() -> None:
+    document = Document()
+    document.add_paragraph("Visible body paragraph.")
+    document.sections[0].header.paragraphs[0].text = "HEADER_TEXT"
+    result = parse_docx(_docx_bytes(document))
+    assert result.flagged_regions == ["docx_header:1"]
+
+
+def test_f3_an_empty_header_and_footer_are_not_flagged() -> None:
+    """Negative control: a header or footer with no text is not an unextracted region."""
+    document = Document()
+    document.add_paragraph("Visible body paragraph.")
+    document.sections[0].header.paragraphs[0].text = "   "
+    document.sections[0].footer.paragraphs[0].text = ""
+    result = parse_docx(_docx_bytes(document))
+    assert result.status == "succeeded"
+    assert result.flagged_regions == []
+
+
 # --- D4: PDF expansion is bounded before any reader holds it in memory. ----------------------
 
 
@@ -380,6 +495,28 @@ def test_d4_a_small_object_stream_is_read_normally() -> None:
     result = parse_pdf(_object_stream_pdf(0))
     assert result.status == "unsupported"
     assert result.flagged_regions == []
+
+
+# --- F-5: admission applies the per-page content bound the parser applies. --------------------
+
+
+def test_f5_admission_refuses_an_oversized_page_before_any_version_exists() -> None:
+    """Before the fix admission admitted this file, and the parser then refused it with
+    pdf_stream_limit after a source version existed."""
+    content = b"BT /F1 12 Tf 10 100 Td (A) Tj ET\n" + b" " * (11 * MiB)
+    data = _assemble(_pdf_objects(b"/Font << /F1 5 0 R >>", content))
+    with pytest.raises(ParserFailure) as exc:
+        open_pdf_structure(data)
+    assert exc.value.reason == limits.PDF_STREAM_LIMIT
+
+
+def test_f5_admission_does_not_refuse_a_page_the_parser_only_flags_for_its_filter() -> None:
+    """Negative control: an LZW page stream is refused at the decoder, which flags its page. Admission
+    admits the file, as the parser does, rather than refusing it."""
+    content = b"\x80\x0b\x60\x50\x22\x0c\x0c\x85\x01"
+    data = _assemble(_pdf_objects(b"/Font << /F1 5 0 R >>", content, b"/Filter /LZWDecode"))
+    assert open_pdf_structure(data) is False
+    assert parse_pdf(data).flagged_regions == ["pdf_page:1"]
 
 
 # --- EML offsets (approved P4-GOV-2026-10-28; field names aligned to the schema, QA-03). -------

@@ -33,7 +33,6 @@ from webdesk.storage.content_store import MAX_BYTES, ContentStore
 
 router = APIRouter()
 
-
 # H-61: only these multipart fields are accepted. Anything else, including every server-owned
 # column, is refused before any work is done.
 ACCEPTED_UPLOAD_FIELDS = frozenset(
@@ -53,6 +52,9 @@ ACCEPTED_UPLOAD_FIELDS = frozenset(
 # H-60: the body limit is the approved 20 MiB file limit plus room for multipart framing.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 MULTIPART_OVERHEAD_BYTES = 1024 * 1024
+# The most a source upload request may carry (Phase 4 F-2, Phase 7 H-60). It is counted as the body
+# arrives, before the framework buffers it.
+MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES
 
 
 class StrictBody(BaseModel):
@@ -131,34 +133,34 @@ def _uuid(value: str) -> uuid.UUID:
         raise IngestError(422, "identifier_invalid") from exc
 
 
-async def _bounded_form(request: Request) -> FormData:
-    """Read the request body under a size limit, then parse the multipart form (H-60).
+async def _bounded_form(request: Request, limit: int) -> FormData:
+    """The multipart form, parsed only while the whole body stays within ``limit`` bytes (D5, F-2).
 
-    The limit is enforced before parsing, so an oversized request is refused with 413 whatever its
-    revision, authorization or fields.
+    Starlette's parser reads the whole body, and its part limits do not bound the total: they cover
+    fields, and they spool file parts to disk. The request is refused on its declared length, or as
+    soon as the bytes received pass the limit, so nothing above it is buffered or spilled to disk.
     """
-    limit = MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
         raise IngestError(413, "too_large")
-    chunks: list[bytes] = []
     received = 0
-    async for chunk in request.stream():
-        received += len(chunk)
-        if received > limit:
-            raise IngestError(413, "too_large")
-        chunks.append(chunk)
-    body = b"".join(chunks)
+    receive = request.receive
 
-    async def replay() -> Message:
-        return {"type": "http.request", "body": body, "more_body": False}
+    async def bounded_receive() -> Message:
+        nonlocal received
+        message = await receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b""))
+            if received > limit:
+                raise IngestError(413, "too_large")
+        return message
 
-    return await Request(request.scope, replay).form()
+    return await Request(request.scope, bounded_receive).form()
 
 
 @router.post("/projects/{project_id}/sources")
 async def upload_source(project_id: str, request: Request, token: Token) -> dict[str, Any]:
-    form = await _bounded_form(request)
+    form = await _bounded_form(request, MAX_UPLOAD_REQUEST_BYTES)
     rejected = sorted(key for key in form if key not in ACCEPTED_UPLOAD_FIELDS)
     if rejected:
         raise IngestError(422, "server_field_rejected")
