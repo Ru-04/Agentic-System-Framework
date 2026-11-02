@@ -75,16 +75,16 @@ def _retrieve(
 
 
 def test_inactive_source_makes_no_request_even_with_a_transport() -> None:
-    # Adobe Commerce is approved but not in the pilot, so it stays inactive.
+    # Adobe shared PHP page is approved but not activated, so it stays inactive.
     recorder = Recorder()
     outcome = retrieve_approved_pages(
         platform="adobe_commerce",
-        edition=Edition.ADOBE_COMMERCE,
-        urls=["https://developer.adobe.com/commerce/webapi/rest/"],
+        edition=Edition.SHARED,
+        urls=["https://developer.adobe.com/commerce/php/"],
         workspace_id=WS,
         version="1.0",
         opener=recorder,
-        source_id="adobe_commerce_exact_pages",
+        source_id="adobe_shared_php",
         now=NOW,
     )
     assert recorder.calls == []

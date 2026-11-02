@@ -7,7 +7,7 @@ Modes:
 - Mode 1 (deterministic synthetic): fixture pages flagged ``synthetic``. Outcome is
   ``SYNTHETIC_SUPPORT``. It is never reported as verified platform evidence.
 - Mode 2 (evidence-backed): real pages from a boundary listed in ``ACTIVE_BOUNDARIES``. The pilot
-  activates the WooCommerce docs and the BigCommerce product page only.
+  activates the sources listed in ``ACTIVE_BOUNDARIES`` only.
 - Mode 3 (production integrated): not implemented here. Blocked by QA-07.
 
 Checks applied to every page, in order: operator confirmation, workspace, boundary for the
@@ -79,12 +79,17 @@ RELEASE_ONLY: Final[frozenset[tuple[str, Edition]]] = frozenset(
     {("magento_open_source", Edition.MAGENTO_OPEN_SOURCE)}
 )
 
-# Boundaries activated for real (Mode 2). Pilot activation under WDS approval (28 Oct 2026):
-# WooCommerce docs and the BigCommerce product page, read-only. Every other boundary stays inactive.
+# Boundaries activated for real (Mode 2), read-only. Pilot activation under WDS approval (28 Oct
+# 2026): WooCommerce docs and the BigCommerce product page. Management authorization (2 Nov 2026,
+# Sprint 5 decision section 2): the Adobe Commerce exact pages and the Magento Open Source release
+# notes page. Shared PHP, Shopify, Shift4Shop, WordPress core, Standalone and Middleware stay
+# inactive.
 ACTIVE_BOUNDARIES: Final[frozenset[tuple[str, Edition]]] = frozenset(
     {
         ("woocommerce", Edition.NOT_APPLICABLE),
         ("bigcommerce", Edition.NOT_APPLICABLE),
+        ("adobe_commerce", Edition.ADOBE_COMMERCE),
+        ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
     }
 )
 

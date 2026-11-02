@@ -1,0 +1,134 @@
+{
+  "run_at": "2026-11-02T07:44:37.287212+00:00",
+  "scope": "read-only retrieval of exact approved pages; redirects not followed",
+  "results": [
+    {
+      "case": "woocommerce_store_api_products",
+      "source_id": "woocommerce_docs",
+      "requested_url": "https://developer.woocommerce.com/docs/apis/store-api/resources-endpoints/products/",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+        }
+      ],
+      "title": "Products API | WooCommerce developer docs",
+      "final_url": "https://developer.woocommerce.com/docs/apis/store-api/resources-endpoints/products/",
+      "content_sha256": "aa2ce12c1cf56287018262cefa8556fa6339f149ce702abea47f1ac587993279",
+      "capability": "product variation pricing",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": null,
+      "passage_digest": null,
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "bigcommerce_get_product",
+      "source_id": "bigcommerce_docs_product_page",
+      "requested_url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+        }
+      ],
+      "title": "Get Product | BigCommerce Docs",
+      "final_url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
+      "content_sha256": "fa905fca5b4683f130ad4923c564c841b4e3f336adf00d1cf250e246e755cf87",
+      "capability": "product catalog read",
+      "outcome": "verified_support",
+      "citations": [
+        {
+          "url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
+          "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
+          "version": "v3"
+        }
+      ],
+      "passage": "https://api.bigcommerce.com/stores/store_hash/v3/catalog/products/1",
+      "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
+      "unknowns": [],
+      "refusals": []
+    },
+    {
+      "case": "adobe_rest_overview",
+      "source_id": "adobe_commerce_exact_pages",
+      "requested_url": "https://developer.adobe.com/commerce/webapi/rest/",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+        }
+      ],
+      "title": "REST API Overview",
+      "final_url": "https://developer.adobe.com/commerce/webapi/rest/",
+      "content_sha256": "945563e1a197658313da331e6878b60da700f541e90e40a3c26fd5343299d5a0",
+      "capability": "REST product read",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": null,
+      "passage_digest": null,
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "adobe_graphql_overview",
+      "source_id": "adobe_commerce_exact_pages",
+      "requested_url": "https://developer.adobe.com/commerce/webapi/graphql/",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+        }
+      ],
+      "title": "GraphQL overview",
+      "final_url": "https://developer.adobe.com/commerce/webapi/graphql/",
+      "content_sha256": "e7d4dd7e85a150e76dc35c424d10a9e0e894527be7c3db0a506af055635eabd8",
+      "capability": "GraphQL query",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": "GraphQL overview",
+      "passage_digest": "b7f9cc1c14878ef7989f0731e62581b9fa8dbd29c0ceed8ce9fe03daada4d8eb",
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "magento_open_source_release_notes",
+      "source_id": "magento_open_source_release_notes",
+      "requested_url": "https://experienceleague.adobe.com/en/docs/commerce-operations/release/notes/magento-open-source/overview",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+        }
+      ],
+      "title": "Magento Open Source release notes | Adobe Commerce",
+      "final_url": "https://experienceleague.adobe.com/en/docs/commerce-operations/release/notes/magento-open-source/overview",
+      "content_sha256": "986b9895c297bb2bcd68804cb62f77d16c434edd3098740967483aa0bac96545",
+      "capability": "release history",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": "Release information",
+      "passage_digest": "0717b21358c448f17f48f7d5eb333bba33cfc1ead36ab208af29180608b78eea",
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    }
+  ]
+}

@@ -215,9 +215,15 @@ def test_http_200_not_found_body_is_excluded_from_evidence() -> None:
     assert outcome.count(FetchStatus.UNAVAILABLE) == 1
 
 
-def test_only_the_two_pilot_boundaries_are_active() -> None:
+def test_only_the_authorized_boundaries_are_active() -> None:
+    # Pilot (28 Oct 2026) plus management authorization (2 Nov 2026). Shared PHP stays inactive.
     assert engine.ACTIVE_BOUNDARIES == frozenset(
-        {("woocommerce", Edition.NOT_APPLICABLE), ("bigcommerce", Edition.NOT_APPLICABLE)}
+        {
+            ("woocommerce", Edition.NOT_APPLICABLE),
+            ("bigcommerce", Edition.NOT_APPLICABLE),
+            ("adobe_commerce", Edition.ADOBE_COMMERCE),
+            ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
+        }
     )
 
 

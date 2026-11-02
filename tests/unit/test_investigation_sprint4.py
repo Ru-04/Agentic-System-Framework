@@ -165,9 +165,14 @@ def test_no_pages_gives_unknown_support() -> None:
     assert finding.outcome is Outcome.UNKNOWN_SUPPORT
 
 
-def test_only_the_pilot_boundaries_are_active_and_others_stay_inactive() -> None:
+def test_only_the_authorized_boundaries_are_active_and_others_stay_inactive() -> None:
     assert ACTIVE_BOUNDARIES == frozenset(
-        {("woocommerce", Edition.NOT_APPLICABLE), ("bigcommerce", Edition.NOT_APPLICABLE)}
+        {
+            ("woocommerce", Edition.NOT_APPLICABLE),
+            ("bigcommerce", Edition.NOT_APPLICABLE),
+            ("adobe_commerce", Edition.ADOBE_COMMERCE),
+            ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
+        }
     )
     page = _page(
         "https://developer.adobe.com/commerce/webapi/rest/",
@@ -179,8 +184,9 @@ def test_only_the_pilot_boundaries_are_active_and_others_stay_inactive() -> None
     finding = investigate(
         ADOBE_REST, [page], workspace_id=WS, requested_version="1.0", operator_confirmed=True
     )
-    assert finding.citations == ()
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    # Activated 2 Nov 2026: the exact REST page supports its capability for the stated version.
+    assert finding.outcome is Outcome.VERIFIED_SUPPORT
+    assert len(finding.citations) == 1
 
 
 # --- BigCommerce: exact product-catalog page ---------------------------------------------------

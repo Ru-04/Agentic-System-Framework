@@ -103,7 +103,10 @@ def retrieve_approved_pages(
         raw = _decode(body, records)
         if raw is None:
             continue
-        text = _text_from_html(raw) if _LOOKS_LIKE_HTML.search(raw) else raw
+        # The document title is metadata (Page.title). It is not body text, so it cannot supply
+        # a passage that supports a claim.
+        body_raw = _TITLE.sub("", raw)
+        text = _text_from_html(body_raw) if _LOOKS_LIKE_HTML.search(raw) else raw
         if _is_not_found(text):
             # A 200 response whose body is a not-found page is not documentation. Excluded.
             records.append(FetchRecord(FetchStatus.UNAVAILABLE, "page not found; not usable"))

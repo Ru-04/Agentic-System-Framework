@@ -35,13 +35,12 @@ def test_pilot_is_limited_to_the_two_approved_pages() -> None:
     ]
 
 
-def test_pilot_activates_exactly_the_two_sources() -> None:
-    assert engine.ACTIVE_BOUNDARIES == frozenset(
-        {
-            ("woocommerce", engine.Edition.NOT_APPLICABLE),
-            ("bigcommerce", engine.Edition.NOT_APPLICABLE),
-        }
-    )
+def test_the_pilot_sources_remain_active() -> None:
+    # The 28 October pilot sources stay active. Adobe and Magento were added on 2 November 2026.
+    assert {
+        ("woocommerce", engine.Edition.NOT_APPLICABLE),
+        ("bigcommerce", engine.Edition.NOT_APPLICABLE),
+    } <= engine.ACTIVE_BOUNDARIES
 
 
 def test_pilot_requests_only_the_two_pilot_urls() -> None:

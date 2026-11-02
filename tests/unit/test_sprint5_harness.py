@@ -200,7 +200,8 @@ def test_the_v2_runner_result_under_the_current_runner_has_one_mismatch() -> Non
 
     report = evaluate(load_dataset(V2_DATASET, V2_MANIFEST), observe)
     mismatched = {r.scenario_id for r in report.results if not r.matched}
-    assert mismatched == {"S5-006"}
+    # S5-008 mismatches here: the Adobe exact page was activated on 2 Nov 2026 (v5 amends it).
+    assert mismatched == {"S5-006", "S5-008"}
     by_id = {r.scenario_id: r for r in report.results}
     # S5-006 stays a mismatch in v2 only: v2 expects INVESTIGATE, and no version is stated.
     assert by_id["S5-006"].observed == "INVESTIGATE_WITH_UNKNOWNS"
@@ -248,7 +249,8 @@ def test_the_v3_runner_result_under_the_current_runner_is_eleven_of_eleven() -> 
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V3_DATASET, V3_MANIFEST), observe)
-    assert [r.scenario_id for r in report.results if not r.matched] == []
+    # S5-008 is the Adobe activation change, amended in v5.
+    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-008"]
 
 
 V4_DATASET = DATA / "sprint5_scenarios_v4.json"
@@ -272,10 +274,25 @@ def test_v4_keeps_every_v3_expectation_unchanged() -> None:
     assert {sid for sid in v3 if v3[sid].expected != v4[sid].expected} == set()
 
 
-def test_v4_runner_result_matches_every_scenario_at_requirement_level() -> None:
+def test_v4_runner_result_differs_only_where_v5_amends_the_activation() -> None:
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V4_DATASET, V4_MANIFEST), observe)
+    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-008", "S5-024"]
+
+
+V5_DATASET = DATA / "sprint5_scenarios_v5.json"
+V5_MANIFEST = DATA / "sprint5_scenarios_v5.manifest.json"
+
+
+def test_v5_matches_every_scenario_and_changes_only_the_two_activation_cases() -> None:
+    from webdesk.evaluation.runner import observe
+
+    v4 = {s.scenario_id: s for s in load_dataset(V4_DATASET, V4_MANIFEST).scenarios}
+    v5_ds = load_dataset(V5_DATASET, V5_MANIFEST)
+    v5 = {s.scenario_id: s for s in v5_ds.scenarios}
+    assert {sid for sid in v4 if v4[sid].expected != v5[sid].expected} == {"S5-008", "S5-024"}
+    report = evaluate(v5_ds, observe)
     assert [r.scenario_id for r in report.results if not r.matched] == []
 
 

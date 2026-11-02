@@ -17,7 +17,9 @@
 | Scorecard | `src/webdesk/evaluation/scorecard.py` |
 | Datasets and manifests | `src/webdesk/evaluation/data/sprint5_scenarios_v4.json` and `.manifest.json` (v1 to v3 unchanged in expectation) |
 | Tests | `tests/unit/test_sprint5_harness.py`, `tests/unit/test_sprint5_scorecard.py` |
-| Governance records | `SPRINT5_REQUIREMENT_TEST_MATRIX_2026-11-02.md`, `SPRINT5_REAL_EVIDENCE_RECORD_2026-11-02.md`, `SPRINT5_SCORECARD_2026-11-02.json`, `SPRINT5_THRESHOLD_PROPOSAL_2026-11-02.md`, `SHOPIFY_55_LABELLING_HANDOFF_2026-11-02.md` |
+| Source activation (new since the first package) | `src/webdesk/investigation/engine.py` (`ACTIVE_BOUNDARIES`), `src/webdesk/investigation/retrieval.py` (title excluded from body text), `docs/specialists/knowledge/sources.json`, `tests/unit/test_sprint5_activation.py`, `SPRINT5_SOURCE_ACTIVATION_MATRIX_2026-11-02.md` |
+| Dataset v5 and runner | `sprint5_scenarios_v5.json` and manifest; `src/webdesk/evaluation/runner.py` (per-capability activity) |
+| Governance records | `SPRINT5_REQUIREMENT_TEST_MATRIX_2026-11-02.md`, `SPRINT5_ACCEPTANCE_GATE_2026-11-02.md`, `SPRINT5_S5-011_DISPOSITION_2026-11-02.md`, `SPRINT5_REAL_EVIDENCE_REPORT_2026-11-02.md`, `SPRINT5_REAL_EVIDENCE_RECORD_2026-11-02.md`, `SPRINT5_SCORECARD_2026-11-02.json`, `SPRINT5_THRESHOLD_PROPOSAL_2026-11-02.md`, `SHOPIFY_55_LABELLING_HANDOFF_2026-11-02.md` |
 
 ## 3. Questions for the reviewer
 
@@ -25,7 +27,9 @@
 2. Does `UNAPPROVED_CAPABILITIES` distinguish a named unapproved capability (UNSUPPORTED_SOURCE) from a request that names none (CLARIFY)?
 3. Is the BigCommerce citation (an endpoint path as the passage) acceptable for the narrow claim it supports?
 4. Is the S5-011 expectation (UNSUPPORTED_SOURCE against the specification's CLARIFY example) a finding?
-5. Does the scorecard overstate anything? In particular, do "evaluated" dimension statuses claim more than requirement-level routing?
+5. Is the heading-passage defect (headings still supply passages, see the real evidence report, section 4) a finding that blocks acceptance?
+6. Does the Shopify reconciliation (section 4 of the activation matrix) correctly describe the decision records?
+7. Does the scorecard overstate anything? In particular, do "evaluated" dimension statuses claim more than requirement-level routing?
 
 ## 4. Evidence the reviewer can rerun
 

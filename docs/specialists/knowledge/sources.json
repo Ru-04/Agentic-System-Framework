@@ -98,8 +98,8 @@
       ],
       "paths": "Exact pages only: /commerce/webapi/rest/, /commerce/webapi/graphql/, /commerce/extensibility/events/",
       "approval_reference": "ADOBE-01 (27 Oct 2026)",
-      "ownership_status": "PUBLISHER-CONTROLLED (browser check, one exact page); OWNER STATEMENT NOT FOUND",
-      "status": "APPROVED BUT INACTIVE",
+      "ownership_status": "PUBLISHER-CONTROLLED (browser check of all three exact pages, 2 Nov 2026); OWNER STATEMENT NOT FOUND",
+      "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
         "adobe_commerce",
         "adobe_commerce"
@@ -114,7 +114,8 @@
           "observed": "Title 'REST API Overview'. Adobe developer navigation and links to developer.adobe.com/apis. No redirect. GraphQL and events pages not checked.",
           "verified_at": "2026-10-28 (browser batch, ~11:32-11:35 UTC)"
         }
-      ]
+      ],
+      "activation_reference": "WDS management authorization, 2 Nov 2026 (Sprint 5 decisions, section 2). Read-only. Exact pages only. Adobe Commerce edition only."
     },
     {
       "source_id": "adobe_shared_php",
@@ -144,7 +145,7 @@
       "paths": "Exact page /en/docs/commerce-operations/release/notes/magento-open-source/overview only",
       "approval_reference": "MAGENTO-01 (27 Oct 2026, with restrictions: release and version claims only)",
       "ownership_status": "PUBLISHER-CONTROLLED (browser check); OWNER STATEMENT NOT FOUND",
-      "status": "APPROVED BUT INACTIVE",
+      "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
         "magento_open_source",
         "magento_open_source"
@@ -159,7 +160,8 @@
           "observed": "Title 'Magento Open Source release notes | Adobe Commerce'. Adobe Experience League navigation. No redirect.",
           "verified_at": "2026-10-28 (browser batch, ~11:32-11:35 UTC)"
         }
-      ]
+      ],
+      "activation_reference": "WDS management authorization, 2 Nov 2026 (Sprint 5 decisions, section 2). Read-only. One exact page. Release and version claims only (MAGENTO-01)."
     },
     {
       "source_id": "shift4shop_3dcart_discovery",

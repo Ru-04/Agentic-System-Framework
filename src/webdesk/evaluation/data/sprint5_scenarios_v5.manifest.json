@@ -1,0 +1,28 @@
+{
+  "dataset_id": "sprint5-scenarios-v5-2026-11-02",
+  "sha256": "e59c62171c68374fad4cb69193bb4e9eb352b7096da5cc09564df0142d6c2e04",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v4-2026-11-02",
+    "file": "sprint5_scenarios_v4.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-008",
+      "from": "UNSUPPORTED_SOURCE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "Source activation 2 Nov 2026 (management authorization, Sprint 5 decisions section 2): Adobe Commerce exact pages. Version not stated, so rule 4 applies."
+    },
+    {
+      "scenario_id": "S5-024",
+      "from": "UNSUPPORTED_SOURCE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "Same activation as S5-008. GraphQL is an Adobe Commerce capability on an activated exact page. Version not stated."
+    }
+  ],
+  "unchanged_by_activation": [
+    "S5-025 (Adobe-only REST on Magento Open Source: ADOBE-01, not attributed)",
+    "S5-009 (Magento Open Source feature: release notes only, MAGENTO-01)",
+    "S5-001 and S5-012 (Shopify inactive)"
+  ],
+  "note": "Frozen manifest. Re-amended under a new manifest because a source activation changed expectations. Not approved as acceptance criteria."
+}
