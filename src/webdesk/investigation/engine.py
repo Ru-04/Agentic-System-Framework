@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
-from webdesk.evidence.allowlist import SHOPIFY_PLAN_SCOPES, ScopedHost, VendorAllowlist
+from webdesk.evidence.allowlist import ScopedHost, VendorAllowlist
 from webdesk.evidence.approved_boundaries import (
     ADOBE_COMMERCE_EXACT,
     ADOBE_SHARED,
