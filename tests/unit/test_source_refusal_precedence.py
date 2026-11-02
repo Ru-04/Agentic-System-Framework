@@ -147,7 +147,7 @@ def test_platform_with_no_approved_source_is_unsupported_not_refused() -> None:
 
 def test_inactive_source_with_real_page_is_unsupported_not_an_authorization_refusal() -> None:
     real = _page(
-        "https://shopify.dev/docs/apps/plans",
+        "https://www.shopify.com/pricing/plans",
         "plan feature availability",
         platform="shopify",
         synthetic=False,

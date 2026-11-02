@@ -45,3 +45,10 @@ Final engineering SHA and CI result: see section 4.
 ## 5. Recommendation
 
 HOLD. Do not record Sprint 5 acceptance. Sprint 6 preparation is not started and is not authorized by this record.
+
+## 6. Update, 2 November 2026 (second cycle)
+
+- Gate 5 (real evidence): the verified-claim count is now **zero**. The BigCommerce claim is withdrawn under Decision 3 (see `SPRINT5_REAL_EVIDENCE_REPORT_2026-11-02.md`, section 7). Gate 5 is not met.
+- Gate 6: S5-011 is resolved under WDS Decision 1 (middleware, 2 November 2026). Its evidence outcome stays UNSUPPORTED_SOURCE, and the specification is corrected. S5-005 and S5-007 are unchanged.
+- Gate 9: the Shopify restricted-source policy is applied in code (Decision 2). S2-D08 is still unconfirmed.
+- Gates 4 and 7 are unchanged: no human labels, and no PG review.

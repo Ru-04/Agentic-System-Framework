@@ -32,8 +32,7 @@ def _record(kind: SourceKind, origin: str, **overrides: Any) -> SourceRecord:
 @pytest.mark.parametrize(
     "origin",
     [
-        "https://shopify.dev/docs/api",
-        "https://help.shopify.com/en/manual",
+        "https://www.shopify.com/pricing",
     ],
 )
 def test_vendor_record_with_allowlisted_origin_is_accepted(origin: str) -> None:

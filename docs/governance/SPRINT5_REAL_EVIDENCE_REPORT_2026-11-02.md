@@ -54,3 +54,17 @@ For each: requirement, specialist and capability, URL, publisher and verificatio
 - No real evidence exists for Shopify, Shift4Shop, WordPress core, Standalone or Middleware.
 - No real evidence establishes any Adobe or Magento capability for any version.
 - The scenario scores are requirement-level routing on synthetic fixtures and are not evidence about any vendor.
+
+## 7. Update, 2 November 2026 (08:30 UTC run): policy change under Decision 3
+
+After the substantive-block policy was applied, the current run (`SPRINT5_REAL_EVIDENCE_2026-11-02.json`, run 08:29:26 UTC) gives:
+
+| Case | Result now | Change |
+|---|---|---|
+| WooCommerce products reference | UNKNOWN, no passage | Unchanged |
+| **BigCommerce get-product** | **UNKNOWN, no passage** | **Verified claim withdrawn.** The endpoint line used before is a JSON example inside a script payload. Script content is not body text under the policy. WDS decision needed on whether rendered or script-embedded examples count |
+| Adobe REST overview | UNKNOWN, no passage | Unchanged |
+| Adobe GraphQL overview | UNKNOWN. Passage: "GraphQL is a data query language and runtime that revolutionizes how you build and consume APIs." | The passage is now a prose sentence. No version is stated, so the claim stays unknown |
+| Magento release notes | UNKNOWN, no passage | Heading-only passages no longer count |
+
+The verified-claim total is now **zero**. The BigCommerce single-product claim in sections 2 and 3.1 above is superseded by this section.

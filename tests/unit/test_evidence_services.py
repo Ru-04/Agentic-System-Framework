@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from tests.support.evidence_fixtures import fixture_source
-from webdesk.evidence.allowlist import PROPOSED_SHOPIFY_ALLOWLIST, VendorAllowlist
+from webdesk.evidence.allowlist import SHOPIFY_PLAN_SCOPES, VendorAllowlist
 from webdesk.evidence.citations import (
     Citation,
     CitationCheck,
@@ -34,6 +34,9 @@ from webdesk.evidence.sources import (
     assess_freshness,
 )
 from webdesk.evidence.untrusted import flag_instruction_like, split_by_trust
+
+# Test fixture only. A stand-in for a mechanics test. It is not an approved source.
+TEST_ALLOWLIST = VendorAllowlist(frozenset({"shopify.dev"}))
 
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 TEXT = "Storefront API access needs a token.\nUnrelated line about shipping.\n"
@@ -189,13 +192,12 @@ def test_query_validation() -> None:
     "url",
     [
         "https://shopify.dev/docs/api",
-        "https://help.shopify.com/en/manual",
         "https://SHOPIFY.DEV/docs",
         "https://shopify.dev:443/docs",
     ],
 )
 def test_allowlist_permits_exact_https_hosts(url: str) -> None:
-    assert PROPOSED_SHOPIFY_ALLOWLIST.permits(url)
+    assert TEST_ALLOWLIST.permits(url)
 
 
 @pytest.mark.parametrize(
@@ -214,7 +216,7 @@ def test_allowlist_permits_exact_https_hosts(url: str) -> None:
     ],
 )
 def test_allowlist_refuses_lookalikes_and_unsafe_urls(url: str) -> None:
-    assert not PROPOSED_SHOPIFY_ALLOWLIST.permits(url)
+    assert not TEST_ALLOWLIST.permits(url)
 
 
 def test_allowlist_hosts_must_be_lowercase() -> None:
@@ -229,7 +231,7 @@ def test_fetch_refuses_non_allowlisted_url_without_any_network_call() -> None:
     with pytest.raises(RetrievalError) as exc_info:
         fetch_vendor_document(
             "https://evil.example/doc",
-            allowlist=PROPOSED_SHOPIFY_ALLOWLIST,
+            allowlist=TEST_ALLOWLIST,
             workspace_id="ws-a",
             source_id="s",
             title="t",
@@ -246,8 +248,8 @@ def test_fetch_builds_a_source_record_from_an_allowlisted_response() -> None:
         return io.BytesIO(body)
 
     source = fetch_vendor_document(
-        "https://shopify.dev/docs/api",
-        allowlist=PROPOSED_SHOPIFY_ALLOWLIST,
+        "https://www.shopify.com/pricing",
+        allowlist=VendorAllowlist(frozenset(), scoped=SHOPIFY_PLAN_SCOPES),
         workspace_id="ws-a",
         source_id="s",
         title="t",
@@ -258,7 +260,7 @@ def test_fetch_builds_a_source_record_from_an_allowlisted_response() -> None:
     assert source.kind is SourceKind.VENDOR_DOC
     assert source.text == "Storefront API docs."
     assert "var x" not in source.text
-    assert source.origin == "https://shopify.dev/docs/api"
+    assert source.origin == "https://www.shopify.com/pricing"
 
 
 def test_fetch_enforces_size_limit() -> None:
@@ -268,7 +270,7 @@ def test_fetch_enforces_size_limit() -> None:
     with pytest.raises(RetrievalError) as exc_info:
         fetch_vendor_document(
             "https://shopify.dev/docs",
-            allowlist=PROPOSED_SHOPIFY_ALLOWLIST,
+            allowlist=TEST_ALLOWLIST,
             workspace_id="ws-a",
             source_id="s",
             title="t",
@@ -290,7 +292,7 @@ def test_fetch_classifies_http_and_connection_failures() -> None:
         raise TimeoutError()
 
     kwargs: dict[str, Any] = {
-        "allowlist": PROPOSED_SHOPIFY_ALLOWLIST,
+        "allowlist": TEST_ALLOWLIST,
         "workspace_id": "ws-a",
         "source_id": "s",
         "title": "t",

@@ -346,7 +346,7 @@ SPECS: dict[SpecialistId, dict[str, object]] = {
             "and idempotency rules are project design choices, not vendor claims."
         ),
         examples=[
-            "Webhook delivery and retry requirement with no product named: CLARIFY.",
+            "Webhook delivery and retry requirement with no product named: UNSUPPORTED_SOURCE for the evidence (no approved source). Webhook retry, error recovery, idempotency and synchronisation are recognised technical requirements, not unsupported ones. Missing integration context is requested as clarification. No product is required.",
             "One named middleware product: bounded example for WDS to choose. Not selected.",
         ],
         estimation=REQ,

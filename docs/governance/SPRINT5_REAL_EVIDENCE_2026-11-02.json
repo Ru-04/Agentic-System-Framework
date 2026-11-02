@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-11-02T07:44:37.287212+00:00",
+  "run_at": "2026-11-02T08:30:29.372344+00:00",
   "scope": "read-only retrieval of exact approved pages; redirects not followed",
   "results": [
     {
@@ -10,12 +10,12 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
         }
       ],
       "title": "Products API | WooCommerce developer docs",
       "final_url": "https://developer.woocommerce.com/docs/apis/store-api/resources-endpoints/products/",
-      "content_sha256": "aa2ce12c1cf56287018262cefa8556fa6339f149ce702abea47f1ac587993279",
+      "content_sha256": "136808aa6b4f3896deebaaf053e96c8bef784807a2060def8d9fb1bb38c65d9b",
       "capability": "product variation pricing",
       "outcome": "unknown_support",
       "citations": [],
@@ -35,24 +35,20 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
         }
       ],
       "title": "Get Product | BigCommerce Docs",
       "final_url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
-      "content_sha256": "fa905fca5b4683f130ad4923c564c841b4e3f336adf00d1cf250e246e755cf87",
+      "content_sha256": "3c4fc37bc63284662c72380134b07f2d441f5f40b8cbba5a771246f5cd23fa03",
       "capability": "product catalog read",
-      "outcome": "verified_support",
-      "citations": [
-        {
-          "url": "https://docs.bigcommerce.com/developer/api-reference/rest/admin/catalog/products/get-product",
-          "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
-          "version": "v3"
-        }
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": null,
+      "passage_digest": null,
+      "unknowns": [
+        "no approved page in the set states this capability for the requested version"
       ],
-      "passage": "https://api.bigcommerce.com/stores/store_hash/v3/catalog/products/1",
-      "passage_digest": "0df66e955ccf76effb6e920a21c875fc4bae77d581aabb6395b044fc57d37348",
-      "unknowns": [],
       "refusals": []
     },
     {
@@ -63,12 +59,12 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
         }
       ],
       "title": "REST API Overview",
       "final_url": "https://developer.adobe.com/commerce/webapi/rest/",
-      "content_sha256": "945563e1a197658313da331e6878b60da700f541e90e40a3c26fd5343299d5a0",
+      "content_sha256": "5191e09476f38cf476c7627e12d38a88bbf40648f37318334e819746a1b11cac",
       "capability": "REST product read",
       "outcome": "unknown_support",
       "citations": [],
@@ -88,17 +84,17 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
         }
       ],
       "title": "GraphQL overview",
       "final_url": "https://developer.adobe.com/commerce/webapi/graphql/",
-      "content_sha256": "e7d4dd7e85a150e76dc35c424d10a9e0e894527be7c3db0a506af055635eabd8",
+      "content_sha256": "9362f84a69d603be5c53a89cf8bc5558051587fb70052d24f46502135d44ba51",
       "capability": "GraphQL query",
       "outcome": "unknown_support",
       "citations": [],
-      "passage": "GraphQL overview",
-      "passage_digest": "b7f9cc1c14878ef7989f0731e62581b9fa8dbd29c0ceed8ce9fe03daada4d8eb",
+      "passage": "GraphQL is a data query language and runtime that revolutionizes how you build and consume APIs.",
+      "passage_digest": "f6eeae78a5b207d1472a1c774cd8c3b970ad7bd3be475fd88d63700de0c4a3c9",
       "unknowns": [
         "version applicability is not established for at least one page",
         "no approved page in the set states this capability for the requested version"
@@ -113,17 +109,17 @@
         {
           "status": "fetched",
           "reason": "retrieved",
-          "retrieved_at": "2026-11-02T07:44:37.287212+00:00"
+          "retrieved_at": "2026-11-02T08:30:29.372344+00:00"
         }
       ],
       "title": "Magento Open Source release notes | Adobe Commerce",
       "final_url": "https://experienceleague.adobe.com/en/docs/commerce-operations/release/notes/magento-open-source/overview",
-      "content_sha256": "986b9895c297bb2bcd68804cb62f77d16c434edd3098740967483aa0bac96545",
+      "content_sha256": "f40324d0bca6e59483aa27b0f3dd3090248770392bfd39631147a03b7dd1a08b",
       "capability": "release history",
       "outcome": "unknown_support",
       "citations": [],
-      "passage": "Release information",
-      "passage_digest": "0717b21358c448f17f48f7d5eb333bba33cfc1ead36ab208af29180608b78eea",
+      "passage": null,
+      "passage_digest": null,
       "unknowns": [
         "version applicability is not established for at least one page",
         "no approved page in the set states this capability for the requested version"

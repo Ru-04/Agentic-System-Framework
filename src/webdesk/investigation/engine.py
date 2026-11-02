@@ -60,7 +60,7 @@ class ClaimKind(StrEnum):
 # Shopify boundary as approved for the Sprint 2 evaluation (S2-D07 to S2-D09). Registered
 # here as INACTIVE: it is listed in no active set, so only synthetic pages are used.
 SHOPIFY_INACTIVE: Final[VendorAllowlist] = VendorAllowlist(
-    frozenset({"shopify.dev", "help.shopify.com"}),
+    frozenset(),
     scoped=SHOPIFY_PLAN_SCOPES,
 )
 

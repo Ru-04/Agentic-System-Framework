@@ -24,9 +24,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from html.parser import HTMLParser
 from typing import Final
 
-from webdesk.evidence.http_vendor import _LOOKS_LIKE_HTML, Opener, _text_from_html
+from webdesk.evidence.http_vendor import _LOOKS_LIKE_HTML, Opener
 from webdesk.evidence.untrusted import flag_instruction_like
 from webdesk.investigation import engine
 from webdesk.investigation.engine import Edition, Page
@@ -103,10 +104,9 @@ def retrieve_approved_pages(
         raw = _decode(body, records)
         if raw is None:
             continue
-        # The document title is metadata (Page.title). It is not body text, so it cannot supply
-        # a passage that supports a claim.
-        body_raw = _TITLE.sub("", raw)
-        text = _text_from_html(body_raw) if _LOOKS_LIKE_HTML.search(raw) else raw
+        # Sprint 5 Decision 3 (2 Nov 2026): only substantive blocks form the text, so headings,
+        # titles and navigation cannot supply a passage. Plain text is used as it is.
+        text = _substantive_text(raw) if _LOOKS_LIKE_HTML.search(raw) else raw
         if _is_not_found(text):
             # A 200 response whose body is a not-found page is not documentation. Excluded.
             records.append(FetchRecord(FetchStatus.UNAVAILABLE, "page not found; not usable"))
@@ -188,6 +188,89 @@ def _is_not_found(text: str) -> bool:
 
 
 _TITLE: Final[re.Pattern[str]] = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+# Blocks that carry substantive content: prose, list items, table cells, code and API specification
+# blocks, and documented examples. Headings and titles are not on this list, so they cannot count.
+_SUBSTANTIVE_TAGS: Final[frozenset[str]] = frozenset(
+    {"p", "li", "td", "th", "pre", "code", "blockquote", "dd", "dt", "caption", "figcaption"}
+)
+# Never body text, even inside a substantive block.
+_NON_BODY_TAGS: Final[frozenset[str]] = frozenset(
+    {
+        "script",
+        "style",
+        "title",
+        "nav",
+        "header",
+        "footer",
+        "aside",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+    }
+)
+
+
+# A prose block needs at least this many words. A one-word label or a short list item is not a
+# passage that can support a claim. Code and API specification blocks are exempt.
+_MIN_PROSE_WORDS: Final = 4
+_SPECIFICATION_TAGS: Final[frozenset[str]] = frozenset({"pre", "code"})
+
+
+class _SubstantiveExtractor(HTMLParser):
+    """Collects one passage per outermost substantive block, and nothing else."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._skip = 0
+        self._depth = 0
+        self._specification = False
+        self._buffer: list[str] = []
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _NON_BODY_TAGS:
+            self._skip += 1
+        elif tag in _SUBSTANTIVE_TAGS:
+            if self._depth == 0:
+                self._buffer = []
+                self._specification = False
+            self._depth += 1
+            if tag in _SPECIFICATION_TAGS:
+                self._specification = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _NON_BODY_TAGS and self._skip:
+            self._skip -= 1
+        elif tag in _SUBSTANTIVE_TAGS and self._depth:
+            self._depth -= 1
+            if self._depth == 0:
+                self._flush()
+
+    def handle_data(self, data: str) -> None:
+        text = data.strip()
+        if text and self._depth and not self._skip:
+            self._buffer.append(text)
+
+    def _flush(self) -> None:
+        if self._specification:
+            block = "\n".join(self._buffer)
+        else:
+            block = " ".join(self._buffer)
+            if len(block.split()) < _MIN_PROSE_WORDS:
+                return
+        if block:
+            self.parts.append(block)
+
+
+def _substantive_text(raw: str) -> str:
+    extractor = _SubstantiveExtractor()
+    extractor.feed(raw)
+    extractor.close()
+    return "\n".join(extractor.parts)
 
 
 def _page_title(raw: str) -> str:

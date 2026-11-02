@@ -1,0 +1,56 @@
+pair_id,requirement_id,source_id,requirement,passage_sha256,matches_blind_file
+P001,SH-CASE-01-R1,shopify-doc-05,"Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses.",4147475e63e31dbc1e7ae2197f5212972047fa6bb490e50c500752f88538ac61,yes
+P002,SH-CASE-01-R1,shopify-doc-05,"Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses.",4147475e63e31dbc1e7ae2197f5212972047fa6bb490e50c500752f88538ac61,yes
+P003,SH-CASE-01-R1,shopify-doc-05,"Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses.",4147475e63e31dbc1e7ae2197f5212972047fa6bb490e50c500752f88538ac61,yes
+P004,SH-CASE-01-R1,shopify-doc-04,"Validate Canadian postal addresses at checkout, with particular attention to rural and remote addresses.",f6ed1497ccaa05ecdc3fe98e97d826ca96293b8ac6ecd52789f9648a6d1b8313,yes
+P005,SH-CASE-01-R2,shopify-doc-05,Do not rely on IP-based province detection. Province must be captured explicitly.,6cedb3e9853f69296ea573bf29a5ba083347f662a24b2f5e09b188f0be3d0a04,yes
+P006,SH-CASE-01-R3,shopify-doc-13,Let a customer renew a rate plan from the order status page without creating an account.,d7e1aafc000ae818340e6c76ce3850a9ea948de2afc2daaf878a8a3298a82e60,yes
+P007,SH-CASE-01-R3,shopify-doc-13,Let a customer renew a rate plan from the order status page without creating an account.,d7e1aafc000ae818340e6c76ce3850a9ea948de2afc2daaf878a8a3298a82e60,yes
+P008,SH-CASE-01-R3,shopify-doc-13,Let a customer renew a rate plan from the order status page without creating an account.,859ba26d61e506753ca2d41382fd3f03988eb4f4037648264cca74719d94c112,yes
+P009,SH-CASE-01-R3,shopify-doc-13,Let a customer renew a rate plan from the order status page without creating an account.,ee0aff35b5bebb50c3d1de167af91fa9b0e7d4769d1350740d74ce6f7f7477c9,yes
+P010,SH-CASE-01-R3,shopify-doc-14,Let a customer renew a rate plan from the order status page without creating an account.,558e49696023f16fd4747aa8d95180cb8dd181b67c276a70caa46cc040c629b0,yes
+P011,SH-CASE-01-R4,shopify-doc-05,"Create the customer account after purchase, reusing details already entered at checkout.",4cbb9333ebf9b24745a88b6e9e6f5d7e29eb715ace960afc3cf5f1530c280ec3,yes
+P012,SH-CASE-01-R4,shopify-doc-05,"Create the customer account after purchase, reusing details already entered at checkout.",4cbb9333ebf9b24745a88b6e9e6f5d7e29eb715ace960afc3cf5f1530c280ec3,yes
+P013,SH-CASE-01-R4,shopify-doc-05,"Create the customer account after purchase, reusing details already entered at checkout.",4cbb9333ebf9b24745a88b6e9e6f5d7e29eb715ace960afc3cf5f1530c280ec3,yes
+P014,SH-CASE-01-R4,shopify-doc-13,"Create the customer account after purchase, reusing details already entered at checkout.",cc224a433403e08e81f2693d2bd7f623e9f4b62d78f4e68657fbf25341d60090,yes
+P015,SH-CASE-01-R4,shopify-doc-03,"Create the customer account after purchase, reusing details already entered at checkout.",8847b00b3c36293000e86b74d772c5c6307deb740fe26b5f0547a3f3ba431221,yes
+P016,SH-CASE-01-R5,shopify-doc-11,"Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply.",75110d9a9267c77bc9d652353c861f259b370819f59c7234d097b7edfc346e32,yes
+P017,SH-CASE-01-R5,shopify-doc-04,"Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply.",cb0ffdafaa6fcbe2c1d9809ff34c0d8cb1c54bf3d2d1b9778a42afd8c9e76fd0,yes
+P018,SH-CASE-01-R5,shopify-doc-12,"Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply.",6b9d4fa5de7b967299c75e33cd87991d4c863775257875019ff5631a9fde7c3c,yes
+P019,SH-CASE-01-R5,shopify-doc-01,"Calculate regional tax and fixed levies correctly for a digital subscription, and avoid shipping fields that do not apply.",c1255e382369fe642dba8c129527c04cafbf83298cc87e8cda1588441b7abbda,yes
+P020,SH-CASE-02-R1,shopify-doc-09,"Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact.",91388f12fc626b8e43915d3f922a19d256d53f875ed86d44c6d8e6d8096a0747,yes
+P021,SH-CASE-02-R1,shopify-doc-11,"Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact.",411b6994f60de3e9d59b1f68b3e3a4c9f6ef1be45841ca2385632f0e116b6501,yes
+P022,SH-CASE-02-R1,shopify-doc-13,"Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact.",859ba26d61e506753ca2d41382fd3f03988eb4f4037648264cca74719d94c112,yes
+P023,SH-CASE-02-R1,shopify-doc-04,"Provide a dedicated page per artist, with featured works, while keeping SEO and live inventory intact.",bf274070b5a4e7abb11d28c99eb5924f530aec5c6c2759d9c8a37a598c050ead,yes
+P024,SH-CASE-02-R2,shopify-doc-01,"Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set.",e89bbf5b7efc1691f7ea6b30486180a84cdb75e5bcd55c86675939b09367b063,yes
+P025,SH-CASE-02-R2,shopify-doc-06,"Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set.",a4b5880e3c1951a802486110b813a461322d6d810139777a7fbe9c558e3ab615,yes
+P026,SH-CASE-02-R2,shopify-doc-11,"Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set.",411b6994f60de3e9d59b1f68b3e3a4c9f6ef1be45841ca2385632f0e116b6501,yes
+P027,SH-CASE-02-R2,shopify-doc-11,"Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set.",702abd6e36913df32faf71cf423f6c058eaa1c2db5477d2f90da2aba643b99f5,yes
+P028,SH-CASE-02-R2,shopify-doc-02,"Provide faceted filters with AND/OR logic, updating results without a page reload, with merchandising control of the filter set.",22c76d36872afed951ef7499442f5b38df44e81f912bbb14ab561a152dac506b,yes
+P029,SH-CASE-02-R3,shopify-doc-04,"Provide search that handles natural-language phrasing, typos and autocomplete at catalogue scale.",47264620f64243ce2e80b3a9c4b80e6b5d1a3afbe56009d7d50d26d4994f6e58,yes
+P030,SH-CASE-02-R3,shopify-doc-14,"Provide search that handles natural-language phrasing, typos and autocomplete at catalogue scale.",aa11fffb7c98c6d52e394b93a74e897c4d4cf1e5b29618a0c3680dc387648482,yes
+P031,SH-CASE-02-R3,shopify-doc-03,"Provide search that handles natural-language phrasing, typos and autocomplete at catalogue scale.",019d2142be654739968791b83da1caab65b5aa8421dfe44f736bcdefd708a35b,yes
+P032,SH-CASE-02-R4,shopify-doc-01,Keep checkout behaviour unchanged.,c6c65db9e65cb5c6fc1adbd046038444ff1648c6a33246abdedc0b4101c74e18,yes
+P033,SH-CASE-03-R1,shopify-doc-11,Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser.,7dbace16c294351129397575ac8f6345e5b42591388abe00daed2d82a7415b3d,yes
+P034,SH-CASE-03-R1,shopify-doc-09,Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser.,0024d1f7a87ed6a31d91b70ef498a16928ecceec368ce851b90f0238960e0926,yes
+P035,SH-CASE-03-R1,shopify-doc-10,Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser.,c3d569ef7288617af776a514125a301fa644714a7c84394a4001df9dd7d71641,yes
+P036,SH-CASE-03-R1,shopify-doc-13,Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser.,5c68a134895105cfb08af55874732590ae510052cad0b348c1df00155d1b7302,yes
+P037,SH-CASE-03-R1,shopify-doc-13,Campaign-specific pages with real-time sales tracking and commission calculation per fundraiser.,58dfb23cac4f2a76a6c3fc6d16ac1299cc19b4be82787b3b7898da28b90650c9,yes
+P038,SH-CASE-03-R2,shopify-doc-10,Coexistence of permanent partner stores and campaign-driven stores.,73b0b57ea45ff13b7bbcd552911977e7819d8a3c82b24b501ca8e8654eb7138b,yes
+P039,SH-CASE-03-R2,shopify-doc-10,Coexistence of permanent partner stores and campaign-driven stores.,73b0b57ea45ff13b7bbcd552911977e7819d8a3c82b24b501ca8e8654eb7138b,yes
+P040,SH-CASE-03-R2,shopify-doc-16,Coexistence of permanent partner stores and campaign-driven stores.,8267114e389851fb7d41c48283c523e08d9dfcbbdb4d8025558c03609764fddc,yes
+P041,SH-CASE-03-R3,shopify-doc-14,Role-based administration for partners and staff.,579be18ee404942a74b9ebee12d36bf4bcb26355db3fd2299a3bf1124b9113ec,yes
+P042,SH-CASE-03-R3,shopify-doc-09,Role-based administration for partners and staff.,6756c2c65c076faa61e7d5c42dedfb3b134b187287f89c9004fc369fb74fbce7,yes
+P043,SH-CASE-03-R4,shopify-doc-08,"Synchronization of orders and product data with several external systems, some with custom endpoints.",f68c858bd0708f56dd40e866fd0b00caa472925a035169421b06e9f449ed0b31,yes
+P044,SH-CASE-03-R4,shopify-doc-08,"Synchronization of orders and product data with several external systems, some with custom endpoints.",547468dd0715dc14582b6721b574bb256b02fe4f8efa0d6b74093aa59f1e0f4d,yes
+P045,SH-CASE-03-R4,shopify-doc-14,"Synchronization of orders and product data with several external systems, some with custom endpoints.",f46c90cc028cdc295256803d1e52dc8b80dd3dd54fa8470a1022bf7341bc2b68,yes
+P046,SH-CASE-03-R4,shopify-doc-02,"Synchronization of orders and product data with several external systems, some with custom endpoints.",9d38401ffe73c855c399841a9ac4089d774a9e8f31da3f32ab530cf1f31a00ac,yes
+P047,SH-CASE-03-R4,shopify-doc-02,"Synchronization of orders and product data with several external systems, some with custom endpoints.",e9a446b0e790de56b1bb026ffb20b486a6ad2f48d261b5991415041020c96ca4,yes
+P048,SH-CASE-04-R1,shopify-doc-01,"Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout.",51d8f78f3e1d0fe6f15aa8c4faefedf6803f165bdec5639efefaad1d4e7641bc,yes
+P049,SH-CASE-04-R1,shopify-doc-01,"Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout.",f410b30db03aee0796df46a44b04dec1a4441bd631755801c39b661d6aebb9ab,yes
+P050,SH-CASE-04-R1,shopify-doc-01,"Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout.",8c0aea562691750c21064f54ecd15945df81c8a237a57dd28a164edd1b6b099e,yes
+P051,SH-CASE-04-R1,shopify-doc-05,"Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout.",27109b8a570e5e091af69c477d9bf2b89e5aa9ce8077b44f9c58804b8cecfeb6,yes
+P052,SH-CASE-04-R1,shopify-doc-01,"Pickup time slots with capacity limits, cut-off times and same-day rules, enforced at checkout.",4fe8659e1604f56a20c870b1468659adb7893161fc1860f07040fc1ca786ff3b,yes
+P053,SH-CASE-04-R2,shopify-doc-02,Blackout dates and holidays.,c312c02b58783f7ca3ac78097f6d91985e0129fc3c0e6ae156c822d2d058d322,yes
+P054,SH-CASE-04-R3,shopify-doc-02,"Staff dashboard with daily volume, forecasting and reporting.",9e08129f04030d5a79579f6460355f577723bb6128ea1cd329fefe8ac028a9b0,yes
+P055,SH-CASE-04-R4,shopify-doc-05,Automated order preparation timelines.,8166ef180b765ce44322ce1c6c257969ca77eecd2c9790c9d3ef187776f05c55,yes

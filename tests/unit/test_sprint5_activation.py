@@ -154,3 +154,70 @@ def test_the_magento_release_notes_page_is_release_only() -> None:
     )
     assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
     assert finding.citations == ()
+
+
+# --- Sprint 5 Decision 3: headings and titles are context, not proof -----------------------------
+
+
+def test_a_heading_alone_cannot_support_a_capability() -> None:
+    html = (
+        b"<html><head><title>Storefront</title></head><body>"
+        b"<h2>GraphQL overview</h2><p>Plan the work before you start the project.</p>"
+        b"</body></html>"
+    )
+    outcome = retrieve_approved_pages(
+        platform="adobe_commerce",
+        edition=Edition.ADOBE_COMMERCE,
+        urls=[ADOBE_GRAPHQL],
+        workspace_id=WS,
+        version="2.4.7",
+        opener=Recorder(html),
+        source_id="adobe_commerce_exact_pages",
+        now=NOW,
+    )
+    assert "GraphQL overview" not in outcome.pages[0].text
+    finding = investigate(
+        GRAPHQL, outcome.pages, workspace_id=WS, requested_version="2.4.7", operator_confirmed=True
+    )
+    assert finding.citations == ()
+    assert finding.outcome is not Outcome.VERIFIED_SUPPORT
+
+
+def test_navigation_text_is_not_a_passage() -> None:
+    html = (
+        b"<html><body><nav><a>GraphQL overview</a></nav>"
+        b"<p>Catalog reads use the storefront.</p></body></html>"
+    )
+    outcome = retrieve_approved_pages(
+        platform="adobe_commerce",
+        edition=Edition.ADOBE_COMMERCE,
+        urls=[ADOBE_GRAPHQL],
+        workspace_id=WS,
+        version="2.4.7",
+        opener=Recorder(html),
+        source_id="adobe_commerce_exact_pages",
+        now=NOW,
+    )
+    assert "GraphQL" not in outcome.pages[0].text
+
+
+def test_an_api_specification_block_can_carry_a_passage() -> None:
+    # Decision 3 allows documented examples and API specifications. The BigCommerce endpoint line
+    # that supports the verified single-product claim sits in such a block.
+    html = (
+        b"<html><body><h2>Endpoint</h2>"
+        b"<pre>GET https://api.bigcommerce.com/stores/store_hash/v3/catalog/products/1</pre>"
+        b"</body></html>"
+    )
+    outcome = retrieve_approved_pages(
+        platform="adobe_commerce",
+        edition=Edition.ADOBE_COMMERCE,
+        urls=[ADOBE_GRAPHQL],
+        workspace_id=WS,
+        version="2.4.7",
+        opener=Recorder(html),
+        source_id="adobe_commerce_exact_pages",
+        now=NOW,
+    )
+    assert "catalog/products/1" in outcome.pages[0].text
+    assert "Endpoint" not in outcome.pages[0].text

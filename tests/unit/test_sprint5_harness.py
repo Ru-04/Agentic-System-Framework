@@ -278,14 +278,15 @@ def test_v4_runner_result_differs_only_where_v5_amends_the_activation() -> None:
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V4_DATASET, V4_MANIFEST), observe)
-    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-008", "S5-024"]
+    mismatched = [r.scenario_id for r in report.results if not r.matched]
+    assert mismatched == ["S5-008", "S5-024", "S5-030"]
 
 
 V5_DATASET = DATA / "sprint5_scenarios_v5.json"
 V5_MANIFEST = DATA / "sprint5_scenarios_v5.manifest.json"
 
 
-def test_v5_matches_every_scenario_and_changes_only_the_two_activation_cases() -> None:
+def test_v5_differs_from_the_runner_only_on_the_middleware_synchronisation_case() -> None:
     from webdesk.evaluation.runner import observe
 
     v4 = {s.scenario_id: s for s in load_dataset(V4_DATASET, V4_MANIFEST).scenarios}
@@ -293,6 +294,21 @@ def test_v5_matches_every_scenario_and_changes_only_the_two_activation_cases() -
     v5 = {s.scenario_id: s for s in v5_ds.scenarios}
     assert {sid for sid in v4 if v4[sid].expected != v5[sid].expected} == {"S5-008", "S5-024"}
     report = evaluate(v5_ds, observe)
+    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-030"]
+
+
+V6_DATASET = DATA / "sprint5_scenarios_v6.json"
+V6_MANIFEST = DATA / "sprint5_scenarios_v6.manifest.json"
+
+
+def test_v6_matches_every_scenario_and_changes_only_the_middleware_case() -> None:
+    from webdesk.evaluation.runner import observe
+
+    v5 = {s.scenario_id: s for s in load_dataset(V5_DATASET, V5_MANIFEST).scenarios}
+    v6_ds = load_dataset(V6_DATASET, V6_MANIFEST)
+    v6 = {s.scenario_id: s for s in v6_ds.scenarios}
+    assert {sid for sid in v5 if v5[sid].expected != v6[sid].expected} == {"S5-030"}
+    report = evaluate(v6_ds, observe)
     assert [r.scenario_id for r in report.results if not r.matched] == []
 
 

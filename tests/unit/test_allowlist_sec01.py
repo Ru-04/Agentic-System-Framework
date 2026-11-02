@@ -116,7 +116,8 @@ def test_approved_boundaries_are_only_woocommerce_and_bigcommerce() -> None:
 
 
 def test_existing_sprint2_allowlist_still_permits_its_approved_pages() -> None:
-    assert SPRINT2_ALLOWLIST.permits("https://shopify.dev/docs/api")
+    # WDS Sprint 5 Decision 2: no whole-host Shopify authorization.
+    assert not SPRINT2_ALLOWLIST.permits("https://shopify.dev/docs/api")
     assert SPRINT2_ALLOWLIST.permits("https://www.shopify.com/pricing")
     assert SPRINT2_ALLOWLIST.permits(
         "https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/b-090.html"

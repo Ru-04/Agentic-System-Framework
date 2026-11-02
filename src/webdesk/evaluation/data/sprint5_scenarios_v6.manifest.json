@@ -1,0 +1,17 @@
+{
+  "dataset_id": "sprint5-scenarios-v6-2026-11-02",
+  "sha256": "6ccdb9ad9d7b85a20959501216a0026c6aa780913a8187ad119c72b240754a57",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v5-2026-11-02",
+    "file": "sprint5_scenarios_v5.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-030",
+      "from": "CLARIFY",
+      "to": "UNSUPPORTED_SOURCE",
+      "reason": "WDS Sprint 5 Decision 1 (2 Nov 2026): middleware synchronisation is a recognised technical requirement. The evidence outcome is UNSUPPORTED_SOURCE because no middleware source is approved. Missing integration context is a clarification, not the outcome."
+    }
+  ],
+  "note": "Frozen manifest. Re-amended under a new manifest because the middleware catalog now recognises synchronisation. Not approved as acceptance criteria."
+}

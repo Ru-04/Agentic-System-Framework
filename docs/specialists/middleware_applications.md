@@ -27,6 +27,9 @@ Language and runtime are chosen from requirements, not fixed here. REQUIRES PROJ
 | Capability | Platform | Edition | Claim kind | Required terms |
 |---|---|---|---|---|
 | webhook delivery retry | middleware_applications | not_applicable | feature | webhook, retry |
+| idempotent processing | middleware_applications | not_applicable | feature | idempotency |
+| data synchronisation | middleware_applications | not_applicable | feature | synchronization |
+| error recovery | middleware_applications | not_applicable | feature | error recovery |
 
 Canonical ID: `CAP-MIDDLEWARE-APPLICATIONS`. The knowledge file and the code are checked against this table by tests.
 
@@ -83,7 +86,7 @@ REQUIRES PROJECT-SPECIFIC INPUT
 - Draft guidance: Retries: bounded, with backoff; retry only transient failures. Idempotency: a key per message so a retry cannot duplicate an effect. Observability: correlation identifiers and structured logs. Recovery: dead-letter handling and replay after a fix. These are design topics, not platform claims.
 
 ## 19. Example requirements and investigation scenarios
-- Webhook delivery and retry requirement with no product named: CLARIFY.
+- Webhook delivery and retry requirement with no product named: UNSUPPORTED_SOURCE for the evidence (no approved source). Webhook retry, error recovery, idempotency and synchronisation are recognised technical requirements, not unsupported ones. Missing integration context is requested as clarification. No product is required.
 - One named middleware product: bounded example for WDS to choose. Not selected.
 
 Full draft scenario set: `docs/governance/SPRINT5_EVALUATION_SCENARIOS_DRAFT_2026-10-28.md`.

@@ -18,13 +18,52 @@
         "NO_APPROVED_SOURCE"
       ],
       "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "idempotent processing",
+      "platform": "middleware_applications",
+      "edition": "not_applicable",
+      "claim_kind": "feature",
+      "required_terms": [
+        "idempotency"
+      ],
+      "source_ids": [
+        "NO_APPROVED_SOURCE"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "data synchronisation",
+      "platform": "middleware_applications",
+      "edition": "not_applicable",
+      "claim_kind": "feature",
+      "required_terms": [
+        "synchronization"
+      ],
+      "source_ids": [
+        "NO_APPROVED_SOURCE"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
+    },
+    {
+      "name": "error recovery",
+      "platform": "middleware_applications",
+      "edition": "not_applicable",
+      "claim_kind": "feature",
+      "required_terms": [
+        "error recovery"
+      ],
+      "source_ids": [
+        "NO_APPROVED_SOURCE"
+      ],
+      "evidence_status": "PENDING OFFICIAL EVIDENCE"
     }
   ],
   "clarification_rules": [
     "No recognisable capability or objective in the requirement: CLARIFY, no investigation run.",
     "Requested version not stated: INVESTIGATE_WITH_UNKNOWNS; version applicability stays unknown.",
     "Operator confirmation missing: REFUSE before any evidence is read.",
-    "No named product or technology constraint is stated: ask. Do not select a stack."
+    "Missing integration context (platforms, data direction, volume, security, operational requirements, client constraints) is requested as clarification. It does not change the evidence outcome. No middleware product or stack is selected."
   ],
   "unsupported_behavior": [
     "Feature claim from Magento Open Source release notes: UNSUPPORTED_SOURCE (MAGENTO-01).",

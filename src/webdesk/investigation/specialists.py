@@ -105,6 +105,8 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
             ("architecture",),
         ),
     ),
+    # Technology-neutral (WDS decision, Sprint 5, Decision 1): these are technical requirements a
+    # project may state. Recognising them selects no product and makes no vendor claim.
     SpecialistId.MIDDLEWARE_APPLICATIONS: (
         Capability(
             "webhook delivery retry",
@@ -112,6 +114,35 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
             NA,
             ClaimKind.FEATURE,
             ("webhook", "retry"),
+        ),
+        Capability(
+            "idempotent processing",
+            "middleware_applications",
+            NA,
+            ClaimKind.FEATURE,
+            ("idempotency",),
+            alternative_terms=(("idempotent",),),
+        ),
+        Capability(
+            "data synchronisation",
+            "middleware_applications",
+            NA,
+            ClaimKind.FEATURE,
+            ("synchronization",),
+            alternative_terms=(
+                ("synchronisation",),
+                ("synchronize",),
+                ("synchronise",),
+                ("sync",),
+            ),
+        ),
+        Capability(
+            "error recovery",
+            "middleware_applications",
+            NA,
+            ClaimKind.FEATURE,
+            ("error recovery",),
+            alternative_terms=(("dead-letter",), ("dead letter",)),
         ),
     ),
 }
@@ -134,6 +165,11 @@ PROVIDER_ACTIONS: Final[frozenset[str]] = frozenset(
 )
 
 FEASIBILITY_UNKNOWN: Final = "feasibility is not determined by this specialist"
+MIDDLEWARE_CONTEXT_NOTE: Final = (
+    "integration context is missing: name the platforms, data direction, volume, security and "
+    "operational requirements, and client constraints. Webhook retry, error recovery, idempotency "
+    "and synchronisation are recognised technical requirements; no middleware product is required"
+)
 
 
 @dataclass(frozen=True)
@@ -342,6 +378,10 @@ class InvestigationProvider:
             else:
                 reason = result.reason or "; ".join(result.unknowns)
                 unknowns.append(f"{capability.name}: {result.outcome.value}: {reason}")
+        if self.specialist is SpecialistId.MIDDLEWARE_APPLICATIONS and not findings:
+            # Decision 1 (Sprint 5): the outcome stays UNSUPPORTED_SOURCE. The missing context is
+            # requested, and the recognised technical requirement is not called unsupported.
+            unknowns.append(f"[CLARIFY] {MIDDLEWARE_CONTEXT_NOTE}")
         unknowns.append(f"[{decision.value}] {FEASIBILITY_UNKNOWN}")
         # Failed only when every capability was refused; otherwise incomplete, with refusals listed.
         all_refused = all(outcome is Outcome.REFUSED for outcome in outcomes)

@@ -48,7 +48,7 @@
       "dimension": "clarification behaviour",
       "metric": "match rate, CLARIFY expected",
       "rule": "min 0.95",
-      "scenarios": 9,
+      "scenarios": 8,
       "value": 1.0,
       "verdict": "MET"
     },
@@ -67,8 +67,8 @@
       "verdict": "THRESHOLD PENDING"
     }
   ],
-  "dataset_id": "sprint5-scenarios-v5-2026-11-02",
-  "dataset_sha256": "e59c62171c68374fad4cb69193bb4e9eb352b7096da5cc09564df0142d6c2e04",
+  "dataset_id": "sprint5-scenarios-v6-2026-11-02",
+  "dataset_sha256": "6ccdb9ad9d7b85a20959501216a0026c6aa780913a8187ad119c72b240754a57",
   "dimensions": [
     {
       "basis": "measured only through CLARIFY and capability matching",
@@ -164,8 +164,7 @@
     "middleware_applications": {
       "authorization_failures": 0,
       "dimensions_covered": {
-        "clarification behaviour": 1,
-        "unknown and unsupported outcomes": 2
+        "unknown and unsupported outcomes": 3
       },
       "failure_categories": {},
       "matched": 3,

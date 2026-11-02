@@ -110,9 +110,10 @@ def _matches(path: str, scoped_path: str, exact: bool) -> bool:
     return rest == "" or rest[0] in "/."
 
 
-PROPOSED_SHOPIFY_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(
-    frozenset({"shopify.dev", "help.shopify.com"})
-)
+# WDS Sprint 5 Decision 2 (2 Nov 2026): no whole-host authorization for Shopify. shopify.dev needs
+# exact approved paths or bounded subtrees, and none is approved yet. help.shopify.com stays
+# inactive until its necessary paths are reviewed. Until then this allowlist permits nothing.
+PROPOSED_SHOPIFY_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(frozenset())
 
 # S2-D08: Shopify plan and pricing documentation only. Directory-style prefixes. /features is
 # excluded because it redirects into /pos/features. shopify.com redirects to www.shopify.com, so
@@ -135,7 +136,8 @@ CANADA_TAX_SCOPE: Final[ScopedHost] = ScopedHost(
     exact=True,
 )
 
+# Shopify: scoped entries only (S2-D08 plan pages, flagged for confirmation). No whole host.
 SPRINT2_ALLOWLIST: Final[VendorAllowlist] = VendorAllowlist(
-    frozenset({"shopify.dev", "help.shopify.com"}),
+    frozenset(),
     scoped=(*SHOPIFY_PLAN_SCOPES, CANADA_TAX_SCOPE),
 )
