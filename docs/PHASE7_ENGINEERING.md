@@ -90,13 +90,13 @@ All four are new; no accepted migration (0001–0045) was edited.
   privileges as intended; 20 code and 4 database mutations, all caught except one H-60 variant (F-1).
 - Verdict on ae032a2: **QA PASSED — ELIGIBLE FOR WDS PHASE 7 ACCEPTANCE** (reviewer assessment, not WDS acceptance).
 - No remediation round was needed.
-- WDS formal acceptance: **PENDING** (requires a WDS decision).
+- WDS formal acceptance: **GRANTED** (see Formal acceptance record).
 
 ### Open findings (none blocking)
 
 | ID | Severity | Finding | Disposition |
 | --- | --- | --- | --- |
-| F-1 | Medium | No test proves the H-60 checks run before authorization (only before the revision check); moving validation to just after `_authorize` passes all intake tests. The code itself is correct | Recommended test-only follow-up; needs a new frozen SHA and reviewer re-check |
+| F-1 | Medium | No test proved the H-60 checks run before authorization (only before the revision check) | Closed by test-only commit 89d6ef2: `test_h60_size_and_type_are_checked_before_authorization` fails when validation is moved after `_authorize` |
 | F-2 | Low | Pre-existing event names `run.run.cancel.denied` / `run.run.retry.denied`; the H-71 path inherits them | WDS call whether to rename |
 | F-3 | Low | H-75 checks are service reads; `fn_grant_restricted_with_proof` does not re-check them, so a race with an archive or a direct function call can still insert a grant. The read path still refuses inactive users and ties sources to their project | Follow-up candidate: re-check inside the SQL function |
 | F-4 | Low | `source.parse.*` worker audits have no `project_id` (version audits, outside H-70's letter) | Known limitation |
@@ -118,11 +118,15 @@ All four are new; no accepted migration (0001–0045) was edited.
   cross-phase integration readiness.
 - **Technical recommendation:** ACCEPT, standalone scope only, with F-1 recommended as a test-only follow-up.
 
-## Formal acceptance record (draft, not granted)
+## Formal acceptance record
 
-- Scope, SHAs and QA verdict: as above.
-- **WDS formal acceptance: PENDING.** The approver identity, timestamp, signature, channel and artifact digests are
-  not in this repository and have not been filled in.
+- Scope, SHAs and QA verdict: as above. Accepted engineering SHA ae032a2; documentation SHA 79fa636.
+- **WDS formal acceptance: GRANTED**, stated by WDS in the Claude Code chat session on 2 November 2026
+  ("I have given my formal phase 7 acceptance"). The approver identity, signature, approval-channel reference and
+  artifact digests are not in this repository and have not been filled in.
+- Post-acceptance, test-only commit 89d6ef2 closes QA finding F-1 (a test that H-60 size and type checks run
+  before authorization; mutation-checked). It changes no source code. Its independent re-check is part of the
+  cross-phase integration QA.
 
 ## Cross-phase integration handoff
 
