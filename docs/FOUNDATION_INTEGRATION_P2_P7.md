@@ -170,3 +170,16 @@ Code HEAD `db7d6f1`. This record is the only later commit.
   not separately tested.
 - Phase 7 F-2 to F-8, Phase 6 informational items and Phase 2 Blocker A are unchanged.
 - Independent QA of this candidate and any acceptance are outstanding.
+
+## Independent QA and status (recorded after QA)
+
+- Frozen integration candidate: **32c98f6** (code commit db7d6f1). Reviewer: a separate agent in a detached checkout
+  `D:/WDS/qa-int-32c98f6`, QA cluster `webdesk-int-qa-postgres`, port 5487, system identifier 7703463818934988838.
+- Reviewer results: full suite 1026 passed, 0 failed, 0 skipped, exit 0; ruff clean; format only the four documented
+  frozen migrations; `mypy --strict` clean; single head 0059; supported rollback range verified on 16 scratch
+  databases; no PUBLIC EXECUTE on any of 88 guard functions. Report: `docs/FOUNDATION_INTEGRATION_QA_REPORT_32c98f6.md`.
+- Verdict: **QA PASSED — INTEGRATION CANDIDATE TECHNICALLY VERIFIED** (technical assessment, not acceptance).
+- Open: QA F-1 (Medium), a non-leaf multipart part with `name=` is neither the body nor reported as an attachment;
+  needs a WDS clarification of ruling 2. F-2 to F-9 Low or Informational.
+- Promotion of this candidate requires recorded WDS acceptance of Phases 2, 3, 4 and 6 (not recorded in the
+  repository). Production readiness: **NOT VERIFIED**; see `docs/FOUNDATION_PRODUCTION_READINESS_ASSESSMENT.md`.
