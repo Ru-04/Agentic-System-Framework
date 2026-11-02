@@ -12,6 +12,12 @@ The catalogs compared are: tables, columns, column and table ACLs, constraints,
 indexes, triggers, functions (definition, owner, ACL, search path, security
 definer flag), schema ACLs, role memberships, and the operation authorization
 rules. Historical migrations are not rewritten; the test runs their committed text.
+
+Function definitions are compared with SQL comments removed (``--`` line comments and ``/* */``
+block comments), as ruled by WDS in chat on 2 November 2026 ("Ignore comments in test"): a
+comment-only difference is acceptable. A line that held only a comment is dropped, and a line that
+ended in a comment loses its trailing whitespace. Everything else, including every other character
+of each definition, is compared exactly.
 """
 
 from __future__ import annotations
@@ -104,16 +110,81 @@ def _alembic(url: str, target: str, *, down: bool) -> None:
             os.environ["WEBDESK_DATABASE_URL"] = previous
 
 
+def strip_sql_comments(source: str) -> str:
+    """``source`` without its SQL comments; quoted text is kept as it is.
+
+    ``--`` runs to the end of the line; ``/* */`` may nest, as in PostgreSQL. Single-quoted
+    literals (with ``''`` escapes) and double-quoted identifiers are copied unchanged, so a comment
+    marker inside them is not a comment. A line that held only comment text is removed; a line that
+    ended in a comment loses the whitespace before it.
+    """
+    out: list[str] = []
+    commented_lines: set[int] = set()
+    i, line, depth, n = 0, 0, 0, len(source)
+    while i < n:
+        ch = source[i]
+        if depth:
+            commented_lines.add(line)
+            if source.startswith("/*", i):
+                depth, i = depth + 1, i + 2
+            elif source.startswith("*/", i):
+                depth, i = depth - 1, i + 2
+            else:
+                if ch == "\n":
+                    out.append(ch)
+                    line += 1
+                    commented_lines.add(line)
+                i += 1
+        elif source.startswith("--", i):
+            commented_lines.add(line)
+            while i < n and source[i] != "\n":
+                i += 1
+        elif source.startswith("/*", i):
+            commented_lines.add(line)
+            depth, i = 1, i + 2
+        elif ch in ("'", '"'):
+            end = i + 1
+            while end < n:
+                if source.startswith(ch * 2, end):
+                    end += 2
+                elif source[end] == ch:
+                    break
+                else:
+                    end += 1
+            quoted = source[i : end + 1]
+            out.append(quoted)
+            line += quoted.count("\n")
+            i = end + 1
+        else:
+            if ch == "\n":
+                line += 1
+            out.append(ch)
+            i += 1
+    kept: list[str] = []
+    for number, text_line in enumerate("".join(out).split("\n")):
+        if number in commented_lines:
+            text_line = text_line.rstrip()
+            if not text_line:
+                continue
+        kept.append(text_line)
+    return "\n".join(kept)
+
+
 def _catalog(url: str) -> dict[str, list[tuple[object, ...]]]:
     engine = _engine(url)
     try:
         with engine.connect() as conn:
-            return {
+            catalog = {
                 name: [tuple(row) for row in conn.execute(text(query)).all()]
                 for name, query in CATALOG_QUERIES.items()
             }
     finally:
         engine.dispose()
+    # The definition is the last column of each function row (WDS ruling, 2 November 2026).
+    catalog["functions"] = [
+        (*row[:-1], strip_sql_comments(str(row[-1]))) for row in catalog["functions"]
+    ]
+    return catalog
 
 
 def _revision(url: str) -> str:
