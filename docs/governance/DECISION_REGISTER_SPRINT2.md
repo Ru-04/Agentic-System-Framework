@@ -88,3 +88,11 @@ S2-D15 (frozen thresholds), S2-D16 (semantic validator disabled), S2-D13 and S2-
 - A WDS Authorized Approver's approval on 23 October 2026 of the "reconciled seven-document specification package" and of Sprint 2 engineering progress is recorded as reported. Approver name and signature are not in this environment and are not recorded.
 - **Version binding is open.** No revised seven-document set exists in the repository. The seven documents are the unchanged 0.3.10 drafts, whose headers say NOT implementation-approved. The approval is therefore not bound to any specification revision. See `docs/governance/SPEC_BASELINE_APPROVAL_RECORD_2026-10-23.md`, section 4, for the three options the approver must choose between.
 - Gate 1 authorization and the 22 October amendment are preserved unchanged.
+
+## Confirmation recorded (2 November 2026)
+
+WDS Authorized Approver confirmed, in writing in the Sprint 5 chat ("Yes, confirmed"), that the approval of the consolidated source table counts as the decision-maker confirmation of:
+- **S2-D08:** `shopify.com` plan pages, exact `/pricing` only (`/plus` redirects and is not activated). Previously flagged for decision-maker confirmation; now confirmed.
+- **S2-D07:** `help.shopify.com` plan-feature pages, two exact pages, by permitted access only. No 403 bypass.
+
+Activated exact pages are listed in `docs/governance/SPRINT5_SOURCE_VERIFICATION_PACKAGE_2026-11-02.md`, section 5. Not confirmed by this record: any `help.shopify.com` or `shopify.dev` path beyond those two pages, and the BigCommerce subtree question.
