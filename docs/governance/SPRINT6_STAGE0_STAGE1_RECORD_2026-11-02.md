@@ -78,3 +78,35 @@ Sprint 5 is not accepted (see `SPRINT5_CLOSURE_DETERMINATION_2026-11-02.md`). Sp
 ## Independent QA and merge
 
 Not started. There is no integration candidate that has been approved for QA, and no merge is authorized.
+
+## WDS decision recorded (2 November 2026): "Approve as recommended"
+
+All of D-1 to D-15 are approved as recommended in the discovery request. The recorded choices are:
+
+| ID | Recorded choice |
+|---|---|
+| D-1 | `ai-read/v1` approved as recorded; approver, date and channel to be added to `GOVERNANCE_DECISION_REGISTER.md` by WDS |
+| D-2 | Component-pair integration for steps 2 to 4 (Foundation with AI Engine, read-only, non-production). An end-to-end contract is required before any specialist connects (step 6) |
+| D-3 | Specialist adapter v0.2 as implemented, for isolated development and conformance only. `ADAPTER_CONTRACT_PROPOSAL_2026-10-26.md` marked superseded |
+| D-4 | AI Engine target line A (`claude/ai-engine-contract-alignment-834e49` at `967d895`) for step 2. Line B waits for a parity record |
+| D-5 | Specialist routing deferred. `operator_confirmed` only from WebDesk's proof path, never from the caller |
+| D-6 | Specialists hold no Foundation credential and no AI principal. `actor_id` derived from authenticated session proof |
+| D-7 | Evidence persistence out of scope for the next steps. Mapping between evidence vocabularies deferred |
+| D-8 | Migrations `0001`–`0059` frozen. Specialist `0027_proof_gated_token_issuance` not merged. Future schema changes need their own approval |
+| D-9 | Declaration-only specialist authority accepted for isolated conformance tests only. No live specialist execution |
+| D-10 | Ruling 5 confirmed. Re-QA on the current candidate tip is required (see D-13) |
+| D-11 | F-2 (search_path) accepted for non-production with a tracking item, fix before production. F-7 (outbox `now()`) fixed before any outbox integration |
+| D-12 | Candidate record governs Phase 3 and Phase 6 acceptance until the directive in `feature/foundation-phase-9` commit `356fb3c` is evidenced |
+| D-13 | Merge sequence approved. Candidate re-QA on its current tip (`5974d59`) is a gate before step 2 |
+| D-14 | `runs/jobs.py` lease API approved as the single contract, with test T7 required before any Foundation change |
+| D-15 | Phase 8 and Phase 9 documentation branches excluded from integration and handled separately |
+
+## Gates now open before step 2
+
+1. **D-13 re-QA on `5974d59`.** This requires an independent reviewer. PG has declined to send evidence, so the only available route is a WDS-named reviewer with a personally attributable record, or a WDS management waiver recorded as such.
+2. **D-10 ruling 5 record.** Add the approver, date and channel to `FOUNDATION_INTEGRATION_P2_P7.md`.
+3. **D-1 approver details** added to the governance decision register.
+
+Step 2 engineering (Foundation read endpoints with the AI Engine line A client, PostgreSQL integration tests) has not started. It needs an isolated integration branch created from `5974d59`. No other team's branch or worktree is modified.
+
+No merge, protected-branch change or production activation is authorized by these decisions.
