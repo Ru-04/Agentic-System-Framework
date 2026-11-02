@@ -363,6 +363,63 @@ def test_qa06_a_vector_only_form_is_not_flagged() -> None:
     assert result.flagged_regions == []
 
 
+def _image_in_form_pdf(levels: int) -> bytes:
+    """A page with no text of its own whose content calls form 6. The image sits ``levels`` forms
+    deep, inside the innermost form's own resources."""
+    objects: dict[int, bytes] = {1: CATALOG, 2: PAGES}
+    objects[3] = _page(b"<< /XObject << /Fm0 6 0 R >> >>", contents=4)
+    objects[4] = _stream(b"", b"q /Fm0 Do Q")
+    for depth in range(levels):
+        number = 6 + depth
+        if depth == levels - 1:
+            objects[number] = _stream(
+                b"/Type /XObject /Subtype /Form /BBox [0 0 10 10] "
+                b"/Resources << /XObject << /Im1 %d 0 R >> >>" % (number + 1),
+                b"/Im1 Do",
+            )
+        else:
+            objects[number] = _stream(
+                b"/Type /XObject /Subtype /Form /BBox [0 0 10 10] "
+                b"/Resources << /XObject << /Fm%d %d 0 R >> >>" % (depth + 1, number + 1),
+                b"/Fm%d Do" % (depth + 1),
+            )
+    objects[6 + levels] = _stream(
+        b"/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray "
+        b"/BitsPerComponent 8",
+        b"\x00",
+    )
+    return _assemble(objects)
+
+
+def test_qa06_an_image_only_form_inside_a_page_flags_the_page_not_a_silent_omission() -> None:
+    """F-1: a page whose only content is an image inside a nested form is flagged, as a direct
+    image-only page is. Before the fix the image was omitted with no flag."""
+    result = parse_pdf(_image_in_form_pdf(levels=1))
+    assert result.status == "unsupported"
+    assert result.segments == []
+    assert result.flagged_regions == ["pdf_page:1"]
+
+
+def test_qa06_an_image_two_forms_deep_is_flagged_as_well() -> None:
+    result = parse_pdf(_image_in_form_pdf(levels=2))
+    assert result.flagged_regions == ["pdf_page:1"]
+
+
+def test_qa06_a_vector_only_nested_form_is_still_not_flagged() -> None:
+    """Negative control for F-1: the nested-image walk must not flag a form with no image."""
+    objects = {
+        1: CATALOG,
+        2: PAGES,
+        3: _page(b"<< /XObject << /Fm0 6 0 R >> >>", contents=4),
+        4: _stream(b"", b"q /Fm0 Do Q"),
+        6: _stream(b"/Type /XObject /Subtype /Form /BBox [0 0 10 10]", b"0 0 m 10 10 l S"),
+    }
+    result = parse_pdf(_assemble(objects))
+    assert result.status == "unsupported"
+    assert result.segments == []
+    assert result.flagged_regions == []
+
+
 def test_qa06_text_in_an_annotation_appearance_is_flagged() -> None:
     objects = {
         1: CATALOG,
