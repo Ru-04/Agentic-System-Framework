@@ -43,6 +43,9 @@ from webdesk.config import Settings
 
 pytestmark = pytest.mark.integration
 
+OPERATOR = "op-1"
+VERIFIER = "v-1"
+
 
 @pytest.fixture
 def owner(tmp_path: Path) -> tuple[Ed25519PrivateKey, Path]:
@@ -82,6 +85,9 @@ def _signed(tmp_path: Path, key: Ed25519PrivateKey, expires_at: datetime) -> Pat
         "owner_identity_ref": "owner:wds-sign-off",
         "expires_at": expires_at.isoformat(),
         "nonce": uuid.uuid4().hex,
+        # Phase 7 H-74: the owner signs the operator and the verifier; the CLI values must match.
+        "deployment_operator_id": OPERATOR,
+        "independent_verifier_id": VERIFIER,
         "contacts": [
             {"email": f"{uuid.uuid4().hex}@wds-test.example", "display_name": "Ada"},
             {"email": f"{uuid.uuid4().hex}@wds-test.example", "display_name": "Grace"},
@@ -124,7 +130,12 @@ def test_an_authorization_the_database_clock_has_not_reached_installs(
 ) -> None:
     key, public = owner
     expires = _db_now(committed_engine) + timedelta(seconds=30)
-    prepared = prepare_install(_settings(public), _signed(tmp_path, key, expires))
+    prepared = prepare_install(
+        _settings(public),
+        _signed(tmp_path, key, expires),
+        operator_id=OPERATOR,
+        verifier_id=VERIFIER,
+    )
     assert prepared.authorization_expires_at == expires
     with committed_engine.begin() as conn:
         apply_install(conn, prepared, operator_id="op-1", verifier_id="v-1")
@@ -156,7 +167,12 @@ def test_an_application_clock_that_says_valid_cannot_grant_a_database_expired_au
     preparation (no application decision), and the database refuses it at the transaction."""
     key, public = owner
     long_ago = datetime(2000, 1, 1, tzinfo=UTC)
-    prepared = prepare_install(_settings(public), _signed(tmp_path, key, long_ago))
+    prepared = prepare_install(
+        _settings(public),
+        _signed(tmp_path, key, long_ago),
+        operator_id=OPERATOR,
+        verifier_id=VERIFIER,
+    )
     assert prepared.authorization_expires_at == long_ago
     with pytest.raises(InstallationError) as exc:
         with committed_engine.begin() as conn:
@@ -169,7 +185,12 @@ def test_a_far_future_authorization_is_decided_by_the_database_and_installs(
     committed_engine: Engine, owner: tuple[Ed25519PrivateKey, Path], tmp_path: Path
 ) -> None:
     key, public = owner
-    prepared = prepare_install(_settings(public), _signed(tmp_path, key, FAR_FUTURE))
+    prepared = prepare_install(
+        _settings(public),
+        _signed(tmp_path, key, FAR_FUTURE),
+        operator_id=OPERATOR,
+        verifier_id=VERIFIER,
+    )
     with committed_engine.begin() as conn:
         apply_install(conn, prepared, operator_id="op-1", verifier_id="v-1")
     assert _ceremonies(committed_engine) == 1
@@ -209,6 +230,7 @@ def test_an_expired_recovery_authorization_is_refused_with_a_denial_record(
         display_name="Replacement",
         owner_approval_ref="OWNER-RECOVERY-1",
         owner_identity_ref="owner:wds-sign-off",
+        verifier_id="v-recovery",
         authorization_digest="r" * 64,
     )
     with pytest.raises(RecoveryError) as exc:

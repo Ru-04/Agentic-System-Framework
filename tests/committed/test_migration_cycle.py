@@ -42,6 +42,9 @@ def mirror_database_privileges(conn: Connection, name: str) -> None:
 
 pytestmark = pytest.mark.integration
 
+# The head of the Phase 5 to 7 line, which a downgrade to 0043 does not touch.
+X7_HEAD = "0049_p7_run_audit_project_id"
+
 CATALOG_QUERIES: dict[str, str] = {
     "tables": """SELECT c.relname, pg_get_userbyid(c.relowner), coalesce(c.relacl::text, ''),
                          c.relkind::text, c.relrowsecurity::text
@@ -134,6 +137,17 @@ def _revision(url: str) -> str:
         engine.dispose()
 
 
+def _revisions(url: str) -> set[str]:
+    """Every row of ``alembic_version``: more than one while the history is branched."""
+    engine = _engine(url)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
+            return {str(row) for row in rows}
+    finally:
+        engine.dispose()
+
+
 def _diff(
     expected: dict[str, list[tuple[object, ...]]],
     actual: dict[str, list[tuple[object, ...]]],
@@ -184,7 +198,12 @@ def test_the_0050_downgrade_to_0043_and_reupgrade_reproduce_the_head_catalog(
 
     reference_url = _url(base, reference)
     round_trip_url = _url(base, round_trip)
+    # Integration of Phases 2 to 7: the history branches after 0041. A downgrade to 0043 removes the
+    # revisions that descend from 0043 (Phase 2 0044 to 0046, Phase 3 0050 to 0054 and the
+    # integration revisions from 0055) and keeps the Phase 5 to 7 line at its head, 0049. The
+    # reference is therefore migrated to both 0043 and 0049.
     _alembic(reference_url, "0043_phase2_review_fixes", down=False)
+    _alembic(reference_url, X7_HEAD, down=False)
     # The committed-test clone is a clone too: it needs the same database-level revocation.
     head_admin = _admin_engine(base)
     try:
@@ -194,7 +213,7 @@ def test_the_0050_downgrade_to_0043_and_reupgrade_reproduce_the_head_catalog(
         head_admin.dispose()
     head_catalog = _catalog(committed_url)
     _alembic(round_trip_url, "0043_phase2_review_fixes", down=True)
-    assert _revision(round_trip_url) == "0043_phase2_review_fixes"
+    assert _revisions(round_trip_url) == {"0043_phase2_review_fixes", X7_HEAD}
     reference_catalog = _catalog(reference_url)
     downgraded_catalog = _catalog(round_trip_url)
 
