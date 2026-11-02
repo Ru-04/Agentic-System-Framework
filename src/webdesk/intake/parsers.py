@@ -761,6 +761,49 @@ def _eml_part(part: str, text: str, provenance: dict[str, Any]) -> SegmentDraft:
     return SegmentDraft("eml_part", locator, text)
 
 
+def _eml_named(part: EmailMessage) -> bool:
+    """H-64, ruled by WDS in chat on 2 November 2026 ("Treat as attachment"): a part whose
+    Content-Type carries a ``name=`` parameter is an attachment, never the body, with or without a
+    Content-Disposition."""
+    return part.get_param("name", header="content-type") is not None
+
+
+def _eml_body(part: EmailMessage, subtype: str) -> EmailMessage | None:
+    """The first ``text/<subtype>`` body part, found as ``EmailMessage.get_body`` finds it, except
+    that a named part (H-64) is skipped like an attachment."""
+    if part.is_attachment() or _eml_named(part):
+        return None
+    maintype, found = part.get_content_maintype(), part.get_content_subtype()
+    if maintype == "text":
+        return part if found == subtype else None
+    if maintype != "multipart" or not part.is_multipart():
+        return None
+    children = [cast(EmailMessage, child) for child in part.iter_parts()]
+    if found == "related" and children:
+        # As the library does: the part named by ``start``, otherwise the first part.
+        start = part.get_param("start")
+        root = next((c for c in children if start and c.get("content-id") == start), None)
+        children = [root if root is not None else children[0]]
+    for child in children:
+        body = _eml_body(child, subtype)
+        if body is not None:
+            return body
+    return None
+
+
+def _eml_named_leaves(part: EmailMessage) -> list[EmailMessage]:
+    """Named leaf parts (H-64), outside any attachment. The message itself counts when it is a
+    single named part."""
+    if part.get_content_maintype() == "multipart" and part.is_multipart():
+        if part.is_attachment():
+            return []
+        leaves: list[EmailMessage] = []
+        for child in part.iter_parts():
+            leaves.extend(_eml_named_leaves(cast(EmailMessage, child)))
+        return leaves
+    return [part] if _eml_named(part) else []
+
+
 def parse_eml(data: bytes) -> ParseResult:
     try:
         message = cast(EmailMessage, BytesParser(policy=email_policy.default).parsebytes(data))
@@ -780,17 +823,24 @@ def parse_eml(data: bytes) -> ParseResult:
     subject = _normalized(str(message.get("subject", "")))
     if subject:
         segments.append(_eml_part("subject", subject, provenance))
-    body_part = message.get_body(preferencelist=("plain",))
+    body_part = _eml_body(message, "plain")
     if body_part is not None:
         body = _normalized(str(body_part.get_content()))
         if body:
             segments.append(_eml_part("body", body, provenance))
-    elif message.get_body(preferencelist=("html",)) is not None:
+    html_part = _eml_body(message, "html")
+    if body_part is None and html_part is not None:
         # H-DEC-6 (approved): an HTML-only body is partial and unextractable. The region is kept.
         flagged.append("eml_part:body_html_only")
 
     attachments: list[dict[str, Any]] = []
-    for part in message.iter_attachments():
+    # H-64: a named part is an attachment even where the library treats it as a body candidate,
+    # and the unnamed body chosen in its place is not an attachment.
+    bodies = {id(part) for part in (body_part, html_part) if part is not None}
+    parts = [part for part in message.iter_attachments() if id(part) not in bodies]
+    seen = {id(part) for part in parts}
+    parts.extend(part for part in _eml_named_leaves(message) if id(part) not in seen)
+    for part in parts:
         payload = part.get_payload(decode=True) or b""
         attachments.append(
             {
