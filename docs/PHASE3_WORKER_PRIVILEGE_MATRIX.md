@@ -24,7 +24,7 @@ The worker holds no INSERT, UPDATE or DELETE on any table. Every write goes thro
 | `fn_worker_lock_run` | lock a run row for a state change | none |
 | `fn_worker_transition_run` | guarded run state change (expected state must hold) | none; legality is checked in worker code (`ALLOWED_TRANSITIONS`) |
 | `fn_worker_set_run_status` | set a run's status (queued after requeue) | none |
-| `fn_worker_mark_inputs_changed` | mark a run's inputs as changed | none |
+| `fn_worker_mark_inputs_changed(job, owner)` | mark a run's inputs as changed, only under the caller's unexpired lease (0055) | none |
 | `fn_worker_finish_job` | complete or fail the caller's leased job | refused unless owned and unexpired (`0050`) |
 | `fn_worker_requeue_job` | requeue the caller's job with backoff | refused unless owned and unexpired (`0050`) |
 | `fn_worker_begin_parse` | move a version to parsing | none |

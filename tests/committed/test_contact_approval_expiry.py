@@ -299,3 +299,25 @@ def test_a_database_failure_during_approval_applies_nothing(
     finally:
         unreachable.dispose()
     assert _status(committed_engine, approval) == "pending"
+
+
+# 10. Trigger paths (F-A): the users and role-assignment guards compare approval liveness with the
+# database clock too. Effective catalog bodies are checked, not migration source text.
+def test_the_contact_and_role_triggers_use_the_database_clock(committed_engine: Engine) -> None:
+    with committed_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT p.proname, pg_get_functiondef(p.oid) FROM pg_proc p
+                   JOIN pg_namespace n ON n.oid = p.pronamespace
+                   WHERE n.nspname = 'public'
+                     AND p.proname IN ('webdesk_users_guard', 'webdesk_role_guard')"""
+            )
+        ).all()
+    defs = {str(name): str(body) for name, body in rows}
+    assert set(defs) == {"webdesk_users_guard", "webdesk_role_guard"}
+    for name, body in defs.items():
+        lines = [line for line in body.split(chr(10)) if "expires_at" in line and "now()" in line]
+        assert lines == [], (name, lines)
+        assert any(
+            "clock_timestamp()" in line for line in body.split(chr(10)) if "expires_at" in line
+        ), name

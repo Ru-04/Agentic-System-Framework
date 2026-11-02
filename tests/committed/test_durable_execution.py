@@ -22,9 +22,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine, Transaction
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import DBAPIError
 
 from tests.support.people import committed_active_user
 from tests.support.privileged import as_worker
@@ -1428,3 +1429,64 @@ def test_the_step_fence_blocks_reclaim_while_a_step_holds_the_job_after_its_leas
     # Once the step's transaction ends, the expired job is reclaimable again.
     rival = committed.claim_and_commit(committed_engine, "w-fence-rival", lease=30)
     assert rival is not None and rival.attempts == 2
+
+
+# --- F-5 (Phase 5 Finding 5): the mark is fenced by the caller's lease ---------------------
+
+
+def _is_stale(engine: Engine, run: uuid.UUID) -> bool:
+    with engine.connect() as conn:
+        return bool(
+            conn.execute(
+                text("SELECT is_stale FROM workflow_runs WHERE run_id = :r"), {"r": run}
+            ).scalar_one()
+        )
+
+
+def test_a_worker_cannot_mark_a_run_it_has_not_claimed(
+    committed_engine: Engine, run_fixture: Fixture, worker_url: str
+) -> None:
+    worker = create_engine(worker_url)
+    try:
+        with pytest.raises(DBAPIError):
+            with worker.begin() as conn:
+                conn.execute(
+                    text("SELECT webdesk_guard.fn_worker_mark_inputs_changed(:r)"),
+                    {"r": run_fixture.run},
+                )
+    finally:
+        worker.dispose()
+    assert not _is_stale(committed_engine, run_fixture.run)
+
+
+def test_the_claim_holder_marks_its_run_and_a_stale_holder_cannot(
+    committed_engine: Engine, run_fixture: Fixture, worker_url: str
+) -> None:
+    worker = create_engine(worker_url)
+    try:
+        holder = _claim(committed_engine, "w-mark-live", lease=60)
+        with worker.begin() as conn:
+            marked = conn.execute(
+                text("SELECT webdesk_guard.fn_worker_mark_inputs_changed(:j, :o)"),
+                {"j": holder.job_id, "o": "w-mark-live"},
+            ).scalar_one()
+        assert marked is True
+        assert _is_stale(committed_engine, run_fixture.run)
+
+        with committed_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE workflow_jobs"
+                    " SET lease_expires_at = clock_timestamp() - interval '1 second'"
+                    " WHERE job_id = :j"
+                ),
+                {"j": holder.job_id},
+            )
+        with worker.begin() as conn:
+            refused = conn.execute(
+                text("SELECT webdesk_guard.fn_worker_mark_inputs_changed(:j, :o)"),
+                {"j": holder.job_id, "o": "w-mark-live"},
+            ).scalar_one()
+        assert refused is False
+    finally:
+        worker.dispose()
