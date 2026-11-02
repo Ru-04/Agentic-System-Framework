@@ -3,12 +3,15 @@
 - Correlated worker audits carry the run's project (migration 0056; Phase 3 G-7 with Phase 7
   H-70). Every audit of the Phase 3 committed job paths (park, requeue, failure, reaper) names
   both the claim's correlation UUID and the run's project.
+- On-demand expiry of a pending contact change is decided on the database wall clock (migration
+  0057; relayed WDS ruling PH3-FC-01, H-76), not on the start time of the surrounding transaction.
 """
 
 from __future__ import annotations
 
 import time
 import uuid
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -20,11 +23,20 @@ from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures an
     _claim,
     run_fixture,
 )
+from tests.support.people import _email, committed_active_user
+from tests.support.proofs import prove
+from webdesk.identity import contacts
+from webdesk.identity.email import ContactEmailPolicy
 from webdesk.runs import committed, jobs
 from webdesk.runs.errors import RunError
 from webdesk.storage.content_store import ContentStore
 
 pytestmark = pytest.mark.integration
+
+POLICY = ContactEmailPolicy(
+    allowed_domains=frozenset({"wds-test.example"}),
+    alias_denylist=frozenset({"admin"}),
+)
 
 
 def _audits(engine: Engine, event: str, run: uuid.UUID) -> list[tuple[Any, Any]]:
@@ -163,3 +175,51 @@ def test_the_project_audit_function_keeps_the_correlation_guard_and_worker_only_
                            '[]'::jsonb, '{}'::jsonb, NULL, gen_random_uuid())"""
                 )
             )
+
+
+# --- 0057: on-demand expiry of a pending contact change uses the database wall clock ------------
+
+
+def test_on_demand_expiry_releases_a_change_that_expired_after_the_transaction_began(
+    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    a, b = committed_admins
+    holder = committed_active_user(committed_engine, a, b, "Holder")
+    shared = _email()
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        stale = contacts.request_change(
+            conn,
+            prove(conn, a, "contact.request.change", holder),
+            POLICY,
+            holder,
+            shared,
+            window=timedelta(seconds=2),
+        )
+    with committed_engine.begin() as conn:
+        # The transaction starts while the approval is still live; its now() stays at that instant.
+        started_live = conn.execute(
+            text("SELECT expires_at > now() FROM user_contact_approvals WHERE approval_id = :a"),
+            {"a": stale},
+        ).scalar_one()
+        assert started_live is True
+        conn.execute(text("SELECT pg_sleep(2.5)"))
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        expired = conn.execute(
+            text("SELECT approval_id FROM webdesk_guard.fn_expire_stale_change_for_email(:e)"),
+            {"e": shared},
+        ).all()
+    assert [uuid.UUID(str(row[0])) for row in expired] == [stale]
+    with committed_engine.connect() as conn:
+        status = conn.execute(
+            text("SELECT status FROM user_contact_approvals WHERE approval_id = :a"),
+            {"a": stale},
+        ).scalar_one()
+        held = conn.execute(
+            text(
+                "SELECT count(*) FROM contact_reservations"
+                " WHERE approval_id = :a AND released_at IS NULL"
+            ),
+            {"a": stale},
+        ).scalar_one()
+    assert (status, int(held)) == ("expired", 0)
