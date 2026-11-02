@@ -7,6 +7,8 @@
   0057; relayed WDS ruling PH3-FC-01, H-76), not on the start time of the surrounding transaction.
 - A create approval that loses to a concurrent decision is an audited 409 contact refusal, as
   before Phase 2 named the guard's ``approval_not_pending`` a proof refusal.
+- The per-process authority test login (Phase 3) is dropped at exit even though the run's
+  namespaced database (Phase 2) is already gone.
 """
 
 from __future__ import annotations
@@ -17,14 +19,16 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 
 from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures and helpers
     Fixture,
     _claim,
     run_fixture,
 )
+from tests.support import authority as authority_support
 from tests.support.people import _email, committed_active_user
 from tests.support.proofs import prove
 from webdesk.identity import contacts
@@ -270,3 +274,40 @@ def test_a_create_approval_that_loses_to_a_committed_decision_is_an_audited_409(
                 ).scalar_one()
     assert (exc.value.status, exc.value.reason) == (409, "approval_refused")
     assert int(denied) == 1
+
+
+# --- The authority test login is dropped after the namespaced database is gone ----------------
+
+
+def test_the_authority_test_login_is_dropped_when_its_provisioning_database_is_gone(
+    committed_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owner_url = committed_url.replace("postgresql://", "postgresql+psycopg://")
+    admin = create_engine(
+        make_url(owner_url).set(database="postgres").render_as_string(hide_password=False),
+        isolation_level="AUTOCOMMIT",
+    )
+    role = f"webdesk_authority_test_{uuid.uuid4().hex[:12]}"
+    gone = f"{make_url(owner_url).database}_gone"
+    try:
+        with admin.connect() as conn:
+            conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
+            conn.execute(text(f'CREATE DATABASE "{gone}"'))
+            conn.execute(text(f'DROP DATABASE "{gone}"'))
+        # As at process exit: the URL the role was provisioned with names a dropped database.
+        monkeypatch.setattr(authority_support, "_role", role)
+        monkeypatch.setattr(
+            authority_support,
+            "_owner_url",
+            make_url(owner_url).set(database=gone).render_as_string(hide_password=False),
+        )
+        authority_support._drop_run_role()
+        with admin.connect() as conn:
+            left = conn.execute(
+                text("SELECT count(*) FROM pg_roles WHERE rolname = :r"), {"r": role}
+            ).scalar_one()
+        assert int(left) == 0
+    finally:
+        with admin.connect() as conn:
+            conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
+        admin.dispose()

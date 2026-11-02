@@ -74,7 +74,13 @@ def _drop_run_role() -> None:
     """Remove this process's login role. A role still in use is kept and reported."""
     if _role is None or _owner_url is None:
         return
-    engine = create_engine(_owner_url, isolation_level="AUTOCOMMIT")
+    # Roles are cluster-wide. The provisioning URL may name this run's namespaced database, which
+    # the Phase 2 run namespace drops before the process exits, so cleanup uses the maintenance
+    # database of the same server (as tests/support/worker_login.py does).
+    maintenance = make_url(_owner_url).set(database="postgres")
+    engine = create_engine(
+        maintenance.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT"
+    )
     try:
         with engine.connect() as conn:
             conn.execute(text(f"DROP ROLE IF EXISTS {_role}"))
