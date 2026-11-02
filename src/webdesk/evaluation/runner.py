@@ -5,8 +5,9 @@ active-source boundary from S4-PILOT-EVIDENCE-01. It does not fetch pages, so it
 citations. A supported outcome from this runner therefore scores as uncited support, and no
 scenario is evaluated against real documentation here.
 
-It does not reproduce the redirect check, the sibling-page refusal or the synthetic provider path.
-Those outcomes are reported as mismatches where the scenario expects them.
+A request to follow a redirect is refused at requirement level, because source policy forbids
+following redirects. The page-level redirect check, the sibling-page refusal and the synthetic
+provider path are not run here. They are covered by the investigation unit tests.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import Final
 
 from webdesk.evaluation.dataset import Outcome, Scenario
 from webdesk.evaluation.harness import Observation
-from webdesk.investigation.specialists import Decision, decide
+from webdesk.investigation.specialists import Decision, decide, stated_version
 from webdesk.specialists.catalog import SpecialistId
 
 # Specialists with an active documentation source. Set by S4-PILOT-EVIDENCE-01 (WooCommerce docs
@@ -30,11 +31,12 @@ _DECISION_TO_OUTCOME: Final[dict[Decision, Outcome]] = {
     Decision.INVESTIGATE_WITH_UNKNOWNS: Outcome.INVESTIGATE_WITH_UNKNOWNS,
     Decision.CLARIFY: Outcome.CLARIFY,
     Decision.REFUSE: Outcome.REFUSE,
+    Decision.UNSUPPORTED_SOURCE: Outcome.UNSUPPORTED_SOURCE,
 }
 
 
 def observe(scenario: Scenario) -> Observation:
-    """Classify one scenario. The requested version is not stated in any scenario, so it is None.
+    """Classify one scenario using the version the requirement itself states, if any.
 
     The operator is taken as confirmed for the evaluation. The scenarios do not test the
     confirmation refusal, which the provider path already covers.
@@ -42,7 +44,7 @@ def observe(scenario: Scenario) -> Observation:
     decision, _reason = decide(
         scenario.specialist_id,
         scenario.requirement,
-        requested_version=None,
+        requested_version=stated_version(scenario.requirement),
         operator_confirmed=True,
     )
     outcome = _DECISION_TO_OUTCOME[decision]

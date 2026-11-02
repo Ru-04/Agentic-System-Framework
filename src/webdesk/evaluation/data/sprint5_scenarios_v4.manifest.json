@@ -1,0 +1,31 @@
+{
+  "dataset_id": "sprint5-scenarios-v4-2026-11-02",
+  "sha256": "8985e1277e5e6e7d57d60918330a44274ef0d1a497a206591e8d0925ff1b2c86",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v3-2026-10-30",
+    "file": "sprint5_scenarios_v3.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-012 to S5-030",
+      "change": "added",
+      "reason": "Seven-specialist coverage (WDS directive S5-COMPLETE-AUTH-01, item B). Positive, negative and ambiguous cases written from each specialist document's sections 14, 13 and 19 before the runner was changed for this version."
+    },
+    {
+      "scenario_id": "S5-005",
+      "change": "note",
+      "reason": "Note now cites the redirect policy in retrieval.py. Expected outcome unchanged (REFUSE)."
+    },
+    {
+      "scenario_id": "S5-007",
+      "change": "note",
+      "reason": "Note now cites bigcommerce.md section 13. Expected outcome unchanged (UNSUPPORTED_SOURCE)."
+    },
+    {
+      "scenario_id": "S5-011",
+      "change": "note",
+      "reason": "Note records an open contract conflict with middleware_applications.md section 19 (CLARIFY). Expected outcome unchanged pending WDS decision."
+    }
+  ],
+  "note": "Frozen manifest. No expectation of a v1 to v3 scenario was changed. Expectations follow the source-activation register, the specialist documents and the deterministic rules. Not approved as acceptance criteria."
+}

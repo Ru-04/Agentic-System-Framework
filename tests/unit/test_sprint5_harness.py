@@ -194,14 +194,15 @@ def test_v2_changes_only_the_three_recorded_expectations() -> None:
         assert v1[sid].specialist_id == v2[sid].specialist_id
 
 
-def test_the_v2_runner_result_is_eight_of_eleven_with_three_unresolved_mismatches() -> None:
+def test_the_v2_runner_result_under_the_current_runner_has_one_mismatch() -> None:
+    # Historical: under the runner before the S5-005 and S5-007 fixes, v2 scored 8 of 11.
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V2_DATASET, V2_MANIFEST), observe)
     mismatched = {r.scenario_id for r in report.results if not r.matched}
-    assert mismatched == {"S5-005", "S5-006", "S5-007"}
+    assert mismatched == {"S5-006"}
     by_id = {r.scenario_id: r for r in report.results}
-    # S5-006 now matches the capability; it stays a mismatch because no version is stated.
+    # S5-006 stays a mismatch in v2 only: v2 expects INVESTIGATE, and no version is stated.
     assert by_id["S5-006"].observed == "INVESTIGATE_WITH_UNKNOWNS"
 
 
@@ -241,9 +242,115 @@ def test_v3_changes_only_the_single_recorded_expectation_against_v2() -> None:
     assert v3["S5-006"].requirement == v2["S5-006"].requirement
 
 
-def test_the_v3_runner_result_is_nine_of_eleven_with_two_unresolved_mismatches() -> None:
+def test_the_v3_runner_result_under_the_current_runner_is_eleven_of_eleven() -> None:
+    # Historical: v3 scored 9 of 11 before the S5-005 and S5-007 fixes. The 9/11 record is kept in
+    # docs/governance/SPRINT5_REQUIREMENT_TEST_MATRIX_2026-11-02.md, section 4.
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V3_DATASET, V3_MANIFEST), observe)
-    mismatched = {r.scenario_id for r in report.results if not r.matched}
-    assert mismatched == {"S5-005", "S5-007"}
+    assert [r.scenario_id for r in report.results if not r.matched] == []
+
+
+V4_DATASET = DATA / "sprint5_scenarios_v4.json"
+V4_MANIFEST = DATA / "sprint5_scenarios_v4.manifest.json"
+
+
+def test_the_v4_dataset_matches_its_manifest_and_covers_all_seven_specialists() -> None:
+    from webdesk.specialists.catalog import SpecialistId
+
+    dataset = load_dataset(V4_DATASET, V4_MANIFEST)
+    assert len(dataset.scenarios) == 30
+    assert {s.specialist_id for s in dataset.scenarios} == set(SpecialistId)
+    for specialist in SpecialistId:
+        assert sum(s.specialist_id is specialist for s in dataset.scenarios) >= 3
+
+
+def test_v4_keeps_every_v3_expectation_unchanged() -> None:
+    v3 = {s.scenario_id: s for s in load_dataset(V3_DATASET, V3_MANIFEST).scenarios}
+    v4 = {s.scenario_id: s for s in load_dataset(V4_DATASET, V4_MANIFEST).scenarios}
+    assert set(v3) <= set(v4)
+    assert {sid for sid in v3 if v3[sid].expected != v4[sid].expected} == set()
+
+
+def test_v4_runner_result_matches_every_scenario_at_requirement_level() -> None:
+    from webdesk.evaluation.runner import observe
+
+    report = evaluate(load_dataset(V4_DATASET, V4_MANIFEST), observe)
+    assert [r.scenario_id for r in report.results if not r.matched] == []
+
+
+def test_the_redirect_request_is_refused_before_any_capability_match() -> None:
+    from webdesk.investigation.specialists import Decision, decide
+    from webdesk.specialists.catalog import SpecialistId
+
+    decision, _ = decide(
+        SpecialistId.WORDPRESS_WOOCOMMERCE,
+        "Follow the redirect and read the REST API product page.",
+        requested_version="9.4",
+        operator_confirmed=True,
+    )
+    assert decision is Decision.REFUSE
+
+
+def test_a_redirect_leaving_the_boundary_is_refused_at_page_level() -> None:
+    # Regression for the page-level finding: a fetched page whose final URL leaves the boundary
+    # is refused, and its content is never cited.
+    from webdesk.investigation.engine import Edition, Outcome, Page, investigate
+    from webdesk.investigation.specialists import CATALOG
+    from webdesk.specialists.catalog import SpecialistId
+
+    capability = CATALOG[SpecialistId.WORDPRESS_WOOCOMMERCE][1]
+    page = Page(
+        url="https://woocommerce.com/document/rest-api/",
+        final_url="https://unapproved.example.net/rest-api/",
+        platform="woocommerce",
+        edition=Edition.NOT_APPLICABLE,
+        version="9.4",
+        workspace_id="ws-1",
+        text="REST API product read is documented here.",
+        synthetic=False,
+    )
+    finding = investigate(
+        capability,
+        [page],
+        workspace_id="ws-1",
+        requested_version="9.4",
+        operator_confirmed=True,
+    )
+    assert finding.outcome is Outcome.REFUSED
+    assert finding.citations == ()
+
+
+def test_order_data_is_unsupported_source_not_clarification() -> None:
+    from webdesk.investigation.specialists import Decision, decide
+    from webdesk.specialists.catalog import SpecialistId
+
+    decision, _ = decide(
+        SpecialistId.BIGCOMMERCE,
+        "Read order data through the BigCommerce API.",
+        requested_version="v3",
+        operator_confirmed=True,
+    )
+    assert decision is Decision.UNSUPPORTED_SOURCE
+
+
+def test_a_request_naming_no_capability_still_clarifies() -> None:
+    from webdesk.investigation.specialists import Decision, decide
+    from webdesk.specialists.catalog import SpecialistId
+
+    decision, _ = decide(
+        SpecialistId.BIGCOMMERCE,
+        "Read customer records through the BigCommerce API.",
+        requested_version="v3",
+        operator_confirmed=True,
+    )
+    assert decision is Decision.CLARIFY
+
+
+def test_a_version_named_in_the_requirement_is_read_from_the_text() -> None:
+    from webdesk.investigation.specialists import stated_version
+
+    assert stated_version("Use the REST API product read on WooCommerce 9.4.") == "9.4"
+    assert stated_version("Read products on Magento Open Source 2.4.7.") == "2.4.7"
+    assert stated_version("Read a product, API version v3.") == "v3"
+    assert stated_version("Read a single product through the product page.") is None

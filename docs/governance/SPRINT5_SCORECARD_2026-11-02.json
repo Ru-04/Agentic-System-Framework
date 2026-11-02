@@ -1,0 +1,186 @@
+{
+  "dataset_id": "sprint5-scenarios-v4-2026-11-02",
+  "dataset_sha256": "8985e1277e5e6e7d57d60918330a44274ef0d1a497a206591e8d0925ff1b2c86",
+  "dimensions": [
+    {
+      "basis": "measured only through CLARIFY and capability matching",
+      "dimension": "requirement interpretation",
+      "status": "partial"
+    },
+    {
+      "basis": "requirement-level routing, synthetic fixtures",
+      "dimension": "capability accuracy",
+      "status": "evaluated"
+    },
+    {
+      "basis": "Shopify 55-pair labels are 0 of 55; pilot passages only",
+      "dimension": "evidence relevance",
+      "status": "not evaluable"
+    },
+    {
+      "basis": "the runner never retrieves, so it never cites",
+      "dimension": "citation correctness",
+      "status": "not evaluable"
+    },
+    {
+      "basis": "requirement-level routing, synthetic fixtures",
+      "dimension": "unknown and unsupported outcomes",
+      "status": "evaluated"
+    },
+    {
+      "basis": "requirement-level refusals; redirect check in unit tests",
+      "dimension": "security behaviour",
+      "status": "evaluated"
+    },
+    {
+      "basis": "feasibility classes are PROPOSED, not approved",
+      "dimension": "feasibility reasoning",
+      "status": "not evaluated"
+    },
+    {
+      "basis": "repeatability; no threshold approved",
+      "dimension": "reliability and regression",
+      "status": "evaluated"
+    },
+    {
+      "basis": "version read from the requirement text only",
+      "dimension": "edition and version accuracy",
+      "status": "evaluated"
+    },
+    {
+      "basis": "requirement-level routing, synthetic fixtures",
+      "dimension": "clarification behaviour",
+      "status": "evaluated"
+    },
+    {
+      "basis": "no human or project-specific input",
+      "dimension": "practical suitability",
+      "status": "not evaluated"
+    }
+  ],
+  "human_evaluation": {
+    "shopify_relevance": {
+      "labelled": 0,
+      "total": 55
+    }
+  },
+  "scope": "requirement-level routing on deterministic rules; no retrieval",
+  "specialists": {
+    "bigcommerce": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "capability accuracy": 1,
+        "clarification behaviour": 1,
+        "edition and version accuracy": 2,
+        "unknown and unsupported outcomes": 1
+      },
+      "failure_categories": {},
+      "matched": 5,
+      "mismatched": [],
+      "scenarios": 5,
+      "uncited_support": 3
+    },
+    "magento_adobe_commerce": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "clarification behaviour": 1,
+        "unknown and unsupported outcomes": 4
+      },
+      "failure_categories": {},
+      "matched": 5,
+      "mismatched": [],
+      "scenarios": 5,
+      "uncited_support": 0
+    },
+    "middleware_applications": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "clarification behaviour": 1,
+        "unknown and unsupported outcomes": 2
+      },
+      "failure_categories": {},
+      "matched": 3,
+      "mismatched": [],
+      "scenarios": 3,
+      "uncited_support": 0
+    },
+    "shift4shop": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "clarification behaviour": 1,
+        "unknown and unsupported outcomes": 2
+      },
+      "failure_categories": {},
+      "matched": 3,
+      "mismatched": [],
+      "scenarios": 3,
+      "uncited_support": 0
+    },
+    "shopify": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "clarification behaviour": 3,
+        "unknown and unsupported outcomes": 2
+      },
+      "failure_categories": {},
+      "matched": 5,
+      "mismatched": [],
+      "scenarios": 5,
+      "uncited_support": 0
+    },
+    "standalone_applications": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "clarification behaviour": 1,
+        "unknown and unsupported outcomes": 2
+      },
+      "failure_categories": {},
+      "matched": 3,
+      "mismatched": [],
+      "scenarios": 3,
+      "uncited_support": 0
+    },
+    "wordpress_woocommerce": {
+      "authorization_failures": 0,
+      "dimensions_covered": {
+        "capability accuracy": 1,
+        "clarification behaviour": 1,
+        "edition and version accuracy": 2,
+        "security behaviour": 2
+      },
+      "failure_categories": {},
+      "matched": 6,
+      "mismatched": [],
+      "scenarios": 6,
+      "uncited_support": 3
+    }
+  },
+  "totals": {
+    "matched": 30,
+    "repeatable": true,
+    "scenarios": 30
+  },
+  "verdicts": {
+    "bigcommerce.false_positive_count": "THRESHOLD PENDING",
+    "bigcommerce.match_rate": "THRESHOLD PENDING",
+    "bigcommerce.uncited_support_count": "THRESHOLD PENDING",
+    "magento_adobe_commerce.false_positive_count": "THRESHOLD PENDING",
+    "magento_adobe_commerce.match_rate": "THRESHOLD PENDING",
+    "magento_adobe_commerce.uncited_support_count": "THRESHOLD PENDING",
+    "middleware_applications.false_positive_count": "THRESHOLD PENDING",
+    "middleware_applications.match_rate": "THRESHOLD PENDING",
+    "middleware_applications.uncited_support_count": "THRESHOLD PENDING",
+    "shift4shop.false_positive_count": "THRESHOLD PENDING",
+    "shift4shop.match_rate": "THRESHOLD PENDING",
+    "shift4shop.uncited_support_count": "THRESHOLD PENDING",
+    "shopify.false_positive_count": "THRESHOLD PENDING",
+    "shopify.match_rate": "THRESHOLD PENDING",
+    "shopify.uncited_support_count": "THRESHOLD PENDING",
+    "standalone_applications.false_positive_count": "THRESHOLD PENDING",
+    "standalone_applications.match_rate": "THRESHOLD PENDING",
+    "standalone_applications.uncited_support_count": "THRESHOLD PENDING",
+    "wordpress_woocommerce.false_positive_count": "THRESHOLD PENDING",
+    "wordpress_woocommerce.match_rate": "THRESHOLD PENDING",
+    "wordpress_woocommerce.uncited_support_count": "THRESHOLD PENDING"
+  }
+}

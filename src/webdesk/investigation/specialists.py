@@ -9,6 +9,7 @@ Synthetic findings are labelled ``[SYNTHETIC]`` and are never reported as verifi
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -115,6 +116,19 @@ CATALOG: Final[dict[SpecialistId, tuple[Capability, ...]]] = {
     ),
 }
 
+# Requests that retrieval policy forbids for every specialist. Refused before any capability match.
+# Redirects are not followed (retrieval.py), so a request to follow one is refused outright.
+PROHIBITED_OPERATIONS: Final[tuple[tuple[str, ...], ...]] = (("redirect",),)
+
+# Named capabilities that the specification records as having no approved source (section 13 of
+# each specialist document). They are not registered capabilities, so no investigation runs.
+UNAPPROVED_CAPABILITIES: Final[dict[SpecialistId, tuple[tuple[str, ...], ...]]] = {
+    SpecialistId.BIGCOMMERCE: (("order data",),),
+}
+
+# A version is stated when the requirement names one: "9.4", "2.4.7" or "version v3".
+_STATED_VERSION: Final = re.compile(r"\b(?:version\s+v?\d+(?:\.\d+)*|v?\d+(?:\.\d+)+)\b", re.I)
+
 PROVIDER_ACTIONS: Final[frozenset[str]] = frozenset(
     {Action.READ_EVIDENCE.value, Action.PROPOSE_CANDIDATES.value, Action.DECLARE_UNKNOWNS.value}
 )
@@ -156,6 +170,19 @@ class Decision(StrEnum):
     INVESTIGATE_WITH_UNKNOWNS = "INVESTIGATE_WITH_UNKNOWNS"
     CLARIFY = "CLARIFY"
     REFUSE = "REFUSE"
+    UNSUPPORTED_SOURCE = "UNSUPPORTED_SOURCE"
+
+
+def stated_version(task: str) -> str | None:
+    """The version the requirement itself names, or None when it names none."""
+    match = _STATED_VERSION.search(task)
+    if match is None:
+        return None
+    return match.group(0).lower().removeprefix("version").strip()
+
+
+def _names(terms_list: Sequence[tuple[str, ...]], task: str) -> bool:
+    return any(all(term_in_text(term, task.lower()) for term in terms) for terms in terms_list)
 
 
 def matched_capabilities(specialist: SpecialistId, task: str) -> tuple[Capability, ...]:
@@ -183,7 +210,17 @@ def decide(
     """Authorization first, then objective, then version. Returns the decision and its reason."""
     if not operator_confirmed:
         return Decision.REFUSE, "operator confirmation is missing; no investigation was run"
+    if _names(PROHIBITED_OPERATIONS, task):
+        return Decision.REFUSE, (
+            "the requirement asks for an operation the source policy forbids (redirects are not "
+            "followed); no investigation was run"
+        )
     if not matched_capabilities(specialist, task):
+        if _names(UNAPPROVED_CAPABILITIES.get(specialist, ()), task):
+            return Decision.UNSUPPORTED_SOURCE, (
+                "the requirement names a capability with no approved source; no investigation "
+                "was run"
+            )
         return Decision.CLARIFY, (
             "the requirement does not name a capability this specialist can investigate; "
             "state the capability or objective; no investigation was run"
@@ -231,6 +268,12 @@ class InvestigationProvider:
                 request,
                 [],
                 [f"[CLARIFY] {reason}", f"[CLARIFY] {FEASIBILITY_UNKNOWN}"],
+            )
+        if decision is Decision.UNSUPPORTED_SOURCE:
+            return self._response(
+                request,
+                [],
+                [f"[UNSUPPORTED_SOURCE] {reason}", f"[UNSUPPORTED_SOURCE] {FEASIBILITY_UNKNOWN}"],
             )
 
         findings: list[dict[str, object]] = []
