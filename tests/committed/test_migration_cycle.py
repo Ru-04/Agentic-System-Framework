@@ -1,12 +1,11 @@
-"""Migration catalog equivalence for 0042 to 0045 (QA F-10).
+"""Migration catalog equivalence over the supported rollback range (Phase 3; integration ruling 4).
 
-Three databases are used, each created for this test and dropped afterwards:
+Databases are created for this test and dropped afterwards:
 
-- ``reference``: created empty and migrated to 0041 directly.
-- ``round_trip``: cloned from the head template, downgraded to 0041 (a
-  multi-step downgrade across 0042 to 0045), then upgraded to head again.
-- ``head``: cloned from the head template and not changed; the expected head
-  catalog.
+- ``round_trip``: cloned from the head template, downgraded step by step to each supported
+  target (the integration merge revisions and the revisions between them), then upgraded to head.
+- one ``reference`` per target: created empty and migrated to the same revisions directly.
+- ``head``: cloned from the head template and not changed; the expected head catalog.
 
 The catalogs compared are: tables, columns, column and table ACLs, constraints,
 indexes, triggers, functions (definition, owner, ACL, search path, security
@@ -42,8 +41,6 @@ def mirror_database_privileges(conn: Connection, name: str) -> None:
 
 pytestmark = pytest.mark.integration
 
-# The head of the Phase 5 to 7 line, which a downgrade to 0043 does not touch.
-X7_HEAD = "0049_p7_run_audit_project_id"
 
 CATALOG_QUERIES: dict[str, str] = {
     "tables": """SELECT c.relname, pg_get_userbyid(c.relowner), coalesce(c.relacl::text, ''),
@@ -179,48 +176,74 @@ def scratch_names() -> list[str]:
         admin.dispose()
 
 
-def test_the_0050_downgrade_to_0043_and_reupgrade_reproduce_the_head_catalog(
+# WDS ruling 4, given in chat on 2 November 2026: "Rollback stops at merge". In the integrated
+# history, supported rollback runs from head down to the integration merge revisions
+# (0058_int_merge_p3_fence, 0055_int_merge_p2_p3_p7). Downgrading a single phase branch below them
+# is unsupported, so this test exercises only head, the merge revisions and the steps between.
+# Each downgraded state is compared exactly with a fresh database migrated to the same revisions,
+# in the order Alembic applies them (the integration line before 0055_approval_worker_fence).
+P3_FENCE = "0055_approval_worker_fence"
+SUPPORTED_STATES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("0058_int_merge_p3_fence", ("0058_int_merge_p3_fence",)),
+    ("0057_int_expire_change_clock", ("0057_int_expire_change_clock", P3_FENCE)),
+    ("0056_int_corr_audit_project", ("0056_int_corr_audit_project", P3_FENCE)),
+    ("0055_int_merge_p2_p3_p7", ("0055_int_merge_p2_p3_p7", P3_FENCE)),
+)
+_TEST_CLOCK_STATE = """SELECT r.rolname, m.rolname, a.admin_option, a.inherit_option, a.set_option
+                       FROM pg_roles r LEFT JOIN pg_auth_members a ON a.roleid = r.oid
+                       LEFT JOIN pg_roles m ON m.oid = a.member
+                       WHERE r.rolname = 'webdesk_test_clock' ORDER BY 2"""
+
+
+def _cluster_rows(url: str, sql: str) -> list[tuple[object, ...]]:
+    engine = _engine(url)
+    try:
+        with engine.connect() as conn:
+            return [tuple(row) for row in conn.execute(text(sql)).all()]
+    finally:
+        engine.dispose()
+
+
+def test_supported_rollback_to_the_integration_merge_revisions_reproduces_each_catalog(
     scratch_names: list[str], committed_url: str, _template_name: str
 ) -> None:
     base = os.environ["WEBDESK_TEST_DATABASE_URL"]
-    admin = _admin_engine(base)
     tag = uuid.uuid4().hex[:10]
-    reference, round_trip = f"webdesk_p3_mref_{tag}", f"webdesk_p3_mrt_{tag}"
+    round_trip = f"webdesk_p3_mrt_{tag}"
+    references = [f"webdesk_p3_mref{n}_{tag}" for n in range(len(SUPPORTED_STATES))]
+    admin = _admin_engine(base)
     try:
         with admin.connect() as conn:
-            conn.execute(text(f'CREATE DATABASE "{reference}"'))
-            scratch_names.append(reference)
+            for name in references:
+                conn.execute(text(f'CREATE DATABASE "{name}"'))
+                scratch_names.append(name)
             conn.execute(text(f'CREATE DATABASE "{round_trip}" TEMPLATE "{_template_name}"'))
             mirror_database_privileges(conn, round_trip)
             scratch_names.append(round_trip)
+            # The committed-test clone is a clone too: it needs the same database-level revocation.
+            mirror_database_privileges(conn, make_url(committed_url).database)
     finally:
         admin.dispose()
 
-    reference_url = _url(base, reference)
     round_trip_url = _url(base, round_trip)
-    # Integration of Phases 2 to 7: the history branches after 0041. A downgrade to 0043 removes the
-    # revisions that descend from 0043 (Phase 2 0044 to 0046, Phase 3 0050 to 0054 and the
-    # integration revisions from 0055) and keeps the Phase 5 to 7 line at its head, 0049. The
-    # reference is therefore migrated to both 0043 and 0049.
-    _alembic(reference_url, "0043_phase2_review_fixes", down=False)
-    _alembic(reference_url, X7_HEAD, down=False)
-    # The committed-test clone is a clone too: it needs the same database-level revocation.
-    head_admin = _admin_engine(base)
-    try:
-        with head_admin.connect() as conn:
-            mirror_database_privileges(conn, make_url(committed_url).database)
-    finally:
-        head_admin.dispose()
+    # Cluster-wide state the supported range must not touch (the 0046 downgrade would drop it).
+    clock_before = _cluster_rows(round_trip_url, _TEST_CLOCK_STATE)
     head_catalog = _catalog(committed_url)
-    _alembic(round_trip_url, "0043_phase2_review_fixes", down=True)
-    assert _revisions(round_trip_url) == {"0043_phase2_review_fixes", X7_HEAD}
-    reference_catalog = _catalog(reference_url)
-    downgraded_catalog = _catalog(round_trip_url)
+    head = _revision(committed_url)
 
-    assert _diff(reference_catalog, downgraded_catalog) == []
-    # Negative control: the 0043 reference must differ from head (0050 is visible).
-    assert _diff(head_catalog, reference_catalog), "the comparison saw no migration change"
+    for (target, expected), reference in zip(SUPPORTED_STATES, references, strict=True):
+        _alembic(round_trip_url, target, down=True)
+        assert _revisions(round_trip_url) == set(expected), target
+        reference_url = _url(base, reference)
+        for revision in expected:
+            _alembic(reference_url, revision, down=False)
+        assert _revisions(reference_url) == set(expected), target
+        downgraded = _catalog(round_trip_url)
+        assert _diff(_catalog(reference_url), downgraded) == [], target
+    # Negative control: the lowest supported state must differ from head (0056 to 0059 are gone).
+    assert _diff(head_catalog, downgraded), "the comparison saw no migration change"
 
     _alembic(round_trip_url, "head", down=False)
-    assert _revision(round_trip_url) == _revision(committed_url)
+    assert _revision(round_trip_url) == head
     assert _diff(head_catalog, _catalog(round_trip_url)) == []
+    assert _cluster_rows(round_trip_url, _TEST_CLOCK_STATE) == clock_before
