@@ -9,6 +9,8 @@
   before Phase 2 named the guard's ``approval_not_pending`` a proof refusal.
 - The per-process authority test login (Phase 3) is dropped at exit even though the run's
   namespaced database (Phase 2) is already gone.
+- The worker's inputs-changed mark keeps both safeguards (migration 0059): the Phase 3 lease and
+  owner fence (F-5) and the Phase 7 ``run.stale_marked`` audit with the run's project (H-70).
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures an
     Fixture,
     _claim,
     run_fixture,
+    worker_url,
 )
 from tests.support import authority as authority_support
 from tests.support.people import _email, committed_active_user
@@ -311,3 +314,71 @@ def test_the_authority_test_login_is_dropped_when_its_provisioning_database_is_g
         with admin.connect() as conn:
             conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
         admin.dispose()
+
+
+# --- 0059: the inputs-changed mark is fenced and audited with the project ----------------------
+
+
+def _stale_marks(engine: Engine, run: uuid.UUID) -> list[tuple[Any, Any]]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT project_id, error_class FROM audit_events
+                   WHERE event_type = 'run.stale_marked'
+                     AND record_refs @> jsonb_build_array(CAST(:r AS text))"""
+            ),
+            {"r": str(run)},
+        ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+def test_the_lease_holder_marks_once_with_an_audit_and_a_non_holder_marks_nothing(
+    committed_engine: Engine,
+    run_fixture: Fixture,  # noqa: F811
+    worker_url: str,  # noqa: F811
+) -> None:
+    worker = create_engine(worker_url)
+    mark = text("SELECT webdesk_guard.fn_worker_mark_inputs_changed(:j, :o)")
+    try:
+        holder = _claim(committed_engine, "w-int-mark", 60)
+        with worker.begin() as conn:
+            refused = conn.execute(mark, {"j": holder.job_id, "o": "w-int-other"}).scalar_one()
+        assert refused is False
+        assert _stale_marks(committed_engine, run_fixture.run) == []
+        with worker.begin() as conn:
+            assert conn.execute(mark, {"j": holder.job_id, "o": "w-int-mark"}).scalar_one() is True
+        with worker.begin() as conn:
+            # A second mark by the holder keeps the first mark and writes no second audit.
+            assert conn.execute(mark, {"j": holder.job_id, "o": "w-int-mark"}).scalar_one() is True
+    finally:
+        worker.dispose()
+    assert _stale_marks(committed_engine, run_fixture.run) == [
+        (run_fixture.project, "inputs_changed_during_run")
+    ]
+
+
+def test_the_mark_function_has_one_fenced_signature_and_the_worker_only_grant(
+    committed_engine: Engine,
+) -> None:
+    with committed_engine.connect() as probe:
+        rows = probe.execute(
+            text(
+                """SELECT pg_get_function_identity_arguments(p.oid), pg_get_userbyid(p.proowner),
+                          p.prosecdef, array_to_string(p.proconfig, ','),
+                          has_function_privilege('public', p.oid, 'EXECUTE'),
+                          has_function_privilege('webdesk_worker', p.oid, 'EXECUTE'),
+                          has_function_privilege('webdesk_app', p.oid, 'EXECUTE')
+                   FROM pg_proc p WHERE p.proname = 'fn_worker_mark_inputs_changed'"""
+            )
+        ).all()
+    assert rows == [
+        (
+            "p_job uuid, p_owner text",
+            "webdesk_guard_owner",
+            True,
+            "search_path=pg_catalog, public",
+            False,
+            True,
+            False,
+        )
+    ]
