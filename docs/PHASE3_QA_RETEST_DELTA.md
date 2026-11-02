@@ -160,3 +160,11 @@ The independent QA of `6e8f574` returned QA FAILED with two confirmed findings. 
 
 Scope check: the remaining transaction-time `now()` uses in the effective catalog are session expiry, proof expiry, token lifetime,
 read-grant expiry and `released_at`/`stale_at` timestamps. They are outside the approval-liveness ruling (PH3-FC-01) and are unchanged.
+
+## Final state after the 0055 remediation (2 November 2026)
+
+- Candidate: `3065361`. Developer full regression: 747 passed, 0 failed, exit code 0. Ruff, format check and strict mypy pass.
+- Independent re-test: incomplete when written (partial report `phase3-indep-qa-report-3065361.md`). Pending: F-3 mutant rerun,
+  reviewer's full regression exit code, reviewer ruff and mypy, reviewer cluster teardown.
+- Owner-reported QA: no issues found. Recorded as reported; not an independent verdict.
+- WDS formal acceptance: not granted.
