@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
-from starlette.datastructures import UploadFile
+from starlette.datastructures import FormData, UploadFile
+from starlette.types import Message
 
 from webdesk.api.errors import DOMAIN_ERRORS
 from webdesk.api.transactions import run_in_transaction
@@ -31,6 +32,10 @@ from webdesk.runs import service as runs
 from webdesk.storage.content_store import MAX_BYTES, ContentStore
 
 router = APIRouter()
+
+# The most a source upload request may carry: the approved file (MAX_BYTES) plus one MiB for form
+# fields and multipart framing. It is counted as the body arrives, before the framework buffers it (F-2).
+MAX_UPLOAD_REQUEST_BYTES = MAX_BYTES + 1024 * 1024
 
 
 SERVER_OWNED_FIELDS = frozenset(
@@ -125,9 +130,34 @@ def _uuid(value: str) -> uuid.UUID:
         raise IngestError(422, "identifier_invalid") from exc
 
 
+async def _bounded_form(request: Request, limit: int) -> FormData:
+    """The multipart form, parsed only while the whole body stays within ``limit`` bytes (D5, F-2).
+
+    Starlette's parser reads the whole body, and its part limits do not bound the total: they cover
+    fields, and they spool file parts to disk. The request is refused on its declared length, or as
+    soon as the bytes received pass the limit, so nothing above it is buffered or spilled to disk.
+    """
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise IngestError(413, "too_large")
+    received = 0
+    receive = request.receive
+
+    async def bounded_receive() -> Message:
+        nonlocal received
+        message = await receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b""))
+            if received > limit:
+                raise IngestError(413, "too_large")
+        return message
+
+    return await Request(request.scope, bounded_receive).form()
+
+
 @router.post("/projects/{project_id}/sources")
 async def upload_source(project_id: str, request: Request, token: Token) -> dict[str, Any]:
-    form = await request.form()
+    form = await _bounded_form(request, MAX_UPLOAD_REQUEST_BYTES)
     rejected = sorted(key for key in form if key in SERVER_OWNED_FIELDS)
     if rejected:
         raise IngestError(422, "server_field_rejected")

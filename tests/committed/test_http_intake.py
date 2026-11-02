@@ -19,6 +19,7 @@ from sqlalchemy.pool import NullPool
 from tests.support.authority import start_in_process_authority
 from tests.support.people import committed_active_user
 from tests.support.proofs import prove
+from webdesk.api import routes
 from webdesk.api.app import create_app
 from webdesk.config import Settings
 from webdesk.projects import service as projects
@@ -164,6 +165,38 @@ def test_an_analyst_uploads_a_source_and_reads_its_bytes_back(http: dict[str, ob
     )
     assert content.status_code == 200
     assert content.content == b"http line one\n"
+
+
+def test_f2_an_upload_over_the_request_bound_is_refused_and_no_source_is_created(
+    http: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-2: the request is refused as its body arrives, and nothing is committed."""
+    monkeypatch.setattr(routes, "MAX_UPLOAD_REQUEST_BYTES", 16 * 1024)
+    client = http["client"]
+    assert isinstance(client, TestClient)
+    engine = http["engine"]
+    assert isinstance(engine, Engine)
+    project = str(http["project"])
+    response = client.post(
+        f"/projects/{project}/sources",
+        headers=_auth(str(http["analyst_token"])),
+        data={
+            "title": "Oversized",
+            "source_type": "client_brief",
+            "source_trust": "untrusted_input",
+            "access_classification": "internal",
+            "expected_project_revision": str(_revision(engine, project)),
+        },
+        files={"file": ("big.txt", b"y" * (64 * 1024), "text/plain")},
+    )
+    assert response.status_code == 413, response.text
+    assert response.json() == {"error": "too_large"}
+    with engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT count(*) FROM sources WHERE project_id = CAST(:p AS uuid)"),
+            {"p": project},
+        ).scalar_one()
+    assert count == 0
 
 
 def test_a_client_supplied_server_field_is_refused_before_any_work(
