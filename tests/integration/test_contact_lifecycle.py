@@ -418,3 +418,83 @@ def test_non_administrator_cannot_withdraw(
             conn, prove(conn, plain, "contact.withdraw", user_id), user_id, "not mine", 1
         )
     assert exc.value.reason == "proof_permission_not_held"
+
+
+def test_an_administrator_rejects_a_contact_change_and_the_current_contact_is_kept(
+    conn: Connection, admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """H-13: rejection marks the change rejected, releases its reservation, keeps the contact."""
+    creator, approver = admins
+    _as_app(conn)
+    old_email = _email()
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, old_email, "Keeper"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof-r"
+    )
+    _owner(conn)
+    activate_user(conn, user_id)
+    _as_app(conn)
+    new_email = _email()
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user_id), POLICY, user_id, new_email
+    )
+    # A non-Administrator (an ordinary active account) cannot obtain the rejection proof at all.
+    staff = active_user(conn)
+    with pytest.raises(ProofNotIssued):
+        prove(conn, staff, "contact.reject.change", change)
+
+    contacts.reject_change(conn, prove(conn, approver, "contact.reject.change", change), change)
+
+    _owner(conn)
+    email_now = conn.execute(
+        text("SELECT normalized_email FROM users WHERE user_id = :u"), {"u": user_id}
+    ).scalar_one()
+    status = conn.execute(
+        text("SELECT status FROM user_contact_approvals WHERE approval_id = :a"), {"a": change}
+    ).scalar_one()
+    reserved_new = conn.execute(
+        text(
+            "SELECT count(*) FROM contact_reservations"
+            " WHERE normalized_email = :e AND released_at IS NULL"
+        ),
+        {"e": new_email},
+    ).scalar_one()
+    assert email_now == old_email
+    assert status == "rejected"
+    assert reserved_new == 0
+    assert _audit_count(conn, "contact.change.rejected") == 1
+
+
+def test_a_rejected_contact_change_leaves_the_session_epoch_and_revision_unchanged(
+    conn: Connection, admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """H-13 session effects: rejecting a change does not revoke sessions or move the contact."""
+    creator, approver = admins
+    _as_app(conn)
+    user_id, approval_id = contacts.request_create(
+        conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Session"
+    )
+    contacts.approve_create(
+        conn, prove(conn, approver, "contact.approve.create", approval_id), approval_id, "proof-s"
+    )
+    _owner(conn)
+    activate_user(conn, user_id)
+    _as_app(conn)
+    change = contacts.request_change(
+        conn, prove(conn, creator, "contact.request.change", user_id), POLICY, user_id, _email()
+    )
+    _owner(conn)
+    before = conn.execute(
+        text("SELECT session_epoch, contact_revision, status FROM users WHERE user_id = :u"),
+        {"u": user_id},
+    ).one()
+    _as_app(conn)
+    contacts.reject_change(conn, prove(conn, approver, "contact.reject.change", change), change)
+    _owner(conn)
+    after = conn.execute(
+        text("SELECT session_epoch, contact_revision, status FROM users WHERE user_id = :u"),
+        {"u": user_id},
+    ).one()
+    assert tuple(before) == tuple(after)

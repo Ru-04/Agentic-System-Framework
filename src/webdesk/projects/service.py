@@ -21,7 +21,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from webdesk.audit.service import record_event
-from webdesk.authority.proofs import actor_for, consume_with, wrapper_refusal
+from webdesk.authority.proofs import ProofRefused, actor_for, consume_with, wrapper_refusal
 from webdesk.rbac.engine import authorize
 from webdesk.rbac.matrix import Permission
 from webdesk.rbac.sql_store import SqlAuthorizationStore
@@ -338,4 +338,94 @@ def archive_project(
         event_type="project.archive.succeeded",
         outcome="success",
         record_refs=[str(project)],
+    )
+
+
+def revoke_project_grant(conn: Connection, proof: uuid.UUID, grant: uuid.UUID) -> None:
+    """Revoke one project access grant (H-14).
+
+    Administrator-only, audited, no self-revocation. A grant that is already
+    revoked is a conflict (409). The database serializes concurrent revocations
+    (``fn_revoke_project_access_with_proof`` locks the grant); the losing call is
+    refused and audited here as a conflict.
+    """
+    row = conn.execute(
+        text(
+            """SELECT project_id, user_id, revoked_at FROM project_access_grants
+               WHERE grant_id = :g"""
+        ),
+        {"g": grant},
+    ).one_or_none()
+    if row is None:
+        raise ProjectServiceError(404, "grant_not_found")
+    project = uuid.UUID(str(row[0]))
+    actor = actor_for(conn, proof, "project.access.revoke", project)
+    _authorized(conn, actor, Permission.PROJECT_GRANT_MANAGE, "grant.revoke.denied")
+    if uuid.UUID(str(row[1])) == actor:
+        _deny(conn, actor, "grant.revoke.denied", "self_revocation", 403)
+    if row[2] is not None:
+        _deny(conn, actor, "grant.revoke.denied", "grant_already_revoked", 409)
+    try:
+        consume_with(
+            conn,
+            "project.access.revoke",
+            "SELECT webdesk_guard.fn_revoke_project_access_with_proof(:p, :g)",
+            {"p": proof, "g": grant},
+        )
+    except ProofRefused as exc:
+        if exc.reason == "grant_already_revoked":
+            _deny(conn, actor, "grant.revoke.denied", exc.reason, 409)
+        if exc.reason == "grant_not_found":
+            _deny(conn, actor, "grant.revoke.denied", exc.reason, 404)
+        raise
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(actor),
+        event_type="project.access.revoked",
+        outcome="success",
+        record_refs=[str(grant), str(project)],
+    )
+
+
+def revoke_restricted_grant(conn: Connection, proof: uuid.UUID, grant: uuid.UUID) -> None:
+    """Revoke one restricted-content grant (H-14). Administrator-only, audited, not self.
+
+    Serialized and conflict-reported exactly as ``revoke_project_grant``.
+    """
+    row = conn.execute(
+        text(
+            """SELECT user_id, revoked_at FROM restricted_content_grants
+               WHERE grant_id = :g"""
+        ),
+        {"g": grant},
+    ).one_or_none()
+    if row is None:
+        raise ProjectServiceError(404, "grant_not_found")
+    actor = actor_for(conn, proof, "restricted.revoke", grant)
+    _authorized(conn, actor, Permission.RESTRICTED_GRANT_MANAGE, "grant.revoke.denied")
+    if uuid.UUID(str(row[0])) == actor:
+        _deny(conn, actor, "grant.revoke.denied", "self_revocation", 403)
+    if row[1] is not None:
+        _deny(conn, actor, "grant.revoke.denied", "grant_already_revoked", 409)
+    try:
+        consume_with(
+            conn,
+            "restricted.revoke",
+            "SELECT webdesk_guard.fn_revoke_restricted_grant_with_proof(:p, :g)",
+            {"p": proof, "g": grant},
+        )
+    except ProofRefused as exc:
+        if exc.reason == "grant_already_revoked":
+            _deny(conn, actor, "grant.revoke.denied", exc.reason, 409)
+        if exc.reason == "grant_not_found":
+            _deny(conn, actor, "grant.revoke.denied", exc.reason, 404)
+        raise
+    record_event(
+        conn,
+        actor_type="human",
+        actor_id=str(actor),
+        event_type="restricted.grant.revoked",
+        outcome="success",
+        record_refs=[str(grant)],
     )

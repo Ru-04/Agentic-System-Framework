@@ -28,12 +28,12 @@ from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, Engine
-from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError
 
 from webdesk.auth.service import AuthError
 from webdesk.authority import service as authority
 from webdesk.delivery.smtp import SmtpTransport, smtp_config_from_env
-from webdesk.delivery.transport import CaptureTransport, EmailTransport, TransportUnavailable
+from webdesk.delivery.transport import CaptureTransport, EmailTransport
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.ratelimit.limiter import Limit
 
@@ -219,10 +219,18 @@ class _Handler(BaseHTTPRequestHandler):
                 self.client_address[0],
                 self.server.reset_transport,
             )
-        except (SQLAlchemyError, TransportUnavailable):
-            # Delivery failed: the transaction rolled back and no token survives. The reply stays
-            # neutral.
-            _diagnose(RESET_REQUEST_PATH, "delivery or database refusal; reply unchanged")
+        except Exception as exc:
+            # Any operational failure: database, transport, policy configuration or a defect. The
+            # transaction was rolled back and no token survives (_run_reset). The reply stays
+            # neutral. Only the exception class and SQLSTATE are logged, never the message, which
+            # may echo the requested address or internal detail. BaseException subclasses (process
+            # exit, interrupts) are not caught.
+            sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+            _diagnose(
+                RESET_REQUEST_PATH,
+                f"delivery or database refusal ({type(exc).__name__}, sqlstate={sqlstate}); "
+                "reply unchanged",
+            )
         self._reply(200, {"accepted": True})
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming

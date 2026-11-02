@@ -19,9 +19,11 @@ from typing import Any
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 
+from tests.support.app_name import label
 from webdesk.auth.service import AuthError
 from webdesk.intake.ingest import ingest_source
 from webdesk.intake.read_access import ReadAccessError, read_source_version_v1
@@ -46,17 +48,29 @@ def owner_engine() -> Iterator[Engine]:
     The login role has no privilege for these. Tests use it only to set up a state the service
     cannot reach.
     """
-    # The hardening database is owned by webdesk_test_owner (WEBDESK_HARDENING_OWNER_URL). The
-    # integration owner holds no privilege on its tables, so the setup role must be that owner.
-    engine = create_engine(os.environ["WEBDESK_HARDENING_OWNER_URL"])
+    # The hardening database named by the hardening owner URL, the same one the app engine reads.
+    hardening_db = make_url(os.environ["WEBDESK_HARDENING_OWNER_URL"]).database
+    url = make_url(os.environ["WEBDESK_TEST_DATABASE_URL"]).set(
+        database=hardening_db, drivername="postgresql+psycopg"
+    )
+    engine = create_engine(url.render_as_string(hide_password=False))
     yield engine
     engine.dispose()
 
 
 @functools.cache
 def _app() -> Engine:
-    """The login role's engine, for committed setup and reads that the authority must see."""
-    return create_engine(os.environ["WEBDESK_HARDENING_APP_URL"])
+    """The login role's engine, for committed setup and reads that the authority must see.
+
+    NullPool: this engine is never disposed, so a pooled connection would stay attached to the
+    run's hardening database until the process exits. That leaked ``webdesk_app_login`` session
+    is the teardown defect of QA F-02. Without a pool, each use closes its connection on return.
+    """
+    return create_engine(
+        os.environ["WEBDESK_HARDENING_APP_URL"],
+        poolclass=NullPool,
+        connect_args={"application_name": label("hardening-app-cached")},
+    )
 
 
 def _session_committed(user: uuid.UUID) -> str:

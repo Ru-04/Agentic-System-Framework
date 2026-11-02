@@ -36,9 +36,36 @@ PURPOSES = frozenset({"activate", "reset"})
 
 
 class TokenError(Exception):
-    def __init__(self, reason: str) -> None:
+    """A neutral refusal. ``reason`` is shown to the caller; ``internal`` is audited.
+
+    ``user_id`` is set only when the presented token matched a stored token. It is
+    the account the token belongs to, not an identity proof, so it is recorded as
+    a reference and never as the actor (QA F-08).
+    """
+
+    def __init__(
+        self, reason: str, internal: str | None = None, user_id: uuid.UUID | None = None
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.internal = internal or reason
+        self.user_id = user_id
+
+
+def _approval_is_live(conn: Connection, user_id: uuid.UUID) -> bool:
+    """True when the account's current contact has an approved, unexpired approval (H-11)."""
+    return (
+        conn.execute(
+            text(
+                """SELECT 1 FROM user_contact_approvals a
+                   JOIN users u ON u.user_id = a.user_id
+                   WHERE a.user_id = :u AND a.status = 'approved' AND a.expires_at > now()
+                     AND a.requested_email_normalized = u.normalized_email"""
+            ),
+            {"u": user_id},
+        ).first()
+        is not None
+    )
 
 
 @dataclass(frozen=True)
@@ -116,6 +143,17 @@ def issue(
         )
         raise TokenError("invalid_request")
     email = str(user[1])
+    if purpose == "activate" and not _approval_is_live(conn, user_id):
+        # H-11: no activation token is issued for an account whose contact approval is not live.
+        _audit(
+            conn,
+            actor_type="system",
+            actor=str(user_id),
+            event="token.issue.denied",
+            outcome="denied",
+            error_class="approval_not_live",
+        )
+        raise TokenError("invalid_request", internal="approval_not_live")
 
     if purpose == "reset":
         pending_change = conn.execute(
@@ -240,25 +278,38 @@ def issue(
 
 
 def consume(conn: Connection, *, token: str, purpose: str) -> uuid.UUID:
-    """Validate and consume a token. Returns the user ID. Neutral error on any refusal."""
+    """Validate and consume a token. Returns the user ID. Neutral error on any refusal.
+
+    The consumption and approval check run in one savepoint, so a refusal leaves the token
+    unconsumed (H-11). The refusal is audited after that savepoint. A caller that wraps ``consume``
+    in its own savepoint must audit the refusal in its outer transaction (H-10).
+    """
     if purpose not in PURPOSES:
-        raise TokenError("invalid_token")
-    # The guard-owner function re-checks liveness, status and contact revision, then consumes.
-    row = conn.execute(
-        text("SELECT token_id, user_id FROM webdesk_guard.fn_consume_token(:h, :p)"),
-        {"h": token_hash(token), "p": purpose},
-    ).one_or_none()
-    if row is None:
+        raise TokenError("invalid_token", internal="invalid")
+    try:
+        with conn.begin_nested():
+            # The guard-owner function re-checks liveness, status and contact revision, then
+            # consumes.
+            row = conn.execute(
+                text("SELECT token_id, user_id FROM webdesk_guard.fn_consume_token(:h, :p)"),
+                {"h": token_hash(token), "p": purpose},
+            ).one_or_none()
+            if row is None:
+                raise TokenError("invalid_token", internal="invalid")
+            user_id = uuid.UUID(str(row[1]))
+            if purpose == "activate" and not _approval_is_live(conn, user_id):
+                raise TokenError("invalid_token", internal="approval_not_live", user_id=user_id)
+    except TokenError as exc:
         _audit(
             conn,
             actor_type="system",
             actor="anonymous",
             event="token.consume.denied",
             outcome="denied",
-            error_class="invalid",
+            error_class=exc.internal,
+            record_refs=[] if exc.user_id is None else [str(exc.user_id)],
         )
-        raise TokenError("invalid_token")
-    user_id = uuid.UUID(str(row[1]))
+        raise
     _audit(
         conn,
         actor_type="system",

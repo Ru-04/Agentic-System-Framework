@@ -189,7 +189,7 @@ def apply_recovery(
                 {"e": request.email},
             ).one_or_none()
             if row is None:
-                raise _refuse(conn, operator_id, "appointment_target_ineligible", 409)
+                raise _refuse(conn, operator_id, "appointment_target_ineligible", 403)
             user_id = uuid.UUID(str(row[0]))
         else:
             if conn.execute(

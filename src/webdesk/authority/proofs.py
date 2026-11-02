@@ -30,6 +30,9 @@ REFUSAL_REASONS = (
     "proof_permission_not_held",
     "reset_not_self",
     "self_assignment",
+    "grant_not_found",
+    "grant_already_revoked",
+    "approval_not_pending",
 )
 
 

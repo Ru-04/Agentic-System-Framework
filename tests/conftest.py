@@ -28,17 +28,70 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import NullPool
 
 from tests.support.activation import activate_user
+from tests.support.app_name import clear_run_label, label, set_run_label
+from tests.support.db_cleanup import drop_when_detached
 from tests.support.proofs import prove
+from tests.support.run_namespace import (
+    RUN_ENV,
+    NamespaceError,
+    RunNamespace,
+    clone_databases,
+    create_template,
+    drop_owned,
+    mirror_database_privileges,
+    point_environment,
+    restore_environment,
+    run_identifier,
+)
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.rbac.assign import assign_role
 from webdesk.rbac.matrix import Role
 
 REPO = Path(__file__).resolve().parents[1]
+_RUN: RunNamespace | None = None
+
+# The teardown guard under the name the Phase 6 guard tests import
+# (tests/integration/test_session_leak_guard.py). One implementation: tests/support/db_cleanup.py.
+_drop_when_detached = drop_when_detached
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Create this run's namespace before any test module reads the database variables (QA F-03)."""
+    global _RUN
+    base = os.environ.get("WEBDESK_TEST_DATABASE_URL")
+    if base is None:
+        return
+    run_id = run_identifier(os.environ.get(RUN_ENV), REPO.name)
+    set_run_label(run_id)
+    try:
+        _RUN = create_template(base, run_id, REPO)
+    except NamespaceError as exc:
+        raise pytest.UsageError(str(exc)) from exc
+    _migrate(make_url(base).set(database=_RUN.template).render_as_string(hide_password=False))
+    clone_databases(_RUN, base)
+    point_environment(_RUN, base)
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Drop only this run's labelled databases, then restore the environment."""
+    global _RUN
+    if _RUN is None:
+        return
+    # The server URL saved before the environment was pointed at this run's databases.
+    base = _RUN.saved_env.get("WEBDESK_TEST_DATABASE_URL") or os.environ.get(
+        "WEBDESK_TEST_DATABASE_URL", ""
+    )
+    try:
+        drop_owned(_RUN, base)
+    finally:
+        restore_environment(_RUN)
+        clear_run_label()
+        _RUN = None
 
 
 class _Clock:
@@ -49,7 +102,11 @@ class _Clock:
 def _admin_engine(base: str) -> Engine:
     from sqlalchemy.engine.url import make_url as _make
 
-    return create_engine(_make(base).set(database="postgres"), isolation_level="AUTOCOMMIT")
+    return create_engine(
+        _make(base).set(database="postgres"),
+        isolation_level="AUTOCOMMIT",
+        connect_args={"application_name": label("admin")},
+    )
 
 
 def _migrate(url: str) -> None:
@@ -66,54 +123,32 @@ def _migrate(url: str) -> None:
             os.environ["WEBDESK_DATABASE_URL"] = previous
 
 
-def _drop_when_detached(conn: Connection, name: str) -> None:
-    """Drop a test database only when no other session is attached to it.
-
-    A session still attached at teardown is a leak in the test that used it, reported by role and
-    application name. ``DROP ... WITH (FORCE)`` is not used: it masks the leak, and this role
-    lacks the rights to terminate other roles' sessions.
-    """
-    # Only client backends count. Background processes such as an autovacuum worker analysing a
-    # freshly cloned database appear with a NULL role and state, and are not test sessions.
-    attached = conn.execute(
-        text(
-            "SELECT usename, application_name, state FROM pg_stat_activity"
-            " WHERE datname = :d AND pid <> pg_backend_pid()"
-            " AND backend_type = 'client backend'"
-        ),
-        {"d": name},
-    ).all()
-    if attached:
-        leaked = [tuple(map(str, row)) for row in attached]
-        raise AssertionError(f"sessions still attached to {name} at teardown: {leaked}")
-    conn.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
+@pytest.fixture(scope="session")
+def _template_name() -> str:
+    """The migrated template of this run's namespace (created by ``pytest_configure``)."""
+    if _RUN is None:
+        pytest.skip("WEBDESK_TEST_DATABASE_URL is not set")
+    return _RUN.template
 
 
 @pytest.fixture(scope="session")
-def _template_name() -> Iterator[str]:
-    base = os.environ.get("WEBDESK_TEST_DATABASE_URL")
-    if base is None:
+def run_prefix() -> str:
+    """The database-name prefix of this run. Helpers derive every name from it (QA F-03)."""
+    if _RUN is None:
         pytest.skip("WEBDESK_TEST_DATABASE_URL is not set")
-    name = f"webdesk_template_{uuid.uuid4().hex[:10]}"
-    admin = _admin_engine(base)
-    with admin.connect() as conn:
-        conn.execute(text(f'CREATE DATABASE "{name}"'))
-    template_url = make_url(base).set(database=name).render_as_string(hide_password=False)
-    _migrate(template_url)
-    yield name
-    with admin.connect() as conn:
-        _drop_when_detached(conn, name)
-    admin.dispose()
+    return _RUN.prefix
 
 
 @pytest.fixture
 def committed_url(_template_name: str) -> Iterator[str]:
     """A fresh database for one test, cloned from the migrated template and dropped afterwards."""
     base = os.environ["WEBDESK_TEST_DATABASE_URL"]
-    name = f"webdesk_test_{uuid.uuid4().hex[:10]}"
+    assert _RUN is not None
+    name = _RUN.client_name(uuid.uuid4().hex[:10])
     admin = _admin_engine(base)
     with admin.connect() as conn:
         conn.execute(text(f'CREATE DATABASE "{name}" TEMPLATE "{_template_name}"'))
+        mirror_database_privileges(conn, name)
     url = make_url(base).set(database=name).render_as_string(hide_password=False)
     previous = os.environ.get("WEBDESK_DATABASE_URL")
     os.environ["WEBDESK_DATABASE_URL"] = url
@@ -125,14 +160,16 @@ def committed_url(_template_name: str) -> Iterator[str]:
         else:
             os.environ["WEBDESK_DATABASE_URL"] = previous
         with admin.connect() as conn:
-            _drop_when_detached(conn, name)
+            drop_when_detached(conn, name)
         admin.dispose()
 
 
 @pytest.fixture
 def committed_engine(committed_url: str) -> Iterator[Engine]:
     engine = create_engine(
-        committed_url.replace("postgresql://", "postgresql+psycopg://"), poolclass=NullPool
+        committed_url.replace("postgresql://", "postgresql+psycopg://"),
+        poolclass=NullPool,
+        connect_args={"application_name": label("committed")},
     )
     yield engine
     engine.dispose()

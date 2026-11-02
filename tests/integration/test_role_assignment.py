@@ -176,7 +176,8 @@ def test_below_two_an_administrator_grant_needs_an_appointment(conn: Connection)
     admin, staff = _solo_admin_and_staff(conn)
     with pytest.raises(RoleServiceError) as exc:
         assign_role(conn, prove(conn, admin, "role.assign", staff), staff, Role.ADMINISTRATOR)
-    assert (exc.value.status, exc.value.reason) == (409, "appointment_required")
+    # H-12 (WDS F11f): a grant below two Administrators without an appointment is 403, not 409.
+    assert (exc.value.status, exc.value.reason) == (403, "appointment_required")
 
 
 def test_recovery_is_refused_with_coverage_sufficient_and_audited(conn: Connection) -> None:

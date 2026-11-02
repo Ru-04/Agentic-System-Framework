@@ -367,3 +367,85 @@ def test_only_an_administrator_may_archive(conn: Connection) -> None:
         {},
     )
     assert denied == 1
+
+
+def test_an_administrator_revokes_a_project_grant_and_the_revocation_is_audited(
+    conn: Connection,
+) -> None:
+    """H-14: revocation is administrator-only, audited, and ends the grant."""
+    first, second = _two_admins(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="Revoke", data_classification="internal"
+    )
+    grant = projects.grant_project_access(
+        conn, prove(conn, first, "project.access.grant", project), project, second, ["source.read"]
+    )
+    projects.revoke_project_grant(conn, prove(conn, first, "project.access.revoke", project), grant)
+    revoked = conn.execute(
+        text("SELECT revoked_at IS NOT NULL FROM project_access_grants WHERE grant_id = :g"),
+        {"g": grant},
+    ).scalar_one()
+    assert revoked
+    audited = conn.execute(
+        text("SELECT count(*) FROM audit_events WHERE event_type = 'project.access.revoked'")
+    ).scalar_one()
+    assert audited == 1
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.revoke_project_grant(
+            conn, prove(conn, first, "project.access.revoke", project), grant
+        )
+    assert (exc.value.status, exc.value.reason) == (409, "grant_already_revoked")
+
+
+def test_a_grant_holder_cannot_revoke_its_own_grant(conn: Connection) -> None:
+    """H-14: no self-revocation, even by an Administrator who holds the grant."""
+    first, second = _two_admins(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="Self", data_classification="internal"
+    )
+    grant = projects.grant_project_access(
+        conn, prove(conn, first, "project.access.grant", project), project, second, ["source.read"]
+    )
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.revoke_project_grant(
+            conn, prove(conn, second, "project.access.revoke", project), grant
+        )
+    assert (exc.value.status, exc.value.reason) == (403, "self_revocation")
+    still = conn.execute(
+        text("SELECT revoked_at IS NULL FROM project_access_grants WHERE grant_id = :g"),
+        {"g": grant},
+    ).scalar_one()
+    assert still
+
+
+def test_an_administrator_revokes_a_restricted_grant_and_a_holder_cannot_revoke_its_own(
+    conn: Connection,
+) -> None:
+    """H-14: an Administrator revokes a restricted grant; its holder cannot."""
+    first, second = _two_admins(conn)
+    project = projects.create_project(
+        conn, prove(conn, first, "project.create"), name="Restr", data_classification="restricted"
+    )
+    grant = projects.grant_restricted(
+        conn,
+        prove(conn, first, "restricted.grant", project),
+        resource_type="project",
+        resource_id=project,
+        user=second,
+        reason="phase 2 test",
+    )
+    with pytest.raises(ProjectServiceError) as exc:
+        projects.revoke_restricted_grant(
+            conn, prove(conn, second, "restricted.revoke", grant), grant
+        )
+    assert (exc.value.status, exc.value.reason) == (403, "self_revocation")
+    projects.revoke_restricted_grant(conn, prove(conn, first, "restricted.revoke", grant), grant)
+    revoked = conn.execute(
+        text("SELECT revoked_at IS NOT NULL FROM restricted_content_grants WHERE grant_id = :g"),
+        {"g": grant},
+    ).scalar_one()
+    assert revoked
+    audited = conn.execute(
+        text("SELECT count(*) FROM audit_events WHERE event_type = 'restricted.grant.revoked'")
+    ).scalar_one()
+    assert audited == 1

@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import os
 import secrets
-import socket
 import subprocess
 import sys
+import tempfile
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -25,8 +25,10 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 
+from tests.support.app_name import label
 from tests.support.authority import SECRET as AUTHORITY_SECRET
 from tests.support.authority import authority_database_url, provision_login_password
+from tests.support.authority_start import listen_port, redact
 from webdesk.authority.client import AuthorityClient
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.delivery.transport import CaptureTransport
@@ -36,8 +38,9 @@ from webdesk.ratelimit.limiter import Limit, subject_hash
 from webdesk.tokens import service as tokens
 from webdesk.tokens.service import TokenLimits, token_hash
 
-APP_URL = os.environ.get("WEBDESK_HARDENING_APP_URL")
-OWNER_URL = os.environ.get("WEBDESK_HARDENING_OWNER_URL")
+# Database URLs are read when a fixture runs, not at import. This conftest is imported before
+# the run namespace is created (tests/conftest.py ``pytest_configure``), so an import-time read
+# would see the shared names.
 PASSWORD = "CHANGE_ME_TEST_PASSWORD_12"  # test-only; never a production credential
 
 POLICY = ContactEmailPolicy(
@@ -60,15 +63,17 @@ def _email() -> str:
 
 
 def _require_urls() -> tuple[str, str]:
-    if not APP_URL or not OWNER_URL:
+    app_url = os.environ.get("WEBDESK_HARDENING_APP_URL")
+    owner_url = os.environ.get("WEBDESK_HARDENING_OWNER_URL")
+    if not app_url or not owner_url:
         pytest.skip("hardening database is not configured (see .env.hardening.local)")
-    return APP_URL, OWNER_URL
+    return app_url, owner_url
 
 
 @pytest.fixture(scope="session")
 def app_engine() -> Iterator[Engine]:
     app_url, _ = _require_urls()
-    engine = create_engine(app_url)
+    engine = create_engine(app_url, connect_args={"application_name": label("hardening-app")})
     yield engine
     engine.dispose()
 
@@ -90,34 +95,42 @@ def authority_client() -> Iterator[AuthorityClient]:
             "WEBDESK_INTEGRATION_OWNER_URL is not set (needed to provision the authority login)"
         )
     password = provision_login_password(provisioning_url)
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
     env = {
         **os.environ,
         "WEBDESK_ENV": "test",
+        "PGAPPNAME": label("authority"),
         "WEBDESK_AUTHORITY_DATABASE_URL": authority_database_url(app_url, password),
         "WEBDESK_AUTHORITY_SECRET": AUTHORITY_SECRET,
-        "WEBDESK_AUTHORITY_BIND": f"127.0.0.1:{port}",
+        "WEBDESK_AUTHORITY_BIND": "127.0.0.1:0",
         "WEBDESK_EMAIL_DOMAIN_ALLOWLIST": "wds-test.example",
     }
+    stderr = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed in finally
     process = subprocess.Popen(  # noqa: S603 - fixed argument list: interpreter and module name
         [sys.executable, "-m", "webdesk.authority.server"],
         env=env,
         stdout=subprocess.PIPE,
+        stderr=stderr,
         text=True,
     )
     try:
         assert process.stdout is not None
         line = process.stdout.readline()
-        if "authority listening" not in line:
-            raise RuntimeError(f"the authority process did not start: {line!r}")
+        port = listen_port(line)
+        if port is None:
+            process.wait(timeout=10)
+            stderr.seek(0)
+            detail = redact(stderr.read()[-800:], [password, AUTHORITY_SECRET])
+            raise RuntimeError(
+                f"the authority process did not start (exit {process.returncode}); "
+                f"stdout {line!r}; stderr tail {detail!r}"
+            )
         _authority = AuthorityClient(f"http://127.0.0.1:{port}", AUTHORITY_SECRET)
         yield _authority
     finally:
         _authority = None
         process.terminate()
         process.wait(timeout=10)
+        stderr.close()
 
 
 def _require_authority() -> AuthorityClient:
@@ -131,28 +144,30 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     """Installs once, activates both install contacts through tokens, and grants the second
     Administrator with its install appointment. Protected steps run as the login role."""
     _, owner_url = _require_urls()
-    owner = create_engine(owner_url)
-    with owner.begin() as conn:
-        conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
-        installed = conn.execute(
-            text("SELECT 1 FROM setup_trust_ceremonies WHERE kind = 'install'")
-        ).first()
-        if installed is None:
-            result = apply_install(
-                conn,
-                PreparedInstall(
-                    owner_approval_ref="OWNER-HARDENING",
-                    owner_identity_ref="owner:test",
-                    authorization_digest="x" * 64,
-                    contacts=((_email(), "A"), (_email(), "B")),
-                ),
-                operator_id="op-hardening",
-                verifier_id="verifier-hardening",
-                clock=SystemClock(),
-            )
-            first, second = result.user_ids[0], result.user_ids[1]
-            appointment = result.approval_ids[1]
-    owner.dispose()
+    owner = create_engine(owner_url, connect_args={"application_name": label("hardening-owner")})
+    try:
+        with owner.begin() as conn:
+            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+            installed = conn.execute(
+                text("SELECT 1 FROM setup_trust_ceremonies WHERE kind = 'install'")
+            ).first()
+            if installed is None:
+                result = apply_install(
+                    conn,
+                    PreparedInstall(
+                        owner_approval_ref="OWNER-HARDENING",
+                        owner_identity_ref="owner:test",
+                        authorization_digest="x" * 64,
+                        contacts=((_email(), "A"), (_email(), "B")),
+                    ),
+                    operator_id="op-hardening",
+                    verifier_id="verifier-hardening",
+                    clock=SystemClock(),
+                )
+                first, second = result.user_ids[0], result.user_ids[1]
+                appointment = result.approval_ids[1]
+    finally:
+        owner.dispose()
 
     with app_engine.connect() as conn:
         if installed is not None:
@@ -195,17 +210,21 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
     if already is None:
         # The appointment is the install-time bootstrap (ceremony role), not an application write.
         _, owner_url = _require_urls()
-        appointing = create_engine(owner_url)
-        with appointing.begin() as conn:
-            conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
-            conn.execute(
-                text(
-                    """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
-                    appointment_approval_id) VALUES (:b, 'Administrator', :a, :approval)"""
-                ),
-                {"b": second, "a": first, "approval": appointment},
-            )
-        appointing.dispose()
+        appointing = create_engine(
+            owner_url, connect_args={"application_name": label("hardening-owner-appoint")}
+        )
+        try:
+            with appointing.begin() as conn:
+                conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
+                conn.execute(
+                    text(
+                        """INSERT INTO role_assignments (user_id, role, assigned_by_user_id,
+                        appointment_approval_id) VALUES (:b, 'Administrator', :a, :approval)"""
+                    ),
+                    {"b": second, "a": first, "approval": appointment},
+                )
+        finally:
+            appointing.dispose()
     return {"admin": first, "second": second}
 
 
@@ -236,7 +255,7 @@ def _activate_bootstrap(engine: Engine, user: uuid.UUID) -> None:
     assume the application role here, so the two steps run on their own connections.
     """
     _app_url, owner_url = _require_urls()
-    owner = create_engine(owner_url)
+    owner = create_engine(owner_url, connect_args={"application_name": label("hardening-owner")})
     token = secrets.token_urlsafe(32)
     try:
         with owner.begin() as conn:
