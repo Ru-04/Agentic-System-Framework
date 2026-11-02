@@ -37,7 +37,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from email import policy as email_policy
-from email.message import EmailMessage
+from email.message import EmailMessage, MIMEPart
 from email.parser import BytesParser
 from typing import Any, cast
 
@@ -767,7 +767,7 @@ def _eml_part(part: str, text: str, provenance: dict[str, Any]) -> SegmentDraft:
     return SegmentDraft("eml_part", locator, text)
 
 
-def _eml_named(part: EmailMessage) -> bool:
+def _eml_named(part: MIMEPart) -> bool:
     """H-64, ruled by WDS in chat on 2 November 2026 ("Treat as attachment"): a part whose
     Content-Type carries a ``name=`` parameter is an attachment, never the body, with or without a
     Content-Disposition."""
@@ -846,13 +846,20 @@ def parse_eml(data: bytes) -> ParseResult:
     # H-64: a named part is an attachment even where the library treats it as a body candidate,
     # and the unnamed body chosen in its place is not an attachment.
     bodies = {id(part) for part in (body_part, html_part) if part is not None}
-    parts = [part for part in message.iter_attachments() if id(part) not in bodies]
-    seen = {id(part) for part in parts}
-    parts.extend(part for part in _eml_named_leaves(message) if id(part) not in seen)
+    parts: list[MIMEPart]
+    if message.is_multipart() and _eml_named(message):
+        # Ruling 5: a named multipart message is one attachment; its children are not walked.
+        parts = [message]
+    else:
+        parts = [part for part in message.iter_attachments() if id(part) not in bodies]
+        seen = {id(part) for part in parts}
+        parts.extend(part for part in _eml_named_leaves(message) if id(part) not in seen)
     for part in parts:
         payload = part.get_payload(decode=True) or b""
         # A named multipart part has no single decoded payload; its size is the serialized part.
-        size = len(part.as_bytes()) if part.is_multipart() else len(payload)
+        # Other attachments keep their decoded-payload size.
+        named_multipart = part.is_multipart() and _eml_named(part)
+        size = len(part.as_bytes()) if named_multipart else len(payload)
         attachments.append(
             {
                 "filename": str(part.get_filename() or "attachment"),

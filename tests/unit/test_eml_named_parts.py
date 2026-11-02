@@ -95,6 +95,34 @@ def test_a_named_multipart_part_alone_gives_no_body_and_is_reported() -> None:
     assert result.flagged_regions == []
 
 
+def test_a_named_multipart_message_is_one_attachment_and_its_children_are_not_reported() -> None:
+    data = (
+        HEADERS + 'Content-Type: multipart/mixed; boundary=B; name="top.eml"\r\n\r\n'
+        "--B\r\nContent-Type: text/plain\r\n\r\ninner text\r\n"
+        '--B\r\nContent-Type: application/pdf; name="child.pdf"\r\n\r\nnot decoded\r\n--B--\r\n'
+    ).encode()
+    result = parse_eml(data)
+    assert [segment.text for segment in result.segments] == ["Hello"]
+    assert [item["filename"] for item in result.unprocessed_attachments] == ["top.eml"]
+
+
+def test_an_unnamed_multipart_attachment_keeps_its_decoded_payload_size() -> None:
+    """Ruling 5 changes the size only of named multipart parts."""
+    nested = "--INNER\r\nContent-Type: text/plain\r\n\r\ninner\r\n--INNER--"
+    data = _multipart(
+        ("Content-Type: text/plain", "the real body"),
+        (
+            "Content-Type: multipart/mixed; boundary=INNER\r\n"
+            'Content-Disposition: attachment; filename="pack"',
+            nested,
+        ),
+    )
+    attachments = parse_eml(data).unprocessed_attachments
+    assert [(item["filename"], item["declared_size_bytes"]) for item in attachments] == [
+        ("pack", 0)
+    ]
+
+
 def test_an_unnamed_multipart_part_is_still_walked() -> None:
     nested = "--INNER\r\nContent-Type: text/plain\r\n\r\nnested body\r\n--INNER--"
     data = _multipart(("Content-Type: multipart/alternative; boundary=INNER", nested))
