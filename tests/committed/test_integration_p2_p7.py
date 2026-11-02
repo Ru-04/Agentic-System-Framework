@@ -11,6 +11,10 @@
   namespaced database (Phase 2) is already gone.
 - The worker's inputs-changed mark keeps both safeguards (migration 0059): the Phase 3 lease and
   owner fence (F-5) and the Phase 7 ``run.stale_marked`` audit with the run's project (H-70).
+- The current outcome of ``reject_create`` and ``cancel_change`` when they lose a real
+  two-connection race is pinned (WDS ruling in chat on 2 November 2026, "Keep approval_refused":
+  no behaviour change). The loser is refused as ``ProofRefused("approval_not_pending")``, with one
+  committed ``authority.proof.refused`` audit, and the winner's outcome stands.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.url import make_url
 
 from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures and helpers
@@ -31,9 +35,17 @@ from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures an
     run_fixture,
     worker_url,
 )
+from tests.committed.test_phase2_concurrency import (
+    _approve,
+    _as_app,
+    _count,
+    _pending_change,
+    _race,
+)
 from tests.support import authority as authority_support
 from tests.support.people import _email, committed_active_user
 from tests.support.proofs import prove
+from webdesk.authority.proofs import ProofRefused
 from webdesk.identity import contacts
 from webdesk.identity.contacts import ContactServiceError
 from webdesk.identity.email import ContactEmailPolicy
@@ -382,3 +394,71 @@ def test_the_mark_function_has_one_fenced_signature_and_the_worker_only_grant(
             False,
         )
     ]
+
+
+# --- Lost races of reject_create and cancel_change, pinned as they are (WDS ruling) ------------
+
+
+def _status(engine: Engine, approval: uuid.UUID) -> str:
+    with engine.connect() as conn:
+        return str(
+            conn.execute(
+                text("SELECT status FROM user_contact_approvals WHERE approval_id = :a"),
+                {"a": approval},
+            ).scalar_one()
+        )
+
+
+def test_a_create_rejection_that_loses_to_an_approval_is_a_proof_refusal(
+    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    creator, approver = committed_admins
+    with committed_engine.begin() as conn:
+        _as_app(conn)
+        _user, approval = contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Race"
+        )
+
+    def approve(conn: Connection) -> object:
+        _as_app(conn)
+        contacts.approve_create(
+            conn, prove(conn, approver, "contact.approve.create", approval), approval, "ref"
+        )
+        return None
+
+    def reject(conn: Connection) -> object:
+        _as_app(conn)
+        contacts.reject_create(
+            conn, prove(conn, approver, "contact.reject.create", approval), approval
+        )
+        return None
+
+    waited, error = _race(committed_engine, approve, reject)
+
+    assert waited
+    assert isinstance(error, ProofRefused), f"unexpected outcome: {error!r}"
+    assert error.reason == "approval_not_pending"
+    assert _status(committed_engine, approval) == "approved"
+    assert _count(committed_engine, "authority.proof.refused", "approval_not_pending") == 1
+    assert _count(committed_engine, "contact.create.rejected") == 0
+
+
+def test_a_change_cancellation_that_loses_to_an_approval_is_a_proof_refusal(
+    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    a, b = committed_admins
+    _user, change, _new_email = _pending_change(committed_engine, committed_admins)
+
+    def cancel(conn: Connection) -> object:
+        _as_app(conn)
+        contacts.cancel_change(conn, prove(conn, a, "contact.cancel.change", change), change)
+        return None
+
+    waited, error = _race(committed_engine, _approve(b, change), cancel)
+
+    assert waited
+    assert isinstance(error, ProofRefused), f"unexpected outcome: {error!r}"
+    assert error.reason == "approval_not_pending"
+    assert _status(committed_engine, change) == "approved"
+    assert _count(committed_engine, "authority.proof.refused", "approval_not_pending") == 1
+    assert _count(committed_engine, "contact.change.cancelled") == 0
