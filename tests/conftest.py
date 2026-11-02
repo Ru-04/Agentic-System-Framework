@@ -21,7 +21,6 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -34,6 +33,7 @@ from sqlalchemy.pool import NullPool
 
 from tests.support.activation import activate_user
 from tests.support.app_name import clear_run_label, label, set_run_label
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.db_cleanup import drop_when_detached
 from tests.support.proofs import prove
 from tests.support.run_namespace import (
@@ -92,11 +92,6 @@ def pytest_unconfigure(config: pytest.Config) -> None:
         restore_environment(_RUN)
         clear_run_label()
         _RUN = None
-
-
-class _Clock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 def _admin_engine(base: str) -> Engine:
@@ -186,6 +181,7 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
         result = apply_install(
             conn,
             PreparedInstall(
+                authorization_expires_at=FAR_FUTURE,
                 owner_approval_ref=f"OWNER-{uuid.uuid4().hex[:8]}",
                 owner_identity_ref="owner:test",
                 authorization_digest="s" * 64,
@@ -193,7 +189,6 @@ def committed_admins(committed_engine: Engine) -> tuple[uuid.UUID, uuid.UUID]:
             ),
             operator_id="op-committed",
             verifier_id="verifier-committed",
-            clock=_Clock(),
         )
         conn.execute(text("RESET ROLE"))
         activate_user(conn, result.user_ids[0])

@@ -27,10 +27,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from webdesk.api.transactions import run_in_transaction
 from webdesk.audit.service import record_event
 from webdesk.ceremony.install import (
-    Clock,
     InstallationError,
     InstallResult,
-    SystemClock,
     apply_install,
     prepare_install,
 )
@@ -55,7 +53,6 @@ def run_install_audited(
     *,
     operator_id: str,
     verifier_id: str,
-    clock: Clock,
 ) -> InstallResult:
     """Run the installation. Every refusal commits an audit record before it is raised."""
 
@@ -66,7 +63,6 @@ def run_install_audited(
             prepared = prepare_install(
                 settings,
                 authorization_path,
-                clock,
                 operator_id=operator_id,
                 verifier_id=verifier_id,
             )
@@ -83,7 +79,6 @@ def run_install_audited(
                     prepared,
                     operator_id=operator_id,
                     verifier_id=verifier_id,
-                    clock=clock,
                 )
         except InstallationError as exc:
             _refuse(conn, operator_id, exc.reason)
@@ -117,7 +112,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.authorization,
             operator_id=args.operator,
             verifier_id=args.verifier,
-            clock=SystemClock(),
         )
     except InstallationError as exc:
         print(f"refused: {exc.reason}", file=sys.stderr)

@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.proofs import prove
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity import contacts
@@ -46,6 +47,7 @@ def install_two_contacts(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.U
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref="OWNER-PEOPLE",
             owner_identity_ref="owner:test",
             authorization_digest="p" * 64,
@@ -53,7 +55,6 @@ def install_two_contacts(conn: Connection) -> tuple[uuid.UUID, uuid.UUID, uuid.U
         ),
         operator_id="op-people",
         verifier_id="verifier-people",
-        clock=_Clock(),
     )
     conn.execute(text("RESET ROLE"))
     return result.user_ids[0], result.user_ids[1], result.approval_ids[1]
@@ -233,6 +234,7 @@ def install_two_contacts_with_window(
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref=f"OWNER-{uuid.uuid4().hex[:8]}",
             owner_identity_ref="owner:test",
             authorization_digest="p" * 64,
@@ -240,7 +242,6 @@ def install_two_contacts_with_window(
         ),
         operator_id="op-window",
         verifier_id="verifier-window",
-        clock=_Clock(),
         activation_window=window,
     )
     conn.execute(text("RESET ROLE"))

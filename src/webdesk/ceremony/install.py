@@ -22,9 +22,9 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -34,6 +34,7 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
+from webdesk.ceremony.dbclock import database_now
 from webdesk.config import ConfigurationError, Settings
 from webdesk.identity.email import EmailPolicyError, policy_from_settings
 
@@ -49,18 +50,15 @@ class InstallationError(RuntimeError):
         self.reason = reason
 
 
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
-
-
 @dataclass(frozen=True)
 class PreparedInstall:
-    """Everything verified before any database write."""
+    """Everything verified before any database write.
+
+    ``authorization_expires_at`` is the signed expiry. It is compared with the database clock inside
+    the installation transaction (``require_unexpired``), never with an application clock (D-3).
+    """
+
+    authorization_expires_at: datetime
 
     owner_approval_ref: str
     owner_identity_ref: str
@@ -84,9 +82,12 @@ def canonical_bytes(payload: dict[str, Any]) -> bytes:
 
 
 def load_signed_authorization(
-    path: Path, owner_public_key_path: Path, clock: Clock
-) -> tuple[dict[str, Any], str]:
-    """Verify the owner signature and expiry; return the payload and its SHA-256 digest."""
+    path: Path, owner_public_key_path: Path
+) -> tuple[dict[str, Any], str, datetime]:
+    """Verify the owner signature; return the payload, its SHA-256 digest and the signed expiry.
+
+    The expiry is only read here. The database clock decides it in ``require_unexpired``.
+    """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
         payload = document["payload"]
@@ -113,9 +114,20 @@ def load_signed_authorization(
         expires_at = datetime.fromisoformat(str(payload["expires_at"]))
     except (KeyError, ValueError) as exc:
         raise InstallationError("authorization_malformed") from exc
-    if expires_at.tzinfo is None or expires_at <= clock.now():
+    if expires_at.tzinfo is None:
+        raise InstallationError("authorization_malformed")
+    return payload, hashlib.sha256(body).hexdigest(), expires_at
+
+
+def require_unexpired(conn: Connection, expires_at: datetime) -> None:
+    """The authoritative expiry decision (D-3).
+
+    The database clock decides. An application clock, injected or not, never grants or refuses on
+    its own. A signed authorization is refused when the database says its expiry has passed, at the
+    same instant as the installation deadline that the transaction then records.
+    """
+    if expires_at <= database_now(conn):
         raise InstallationError("authorization_expired")
-    return payload, hashlib.sha256(body).hexdigest()
 
 
 def signed_identifier(payload: dict[str, Any], field: str, supplied: str, mismatch: str) -> str:
@@ -132,7 +144,6 @@ def signed_identifier(payload: dict[str, Any], field: str, supplied: str, mismat
 def prepare_install(
     settings: Settings,
     authorization_path: Path,
-    clock: Clock,
     *,
     operator_id: str,
     verifier_id: str,
@@ -140,7 +151,8 @@ def prepare_install(
     """Fail closed on configuration, then verify the authorization and the two contacts.
 
     ``operator_id`` and ``verifier_id`` are the CLI values. Each must equal the value the owner
-    signed (``deployment_operator_id``, ``independent_verifier_id``).
+    signed (``deployment_operator_id``, ``independent_verifier_id``). The signed expiry is not
+    decided here: the database clock decides it inside the transaction (D-3, H-21).
     """
     missing = list(settings.onboarding_capability().missing) + list(
         settings.ceremony_capability().missing
@@ -151,8 +163,8 @@ def prepare_install(
         raise InstallationError("configuration_incomplete: WEBDESK_OWNER_PUBLIC_KEY_PATH")
     policy = policy_from_settings(settings)
 
-    payload, digest = load_signed_authorization(
-        authorization_path, settings.owner_public_key_path, clock
+    payload, digest, expires_at = load_signed_authorization(
+        authorization_path, settings.owner_public_key_path
     )
     if payload.get("kind") != INSTALL_KIND:
         raise InstallationError("authorization_kind_mismatch")
@@ -180,6 +192,7 @@ def prepare_install(
         raise InstallationError("contacts_not_distinct")
 
     return PreparedInstall(
+        authorization_expires_at=expires_at,
         owner_approval_ref=owner_ref,
         owner_identity_ref=owner_identity,
         authorization_digest=digest,
@@ -193,15 +206,17 @@ def apply_install(
     *,
     operator_id: str,
     verifier_id: str,
-    clock: Clock,
     activation_window: timedelta = ACTIVATION_WINDOW,
 ) -> InstallResult:
     """Run the installation transaction on ``conn``. The caller commits or rolls back.
 
     ``activation_window`` is the approval deadline. Production passes nothing and gets the approved
     24-hour window. Only tests pass a different value (GD-003 in the governance decision register).
+    The signed expiry is decided against the database clock before any write (D-3).
     """
-    now = clock.now()
+    require_unexpired(conn, prepared.authorization_expires_at)
+    # H-21: the ceremony clock is the database clock. The injected window is only a duration.
+    now = database_now(conn)
     deadline = now + activation_window
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
@@ -345,13 +360,10 @@ def run_install(
     *,
     operator_id: str,
     verifier_id: str,
-    clock: Clock,
 ) -> InstallResult:
     """Verify, then run the one-time installation as a single all-or-nothing transaction."""
     prepared = prepare_install(
-        settings, authorization_path, clock, operator_id=operator_id, verifier_id=verifier_id
+        settings, authorization_path, operator_id=operator_id, verifier_id=verifier_id
     )
     with engine.begin() as conn:
-        return apply_install(
-            conn, prepared, operator_id=operator_id, verifier_id=verifier_id, clock=clock
-        )
+        return apply_install(conn, prepared, operator_id=operator_id, verifier_id=verifier_id)

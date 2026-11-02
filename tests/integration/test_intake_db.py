@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +18,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
 from tests.support.activation import activate_user
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import active_user
 from tests.support.privileged import as_worker, ceremony_insert
 from tests.support.proofs import prove
@@ -50,11 +50,6 @@ POLICY = ContactEmailPolicy(
 NOTES = b"Inventory must sync nightly.\nOrders need an ERP reference.\n"
 
 
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
-
-
 def _email() -> str:
     return f"{uuid.uuid4().hex}@wds-test.example"
 
@@ -81,6 +76,7 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
     result = apply_install(
         conn,
         PreparedInstall(
+            authorization_expires_at=FAR_FUTURE,
             owner_approval_ref="OWNER-INTAKE",
             owner_identity_ref="owner:test",
             authorization_digest="p" * 64,
@@ -88,7 +84,6 @@ def _setup(conn: Connection) -> dict[str, uuid.UUID]:
         ),
         operator_id="op-1",
         verifier_id="verifier-1",
-        clock=SystemClock(),
     )
     conn.execute(text("RESET ROLE"))
     activate_user(conn, result.user_ids[0])

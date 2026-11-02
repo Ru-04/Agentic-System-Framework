@@ -38,7 +38,7 @@ def _sweep(conn: Connection) -> dict[str, int]:
     expired = conn.execute(
         text(
             """UPDATE user_contact_approvals SET status = 'expired', revision = revision + 1
-               WHERE status = 'pending' AND expires_at <= now()
+               WHERE status = 'pending' AND expires_at <= clock_timestamp()
                RETURNING approval_id, user_id, request_type"""
         )
     ).all()
@@ -67,7 +67,7 @@ def _sweep(conn: Connection) -> dict[str, int]:
             """UPDATE user_contact_approvals SET status = 'expired', revision = revision + 1
                WHERE status = 'approved' AND ceremony_id IS NOT NULL
                  AND administrator_appointment AND appointment_consumed_at IS NULL
-                 AND expires_at <= now()
+                 AND expires_at <= clock_timestamp()
                RETURNING approval_id, user_id"""
         )
     ).all()

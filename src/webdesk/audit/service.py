@@ -100,33 +100,55 @@ def record_worker_event(
     record_refs: Iterable[str] = (),
     details: Mapping[str, Any] | None = None,
     project_id: uuid.UUID | None = None,
+    correlation_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     """Insert one system audit event through the worker guard.
 
     The worker role has no table insert. Redaction and the audit columns are the same as
     ``record_event``. Only system events use this path. ``project_id`` fills the audit row's
     project (H-70); events with no project, such as outbox deliveries, pass None.
+    ``correlation_id`` fills the audit row's correlation column with the job's claim key (G-7).
     """
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown outcome: {outcome!r}")
     if not actor_id or not event_type:
         raise ValueError("actor_id and event_type are required")
 
+    if correlation_id is not None and not isinstance(correlation_id, uuid.UUID):
+        # A malformed correlation is refused, never coerced or stored as text (G-7).
+        raise ValueError("correlation_id must be a UUID")
     payload = json.dumps(redact(dict(details or {})), default=str)
     refs = json.dumps(list(record_refs), default=str)
-    row = conn.execute(
-        text(
-            """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
-                   :error, CAST(:refs AS jsonb), CAST(:details AS jsonb), CAST(:project AS uuid))"""
-        ),
-        {
-            "project": project_id,
-            "actor": actor_id,
-            "event": event_type,
-            "outcome": outcome,
-            "error": error_class,
-            "refs": refs,
-            "details": payload,
-        },
-    ).scalar_one()
+    params: dict[str, Any] = {
+        "project": project_id,
+        "actor": actor_id,
+        "event": event_type,
+        "outcome": outcome,
+        "error": error_class,
+        "refs": refs,
+        "details": payload,
+    }
+    if correlation_id is None:
+        # Events without a job (for example, a system maintenance event) carry no correlation.
+        row = conn.execute(
+            text(
+                """SELECT webdesk_guard.fn_worker_record_audit('system', :actor, :event, :outcome,
+                       :error, CAST(:refs AS jsonb), CAST(:details AS jsonb),
+                       CAST(:project AS uuid))"""
+            ),
+            params,
+        ).scalar_one()
+    else:
+        params["correlation"] = str(correlation_id)
+        params.pop("project")
+        # The 0052 correlated function has no project argument. The project of a correlated
+        # event is reconciled by a later integration migration.
+        row = conn.execute(
+            text(
+                """SELECT webdesk_guard.fn_worker_record_audit_correlated('system', :actor,
+                       :event, :outcome, :error, CAST(:refs AS jsonb), CAST(:details AS jsonb),
+                       CAST(:correlation AS uuid))"""
+            ),
+            params,
+        ).scalar_one()
     return uuid.UUID(str(row))

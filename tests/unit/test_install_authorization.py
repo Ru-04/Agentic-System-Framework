@@ -30,11 +30,6 @@ OPERATOR = "op-1"
 VERIFIER = "verifier-1"
 
 
-class FixedClock:
-    def now(self) -> datetime:
-        return NOW
-
-
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
@@ -79,7 +74,7 @@ def _write(tmp_path: Path, key: Ed25519PrivateKey, payload: dict[str, Any]) -> P
 
 
 def _prepare(settings: Settings, path: Path) -> Any:
-    return prepare_install(settings, path, FixedClock(), operator_id=OPERATOR, verifier_id=VERIFIER)
+    return prepare_install(settings, path, operator_id=OPERATOR, verifier_id=VERIFIER)
 
 
 def _settings(public_key: Path, **overrides: Any) -> Settings:
@@ -139,15 +134,17 @@ def test_signature_from_another_key_is_refused(
     assert exc.value.reason == "signature_invalid"
 
 
-def test_expired_authorization_is_refused(
+def test_preparation_reads_the_signed_expiry_but_does_not_decide_it(
     tmp_path: Path, owner_key: tuple[Ed25519PrivateKey, Path]
 ) -> None:
+    """D-3: the expiry decision is taken by the database clock inside the installation transaction
+    (tests/committed/test_authorization_expiry.py). Preparation never refuses on an application
+    clock."""
     private, public = owner_key
     stale = _payload(expires_at=(NOW - timedelta(minutes=1)).isoformat())
     path = _write(tmp_path, private, stale)
-    with pytest.raises(InstallationError) as exc:
-        _prepare(_settings(public), path)
-    assert exc.value.reason == "authorization_expired"
+    prepared = _prepare(_settings(public), path)
+    assert prepared.authorization_expires_at == NOW - timedelta(minutes=1)
 
 
 def test_identical_contacts_are_refused(
@@ -240,9 +237,7 @@ def test_h74_the_cli_operator_must_match_the_signed_operator(
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(
-            _settings(public), path, FixedClock(), operator_id="op-other", verifier_id=VERIFIER
-        )
+        prepare_install(_settings(public), path, operator_id="op-other", verifier_id=VERIFIER)
     assert exc.value.reason == "operator_mismatch"
 
 
@@ -252,9 +247,7 @@ def test_h74_the_cli_verifier_must_match_the_signed_verifier(
     private, public = owner_key
     path = _write(tmp_path, private, _payload())
     with pytest.raises(InstallationError) as exc:
-        prepare_install(
-            _settings(public), path, FixedClock(), operator_id=OPERATOR, verifier_id="v-other"
-        )
+        prepare_install(_settings(public), path, operator_id=OPERATOR, verifier_id="v-other")
     assert exc.value.reason == "verifier_mismatch"
 
 

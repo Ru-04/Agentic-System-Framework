@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import base64
 import uuid
-from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -30,11 +29,6 @@ POLICY = ContactEmailPolicy(
     alias_denylist=frozenset({"admin"}),
 )
 BOX = ContactBox(base64.b64encode(b"\x09" * 32).decode("ascii"))
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 class _Failing:

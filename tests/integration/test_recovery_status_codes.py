@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.support.people import administrators_for, user_in_state
 from tests.support.proofs import prove
 from webdesk.ceremony.recovery import RecoveryError, RecoveryRequest, apply_recovery
@@ -37,13 +38,6 @@ def conn() -> Connection:
         finally:
             transaction.rollback()
     engine.dispose()
-
-
-class _Clock:
-    def now(self) -> object:
-        from datetime import UTC, datetime
-
-        return datetime.now(UTC)
 
 
 def _email_of(conn: Connection, user: uuid.UUID) -> str:
@@ -74,15 +68,16 @@ def _appointment(conn: Connection, email: str) -> RecoveryError:
         apply_recovery(
             conn,
             RecoveryRequest(
+                authorization_expires_at=FAR_FUTURE,
                 request_type="appointment",
                 email=email,
                 display_name="",
                 owner_approval_ref=f"OWNER-{uuid.uuid4().hex[:6]}",
                 owner_identity_ref="owner:test",
+                verifier_id="verifier-status",
                 authorization_digest="s" * 64,
             ),
             operator_id="op-status",
-            clock=_Clock(),
         )
     conn.execute(text("RESET ROLE"))
     return exc.value

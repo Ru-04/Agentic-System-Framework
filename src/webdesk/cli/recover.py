@@ -21,7 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.api.transactions import run_in_transaction
 from webdesk.audit.service import record_event
-from webdesk.ceremony.install import Clock, InstallationError, SystemClock
+from webdesk.ceremony.install import InstallationError
 from webdesk.ceremony.recovery import (
     RecoveryError,
     RecoveryRequest,
@@ -50,21 +50,22 @@ def run_recovery_audited(
     authorization_path: Path,
     *,
     operator_id: str,
-    clock: Clock,
 ) -> RecoveryResult:
-    """Validate the artifact, then run the recovery. Every refusal commits its audit record."""
+    """Validate the artifact, then run the recovery. Every refusal commits its audit record.
+
+    The signed expiry is decided by the database clock inside ``apply_recovery`` (D-3, H-21)."""
 
     def operation(conn: Connection) -> RecoveryResult:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))
         request: RecoveryRequest
         try:
             # Validation happens before any insert: the artifact check reads no database rows.
-            request = prepare_recovery(settings, authorization_path, clock, operator_id=operator_id)
+            request = prepare_recovery(settings, authorization_path, operator_id=operator_id)
         except (ConfigurationError, InstallationError) as exc:
             reason = exc.reason if isinstance(exc, InstallationError) else "configuration_invalid"
             _refuse(conn, operator_id, str(reason))
             raise RecoveryError(422, str(reason).split(":", 1)[0]) from exc
-        return apply_recovery(conn, request, operator_id=operator_id, clock=clock)
+        return apply_recovery(conn, request, operator_id=operator_id)
 
     return run_in_transaction(engine, operation)
 
@@ -92,7 +93,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings,
             args.authorization,
             operator_id=args.operator,
-            clock=SystemClock(),
         )
     except RecoveryError as exc:
         print(f"refused: {exc.reason}", file=sys.stderr)

@@ -19,7 +19,7 @@ import sys
 import tempfile
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -29,6 +29,7 @@ from tests.support.app_name import label
 from tests.support.authority import SECRET as AUTHORITY_SECRET
 from tests.support.authority import authority_database_url, provision_login_password
 from tests.support.authority_start import listen_port, redact
+from tests.support.ceremony_time import FAR_FUTURE
 from webdesk.authority.client import AuthorityClient
 from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.delivery.transport import CaptureTransport
@@ -51,11 +52,6 @@ TOKEN_LIMITS = TokenLimits(
     contact=Limit("token:contact", 50, timedelta(minutes=15)),
     ip=Limit("token:ip", 500, timedelta(minutes=15)),
 )
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 def _email() -> str:
@@ -155,6 +151,7 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
                 result = apply_install(
                     conn,
                     PreparedInstall(
+                        authorization_expires_at=FAR_FUTURE,
                         owner_approval_ref="OWNER-HARDENING",
                         owner_identity_ref="owner:test",
                         authorization_digest="x" * 64,
@@ -162,7 +159,6 @@ def world(app_engine: Engine, authority_client: AuthorityClient) -> dict[str, uu
                     ),
                     operator_id="op-hardening",
                     verifier_id="verifier-hardening",
-                    clock=SystemClock(),
                 )
                 first, second = result.user_ids[0], result.user_ids[1]
                 appointment = result.approval_ids[1]

@@ -15,8 +15,7 @@ worker function (migration 0031), and the worker reads only the tables it needs.
 stays here, against ``ALLOWED_TRANSITIONS``. The guard applies a transition only when the expected
 state still holds.
 
-Callers commit each step. Tests run the same functions on a rolled-back connection.
-"""
+Callers commit each step. Tests run the same functions on a rolled-back connection."""
 
 from __future__ import annotations
 
@@ -47,6 +46,27 @@ class JobClaim:
     project_id: uuid.UUID
     attempts: int
 
+    @property
+    def correlation_id(self) -> str:
+        """One key per claim attempt, carried in logs and audit details (G-7)."""
+        return f"{self.run_id}/{self.job_id}/{self.attempts}"
+
+    @property
+    def correlation_uuid(self) -> uuid.UUID:
+        """The same key as a UUID, stored in ``audit_events.correlation_id`` (G-7)."""
+        return correlation_uuid(self.run_id, self.job_id, self.attempts)
+
+
+_CORRELATION_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "urn:webdesk:phase3:durable-job")
+
+
+def correlation_uuid(run_id: uuid.UUID, job_id: uuid.UUID, attempts: int) -> uuid.UUID:
+    """Deterministic UUID for one claim attempt.
+
+    The logs carry the string key; the audit column carries this UUID.
+    """
+    return uuid.uuid5(_CORRELATION_NAMESPACE, f"{run_id}/{job_id}/{attempts}")
+
 
 def _guard(conn: Connection, call: str, params: dict[str, Any]) -> Any:
     """Run one worker guard call. A named refusal from the guard becomes a 409 run refusal."""
@@ -59,11 +79,18 @@ def _guard(conn: Connection, call: str, params: dict[str, Any]) -> Any:
         raise RunError(409, reason) from exc
 
 
-def claim(conn: Connection, owner: str) -> JobClaim | None:
+class LeaseLost(RunError):
+    """The worker no longer holds the job's lease. It must write nothing further (H-22, H-23)."""
+
+    def __init__(self) -> None:
+        super().__init__(409, "lease_lost")
+
+
+def claim(conn: Connection, owner: str, lease_seconds: int = LEASE_SECONDS) -> JobClaim | None:
     row = _guard(
         conn,
         "SELECT * FROM webdesk_guard.fn_worker_claim_job(:owner, :lease, :max)",
-        {"owner": owner, "lease": LEASE_SECONDS, "max": MAX_ATTEMPTS},
+        {"owner": owner, "lease": lease_seconds, "max": MAX_ATTEMPTS},
     ).one_or_none()
     if row is None:
         return None
@@ -85,12 +112,30 @@ def claim(conn: Connection, owner: str) -> JobClaim | None:
     return job
 
 
-def renew(conn: Connection, job_id: uuid.UUID, owner: str) -> bool:
+def hold(conn: Connection, job: JobClaim, owner: str) -> None:
+    """Confirm the caller still owns an unexpired lease, and hold a KEY SHARE lock (H-22).
+
+    The lock lasts until the caller's transaction ends. It blocks reclaim, which takes FOR UPDATE,
+    and it does not block the heartbeat's renewal. A caller that cannot prove ownership raises
+    ``LeaseLost``."""
+    held = _guard(
+        conn,
+        "SELECT webdesk_guard.fn_worker_hold_lease(:j, :owner)",
+        {"j": job.job_id, "owner": owner},
+    ).scalar_one()
+    if not held:
+        raise LeaseLost()
+
+
+def renew(
+    conn: Connection, job_id: uuid.UUID, owner: str, lease_seconds: int = LEASE_SECONDS
+) -> bool:
+    """Extend the lease. Only the heartbeat calls this, so a step never holds the update lock."""
     return bool(
         _guard(
             conn,
             "SELECT webdesk_guard.fn_worker_renew_lease(:j, :owner, :lease)",
-            {"j": job_id, "owner": owner, "lease": LEASE_SECONDS},
+            {"j": job_id, "owner": owner, "lease": lease_seconds},
         ).scalar_one()
     )
 
@@ -161,7 +206,11 @@ def _finish_job(conn: Connection, job: JobClaim, owner: str, status: str) -> Non
         raise RunError(409, "lease_lost")
 
 
-def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: str) -> None:
+def begin_intake(
+    conn: Connection, job: JobClaim, owner: str, lease_seconds: int = LEASE_SECONDS
+) -> None:
+    """Step 1 of intake: confirm the lease, then move the run from intake_pending to parsing."""
+    hold(conn, job, owner)
     run = _lock_run(conn, job.run_id)
     if run.state == "intake_pending":
         _transition(
@@ -176,7 +225,9 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
     elif run.state != "parsing":
         raise RunError(409, "state_mismatch")
 
-    pending = conn.execute(
+
+def pending_versions(conn: Connection, job: JobClaim) -> list[uuid.UUID]:
+    rows = conn.execute(
         text(
             """SELECT v.source_version_id FROM run_input_snapshots s
                JOIN source_versions v ON v.source_version_id = s.source_version_id
@@ -185,14 +236,32 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         ),
         {"r": job.run_id},
     ).all()
-    for (version_id,) in pending:
-        if not renew(conn, job.job_id, owner):
-            raise RunError(409, "lease_lost")
-        try:
-            parse_version(conn, store, uuid.UUID(str(version_id)), actor_id=f"run:{job.run_id}")
-        except ParseRefused:
-            continue
+    return [uuid.UUID(str(row[0])) for row in rows]
 
+
+def parse_one(
+    conn: Connection,
+    store: ContentStore,
+    job: JobClaim,
+    owner: str,
+    version_id: uuid.UUID,
+    lease_seconds: int = LEASE_SECONDS,
+) -> None:
+    """Step 2 of intake, once per version: renew the lease, then parse.
+
+    A refused parse is recorded by the parser, not raised."""
+    hold(conn, job, owner)
+    try:
+        parse_version(conn, store, version_id, actor_id=f"run:{job.run_id}")
+    except ParseRefused:
+        return
+
+
+def finish_intake(
+    conn: Connection, job: JobClaim, owner: str, lease_seconds: int = LEASE_SECONDS
+) -> None:
+    """Step 3 of intake: park the run, checkpoint, complete the job, and audit the outcome."""
+    hold(conn, job, owner)
     failed = conn.execute(
         text(
             """SELECT v.source_version_id FROM run_input_snapshots s
@@ -267,9 +336,27 @@ def execute_intake(conn: Connection, store: ContentStore, job: JobClaim, owner: 
         details={
             "failed_versions": [str(v[0]) for v in failed],
             "stale": bool(stale),
+            "correlation_id": job.correlation_id,
         },
         project_id=job.project_id,
+        correlation_id=job.correlation_uuid,
     )
+
+
+def execute_intake(
+    conn: Connection,
+    store: ContentStore,
+    job: JobClaim,
+    owner: str,
+    lease_seconds: int = LEASE_SECONDS,
+) -> None:
+    """All three intake steps on one connection, for rolled-back tests.
+
+    Committed execution runs the steps in separate transactions (``runs/committed.py``)."""
+    begin_intake(conn, job, owner, lease_seconds)
+    for version_id in pending_versions(conn, job):
+        parse_one(conn, store, job, owner, version_id, lease_seconds)
+    finish_intake(conn, job, owner, lease_seconds)
 
 
 def record_failure(
@@ -301,7 +388,9 @@ def record_failure(
             outcome="error",
             error_class=reason,
             record_refs=[str(job.run_id)],
+            details={"correlation_id": job.correlation_id},
             project_id=job.project_id,
+            correlation_id=job.correlation_uuid,
         )
         return "failed"
     delay = backoff_seconds(job.attempts)
@@ -322,6 +411,8 @@ def record_failure(
         "SELECT webdesk_guard.fn_worker_set_run_status(:r, 'queued')",
         {"r": job.run_id},
     )
+    # Recovery is audited too: the job is back in the queue, with its correlation key (G-7) and
+    # the run's project (H-70). Both phases added this event; it is written once.
     record_worker_event(
         conn,
         actor_id=owner,
@@ -329,8 +420,13 @@ def record_failure(
         outcome="error",
         error_class=reason,
         record_refs=[str(job.job_id), str(job.run_id)],
-        details={"attempts": job.attempts, "delay_seconds": delay},
+        details={
+            "correlation_id": job.correlation_id,
+            "attempts": job.attempts,
+            "delay_seconds": delay,
+        },
         project_id=job.project_id,
+        correlation_id=job.correlation_uuid,
     )
     return "requeued"
 
@@ -344,6 +440,9 @@ def process_one(conn: Connection, store: ContentStore, owner: str) -> str:
         with conn.begin_nested():
             execute_intake(conn, store, job, owner)
         return "completed"
+    except LeaseLost:
+        # The lease was lost: the worker writes nothing further (a reclaimer owns the job now).
+        return "lease_lost"
     except RunError as exc:
         return record_failure(conn, job, owner, exc.reason, retryable=False)
     except Exception:

@@ -1,0 +1,17 @@
+Synthetic durable-execution demonstration, tree b509900, dedicated cluster 127.0.0.1:5440, 2026-10-28T12:23:12Z
+[phase3-demo] 1. run created (synthetic): 1ce95b45-6452-436f-a351-0d81a77c482c; job state queued
+[phase3-demo] 2. worker A claimed the job (committed claim, attempt 1)
+[phase3-demo] 3. worker A interrupted mid-step (SIGKILL); its claim is durable
+[phase3-demo] 4. competing worker B while A's lease is live: claim rejected
+[phase3-demo] 5. A's lease expired
+[phase3-demo] 6. worker C recovered the job (attempt 2) and completed intake: outcome completed
+[phase3-demo] 7. stale worker A tried to finish the job: refused (lease_lost), nothing written
+[phase3-demo] 8. verified: job completed (attempts 2), run blocked_pending_decision, checkpoint rows 1, audit rows run.parked 1
+[phase3-demo] 1. heartbeat: claim aa39d3b4-c0d0-4cb6-ab2d-fe603f29e18c/dae54424-0950-4232-8792-4b23b2e52bd8/1 (attempt 1), lease 2 s
+[phase3-demo] 2. heartbeat: 3 s step with no commit; renewals 12; lease still live with 1.9 s left; rival claim refused
+[phase3-demo] 3. stuck report after abrupt heartbeat stop: expired_lease_not_reclaimed (aa39d3b4-c0d0-4cb6-ab2d-fe603f29e18c/dae54424-0950-4232-8792-4b23b2e52bd8/1)
+[phase3-demo] 4.1. worker demo-crash-2 killed mid-step with attempt 2 durable
+[phase3-demo] 4.2. worker demo-crash-3 killed mid-step with attempt 3 durable
+[phase3-demo] 5. reaper: 1 job reaped after 3 attempts; run failed (system_failure); slot released
+[phase3-demo] 6. graceful stop during a step: exit 0; job completed (attempt 1); no lease left behind
+2 passed, 43 deselected in 27.60s

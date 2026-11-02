@@ -13,7 +13,6 @@ import pytest
 
 from tests.unit.test_install_authorization import (  # noqa: F401 - fixtures and helpers
     OPERATOR,
-    FixedClock,
     _payload,
     _settings,
     _write,
@@ -53,7 +52,7 @@ def test_recovery_artifact_without_a_verifier_is_refused(
     private, public = owner_key
     path = _write(tmp_path, private, _recovery())
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
+        prepare_recovery(_settings(public), path, operator_id=OPERATOR)
     assert exc.value.reason == "authorization_malformed"
 
 
@@ -63,7 +62,7 @@ def test_recovery_artifact_supplies_the_verifier_it_names(
 ) -> None:
     private, public = owner_key
     path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-07"))
-    request = prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
+    request = prepare_recovery(_settings(public), path, operator_id=OPERATOR)
     assert request.verifier_id == "verifier-signed-07"
     assert request.email == "ada@wds-test.example"
 
@@ -102,7 +101,7 @@ def test_a_malformed_owner_key_is_a_refusal_not_a_traceback(
     path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-q1"))
     public.write_bytes(b"this is not a PEM public key")
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
+        prepare_recovery(_settings(public), path, operator_id=OPERATOR)
     assert exc.value.reason == "owner_key_invalid"
 
 
@@ -144,7 +143,7 @@ def test_h74_a_recovery_artifact_without_a_signed_operator_is_refused(
     del payload["deployment_operator_id"]
     path = _write(tmp_path, private, payload)
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock(), operator_id=OPERATOR)
+        prepare_recovery(_settings(public), path, operator_id=OPERATOR)
     assert exc.value.reason == "authorization_malformed"
 
 
@@ -155,5 +154,5 @@ def test_h74_the_recovery_cli_operator_must_match_the_signed_operator(
     private, public = owner_key
     path = _write(tmp_path, private, _recovery(independent_verifier_id="verifier-signed-h74"))
     with pytest.raises(InstallationError) as exc:
-        prepare_recovery(_settings(public), path, FixedClock(), operator_id="op-other")
+        prepare_recovery(_settings(public), path, operator_id="op-other")
     assert exc.value.reason == "operator_mismatch"

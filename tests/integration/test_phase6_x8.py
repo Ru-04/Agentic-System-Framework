@@ -22,8 +22,8 @@ from tests.integration.test_outbox_worker import (  # noqa: F401
     _worker,
     made,
 )
+from tests.support.ceremony_time import FAR_FUTURE
 from tests.unit.test_install_authorization import (  # noqa: F401 - fixtures and helpers
-    FixedClock,
     _payload,
     _settings,
     _write,
@@ -58,6 +58,8 @@ def _recovery_artifact(tmp_path: Path, owner: Any, email: str, operator: str = "
         contacts=[],
         independent_verifier_id="verifier-signed-h50",
         deployment_operator_id=operator,  # H-74: the operator is bound into the signed payload
+        # D-3: the database clock decides the signed expiry, so the artifact must be unexpired now.
+        expires_at=FAR_FUTURE.isoformat(),
     )
     return _write(tmp_path, private, payload)
 
@@ -94,7 +96,6 @@ def test_h50_a_refused_appointment_leaves_no_initiated_ceremony_row(
             _settings(public),
             path,
             operator_id="op-h50",
-            clock=FixedClock(),
         )
     assert exc.value.reason == "appointment_target_ineligible"
     initiated = _count(
@@ -127,7 +128,6 @@ def test_h74_a_recovery_with_another_operator_is_refused_and_audited(
             _settings(public),
             path,
             operator_id="op-not-signed",
-            clock=FixedClock(),
         )
     assert (exc.value.status, exc.value.reason) == (422, "operator_mismatch")
     denied = _count(

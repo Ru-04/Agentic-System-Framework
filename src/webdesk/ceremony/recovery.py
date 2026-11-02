@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -26,12 +26,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from webdesk.audit.service import record_event
-from webdesk.ceremony.install import (
-    Clock,
-    InstallationError,
-    load_signed_authorization,
-    signed_identifier,
-)
+from webdesk.ceremony.dbclock import database_now
+from webdesk.ceremony.install import InstallationError, load_signed_authorization, signed_identifier
 from webdesk.config import Settings
 from webdesk.identity.email import EmailPolicyError, policy_from_settings
 
@@ -48,6 +44,7 @@ class RecoveryError(Exception):
 
 @dataclass(frozen=True)
 class RecoveryRequest:
+    authorization_expires_at: datetime  # signed expiry; decided against the database clock (D-3)
     request_type: Literal["appointment", "replacement"]
     email: str  # normalized
     display_name: str
@@ -64,12 +61,11 @@ class RecoveryResult:
     user_id: uuid.UUID
 
 
-def prepare_recovery(
-    settings: Settings, path: Path, clock: Clock, *, operator_id: str
-) -> RecoveryRequest:
+def prepare_recovery(settings: Settings, path: Path, *, operator_id: str) -> RecoveryRequest:
     """Verify the owner signature and the request shape. No database access.
 
     ``operator_id`` is the CLI value. It must equal the signed ``deployment_operator_id`` (H-74).
+    The signed expiry is decided later, against the database clock (D-3, H-21).
     """
     missing = list(settings.onboarding_capability().missing) + list(
         settings.ceremony_capability().missing
@@ -78,7 +74,7 @@ def prepare_recovery(
         raise InstallationError("configuration_incomplete: " + ", ".join(missing))
     if settings.owner_public_key_path is None:
         raise InstallationError("configuration_incomplete: WEBDESK_OWNER_PUBLIC_KEY_PATH")
-    payload, digest = load_signed_authorization(path, settings.owner_public_key_path, clock)
+    payload, digest, expires_at = load_signed_authorization(path, settings.owner_public_key_path)
     if payload.get("kind") != RECOVERY_KIND:
         raise InstallationError("authorization_kind_mismatch")
     request_type = payload.get("request_type")
@@ -96,6 +92,7 @@ def prepare_recovery(
         raise InstallationError("authorization_malformed")
     signed_identifier(payload, "deployment_operator_id", operator_id, "operator_mismatch")
     return RecoveryRequest(
+        authorization_expires_at=expires_at,
         request_type=request_type,
         email=email,
         display_name=str(contact.get("display_name", "")).strip() or "WDS user",
@@ -118,7 +115,7 @@ def _coverage(conn: Connection) -> tuple[int, int]:
         text(
             """SELECT count(DISTINCT a.user_id) FROM user_contact_approvals a
                WHERE a.administrator_appointment AND a.ceremony_id IS NOT NULL
-                 AND a.status = 'approved' AND a.expires_at > now()
+                 AND a.status = 'approved' AND a.expires_at > clock_timestamp()
                  AND a.appointment_consumed_at IS NULL
                  AND NOT EXISTS (
                      SELECT 1 FROM role_assignments r
@@ -146,7 +143,6 @@ def apply_recovery(
     request: RecoveryRequest,
     *,
     operator_id: str,
-    clock: Clock,
     activation_window: timedelta = ACTIVATION_WINDOW,
 ) -> RecoveryResult:
     """Run the recovery ceremony on ``conn``. The caller commits or rolls back.
@@ -154,7 +150,11 @@ def apply_recovery(
     ``activation_window`` is the appointment deadline. Production passes nothing and gets the
     approved 24-hour window. Only tests pass another value (GD-003, governance register).
     """
-    now = clock.now()
+    # D-3: the signed expiry is decided against the database clock, and the refusal is audited.
+    if request.authorization_expires_at <= database_now(conn):
+        raise _refuse(conn, operator_id, "authorization_expired", 409)
+    # H-21: the ceremony clock is the database clock. The injected window is only a duration.
+    now = database_now(conn)
     deadline = now + activation_window
     try:
         conn.execute(text("SET LOCAL ROLE webdesk_ceremony"))

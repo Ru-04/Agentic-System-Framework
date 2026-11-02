@@ -59,7 +59,8 @@ def _approval_is_live(conn: Connection, user_id: uuid.UUID) -> bool:
             text(
                 """SELECT 1 FROM user_contact_approvals a
                    JOIN users u ON u.user_id = a.user_id
-                   WHERE a.user_id = :u AND a.status = 'approved' AND a.expires_at > now()
+                   WHERE a.user_id = :u AND a.status = 'approved'
+                     AND a.expires_at > clock_timestamp()
                      AND a.requested_email_normalized = u.normalized_email"""
             ),
             {"u": user_id},
@@ -160,7 +161,7 @@ def issue(
             text(
                 """SELECT 1 FROM user_contact_approvals
                    WHERE user_id = :u AND request_type = 'change' AND status = 'pending'
-                     AND expires_at > now()"""
+                     AND expires_at > clock_timestamp()"""
             ),
             {"u": user_id},
         ).first()
