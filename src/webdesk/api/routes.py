@@ -34,7 +34,8 @@ from webdesk.storage.content_store import MAX_BYTES, ContentStore
 router = APIRouter()
 
 # The most a source upload request may carry: the approved file (MAX_BYTES) plus one MiB for form
-# fields and multipart framing. It is counted as the body arrives, before the framework buffers it (F-2).
+# fields and multipart framing. It is counted as the body arrives, before the framework buffers
+# it (F-2).
 MAX_UPLOAD_REQUEST_BYTES = MAX_BYTES + 1024 * 1024
 
 

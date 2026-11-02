@@ -418,21 +418,27 @@ def _bound_page_content(page: Any, meter: _DecodeMeter) -> None:
             raise ParserFailure(limits.PDF_STREAM_LIMIT)
 
 
-def _admit_page_bounds(pages: list[Any], meter: _DecodeMeter) -> None:
-    """Apply to every page the content bound the parser applies (F-5).
+def _page_bound_refusal(page: Any, meter: _DecodeMeter) -> ParserFailure | None:
+    """The refusal the parser makes for this page's content, if it makes one (F-5).
 
-    A file the parser would refuse as a whole (a page over the size bound, a corrupt stream) is
-    refused here, before a source version exists. A page the parser only flags, for an unsupported
-    filter or for any other fault, is admitted here as it is there.
+    Only a size or corruption refusal is returned. A filter refusal, or any other fault, is not:
+    the parser flags such a page and does not refuse the file.
     """
+    try:
+        _bound_page_content(page, meter)
+    except ParserFailure as exc:
+        return None if exc.reason == PDF_FILTER_UNSUPPORTED else exc
+    except Exception:
+        return None
+    return None
+
+
+def _admit_page_bounds(pages: list[Any], meter: _DecodeMeter) -> None:
+    """Apply to every page the content bound the parser applies, before a version exists (F-5)."""
     for page in pages:
-        try:
-            _bound_page_content(page, meter)
-        except ParserFailure as exc:
-            if exc.reason != PDF_FILTER_UNSUPPORTED:
-                raise
-        except Exception:
-            continue  # the parser flags this page; it does not refuse the file
+        refusal = _page_bound_refusal(page, meter)
+        if refusal is not None:
+            raise refusal
 
 
 def open_pdf_structure(data: bytes) -> bool:
@@ -505,8 +511,8 @@ def _parse_pdf_metered(data: bytes, meter: _DecodeMeter) -> ParseResult:
         except Exception:
             flagged.append(f"pdf_page:{number}")
             continue
-        # Replacement characters alone are pypdf's placeholder for unmapped glyphs (D3). They are not
-        # content, so a page holding only them commits no segment (F-4).
+        # Replacement characters alone are pypdf's placeholder for unmapped glyphs (D3). They are
+        # not content, so a page holding only them commits no segment (F-4).
         valid = text.replace("�", "").strip()
         if valid:
             segments.append(SegmentDraft("pdf_page", {"page_number": number}, text))

@@ -87,8 +87,12 @@ def _run_child(command: list[str], data: bytes) -> tuple[int, bytes]:
         cwd=_src_root(),
         **_spawn_options(),
     )
-    assert process.stdin is not None and process.stdout is not None
     stdin, stdout = process.stdin, process.stdout
+    if stdin is None or stdout is None:  # both pipes are requested above; narrows the types
+        process.kill()
+        process.wait()
+        raise ParserFailure(limits.PARSER_CRASH)
+    descriptor = stdout.fileno()
     output = bytearray()
     overflow = threading.Event()
 
@@ -102,8 +106,9 @@ def _run_child(command: list[str], data: bytes) -> tuple[int, bytes]:
                 stdin.close()
 
     def drain() -> None:
+        # os.read returns what the pipe holds, up to the room left under the cap, and b"" at EOF.
         while True:
-            chunk = stdout.read1(min(_READ_CHUNK, cap + 1 - len(output)))
+            chunk = os.read(descriptor, min(_READ_CHUNK, cap + 1 - len(output)))
             if not chunk:
                 return
             output.extend(chunk)
