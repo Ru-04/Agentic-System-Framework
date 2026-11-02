@@ -32,6 +32,7 @@ from webdesk.intake.parsers import (
     _DecodeMeter,
     parse_docx,
     parse_eml,
+    open_pdf_structure,
     parse_pdf,
 )
 
@@ -494,6 +495,28 @@ def test_d4_a_small_object_stream_is_read_normally() -> None:
     result = parse_pdf(_object_stream_pdf(0))
     assert result.status == "unsupported"
     assert result.flagged_regions == []
+
+
+# --- F-5: admission applies the per-page content bound the parser applies. --------------------
+
+
+def test_f5_admission_refuses_an_oversized_page_before_any_version_exists() -> None:
+    """Before the fix admission admitted this file, and the parser then refused it with
+    pdf_stream_limit after a source version existed."""
+    content = b"BT /F1 12 Tf 10 100 Td (A) Tj ET\n" + b" " * (11 * MiB)
+    data = _assemble(_pdf_objects(b"/Font << /F1 5 0 R >>", content))
+    with pytest.raises(ParserFailure) as exc:
+        open_pdf_structure(data)
+    assert exc.value.reason == limits.PDF_STREAM_LIMIT
+
+
+def test_f5_admission_does_not_refuse_a_page_the_parser_only_flags_for_its_filter() -> None:
+    """Negative control: an LZW page stream is refused at the decoder, which flags its page. Admission
+    admits the file, as the parser does, rather than refusing it."""
+    content = b"\x80\x0b\x60\x50\x22\x0c\x0c\x85\x01"
+    data = _assemble(_pdf_objects(b"/Font << /F1 5 0 R >>", content, b"/Filter /LZWDecode"))
+    assert open_pdf_structure(data) is False
+    assert parse_pdf(data).flagged_regions == ["pdf_page:1"]
 
 
 # --- EML offsets (approved P4-GOV-2026-10-28; field names aligned to the schema, QA-03). -------

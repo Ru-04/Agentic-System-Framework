@@ -146,6 +146,23 @@ def test_d4_admission_of_a_valid_pdf_runs_in_the_child_and_reports_not_encrypted
     assert open_pdf_in_child(build_pdf(["admitted page"])) is False
 
 
+def test_f5_the_admission_child_refuses_an_oversized_page_before_any_version_exists() -> None:
+    content = b"BT /F1 12 Tf 10 100 Td (A) Tj ET\n" + b" " * (11 * 1024 * 1024)
+    data = _assemble(
+        {
+            1: CATALOG,
+            2: PAGES,
+            3: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            + b"/Resources << /Font << /F1 5 0 R >> >> >>",
+            4: b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+            5: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        }
+    )
+    with pytest.raises(ParserFailure) as exc:
+        open_pdf_in_child(data)
+    assert exc.value.reason == limits.PDF_STREAM_LIMIT
+
+
 def test_d4_the_admission_child_is_killed_at_the_bound_and_the_failure_is_classified(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

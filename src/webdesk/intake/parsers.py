@@ -418,6 +418,23 @@ def _bound_page_content(page: Any, meter: _DecodeMeter) -> None:
             raise ParserFailure(limits.PDF_STREAM_LIMIT)
 
 
+def _admit_page_bounds(pages: list[Any], meter: _DecodeMeter) -> None:
+    """Apply to every page the content bound the parser applies (F-5).
+
+    A file the parser would refuse as a whole (a page over the size bound, a corrupt stream) is
+    refused here, before a source version exists. A page the parser only flags, for an unsupported
+    filter or for any other fault, is admitted here as it is there.
+    """
+    for page in pages:
+        try:
+            _bound_page_content(page, meter)
+        except ParserFailure as exc:
+            if exc.reason != PDF_FILTER_UNSUPPORTED:
+                raise
+        except Exception:
+            continue  # the parser flags this page; it does not refuse the file
+
+
 def open_pdf_structure(data: bytes) -> bool:
     """Open a PDF the way the parser does, under the same meter, and report whether it is encrypted.
 
@@ -431,7 +448,7 @@ def open_pdf_structure(data: bytes) -> bool:
             reader = PdfReader(io.BytesIO(data))
             encrypted = bool(reader.is_encrypted)
             if not encrypted:
-                _ = len(reader.pages)
+                _admit_page_bounds(list(reader.pages), meter)
         except ParserFailure:
             raise
         except Exception as exc:
