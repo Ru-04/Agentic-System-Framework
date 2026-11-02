@@ -1,0 +1,141 @@
+{
+  "cases": {
+    "invalid-docx": {
+      "category": "invalid",
+      "expected_class": "corrupt_structure",
+      "expected_status": "failed",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "71284a425626895b8e25ddb014f51c706c891b3cc3107e6ac82316162c974248",
+      "size_bytes": 19
+    },
+    "invalid-pdf": {
+      "category": "invalid",
+      "expected_class": "corrupt_structure",
+      "expected_status": "failed",
+      "mime": "application/pdf",
+      "sha256": "0517312060efd7c086d3817225a34b1da30db7b4fd0ba54e1deb75995427335a",
+      "size_bytes": 21
+    },
+    "invalid-txt": {
+      "category": "invalid",
+      "expected_class": "invalid_utf8",
+      "expected_status": "failed",
+      "mime": "text/plain",
+      "sha256": "533b4fa8d0bc6a3c44a5dd5091c85826d35e3d070fd5713f724514bda97bac30",
+      "size_bytes": 15
+    },
+    "oversized-docx-archive": {
+      "category": "oversized",
+      "expected_class": "archive_ratio_limit",
+      "expected_status": "failed",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "2d42f5c82f9e67dcc09f814abb303804452c21e1372197d8c38eeec534d5a1da",
+      "size_bytes": 2181
+    },
+    "oversized-pdf": {
+      "category": "oversized",
+      "expected_class": "input_too_large",
+      "expected_status": "failed",
+      "mime": "application/pdf",
+      "sha256": "9054a8194d506a9a82985bb602e755fbafe477d923f763a4c58efa6b1c7d1b43",
+      "size_bytes": 20972100
+    },
+    "oversized-txt": {
+      "category": "oversized",
+      "expected_class": "input_too_large",
+      "expected_status": "failed",
+      "mime": "text/plain",
+      "sha256": "b0849bc28f66b0531cd1789a8e5c38abfca458a7997f39210814ec6f861d5378",
+      "size_bytes": 20971521
+    },
+    "partial-eml-html-only": {
+      "category": "partial",
+      "expected_class": "eml_part:body_html_only",
+      "expected_status": "partial",
+      "mime": "message/rfc822",
+      "sha256": "20f4f5e6d6dc1d44f1d1dd22404b6a8c6e578df1397c8ae4c2af09c8dcaa7f61",
+      "size_bytes": 246
+    },
+    "partial-pdf-image-page": {
+      "category": "partial",
+      "expected_class": "pdf_page:2",
+      "expected_status": "partial",
+      "mime": "application/pdf",
+      "sha256": "c537780b556aa142ca0f9c9f09019dd04202ace65b2fae82ef0fd01aa3bcbead",
+      "size_bytes": 1314
+    },
+    "quarantined-docx": {
+      "category": "quarantined",
+      "expected_class": "quarantined",
+      "expected_status": "refused",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "567b255a91f7eda06c314eeaba486ccf16e9e95dbb5be179739e0fcf7f7ecc94",
+      "size_bytes": 36597
+    },
+    "quarantined-pdf": {
+      "category": "quarantined",
+      "expected_class": "quarantined",
+      "expected_status": "refused",
+      "mime": "application/pdf",
+      "sha256": "543983473e4fe70e7e5de26c60054ab1009d6d829772b96179fb494dbfa00e7a",
+      "size_bytes": 591
+    },
+    "quarantined-txt": {
+      "category": "quarantined",
+      "expected_class": "quarantined",
+      "expected_status": "refused",
+      "mime": "text/plain",
+      "sha256": "a0e683ba43eb987421bddf7e078081b93eb0ab7bc820a2be7d7f85a538ca885f",
+      "size_bytes": 37
+    },
+    "restricted-docx-classified": {
+      "category": "restricted",
+      "expected_class": null,
+      "expected_status": "succeeded",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "a9e60e9ab33428f62af3dc3562b2bd9acde8251cb2accd6fbfade40de66245a5",
+      "size_bytes": 36606
+    },
+    "restricted-pdf-encrypted": {
+      "category": "restricted",
+      "expected_class": "encrypted_not_permitted",
+      "expected_status": "failed",
+      "mime": "application/pdf",
+      "sha256": "2011b1e88ea8b9e5863bd77c9d193f20930ffaf07a29b4f8b7472fbcecc1e9f6",
+      "size_bytes": 2379
+    },
+    "restricted-txt-classified": {
+      "category": "restricted",
+      "expected_class": null,
+      "expected_status": "succeeded",
+      "mime": "text/plain",
+      "sha256": "4672e2ecadf96066ecd9183b0b4021f001a1daaefe62e958280ee5e4fcd408d0",
+      "size_bytes": 50
+    },
+    "valid-docx": {
+      "category": "valid",
+      "expected_class": null,
+      "expected_status": "succeeded",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "86ba7d1f41c0f0fa12534325e6ca98d203810d7ad5fa2090aec1a212153984c5",
+      "size_bytes": 36739
+    },
+    "valid-pdf": {
+      "category": "valid",
+      "expected_class": null,
+      "expected_status": "succeeded",
+      "mime": "application/pdf",
+      "sha256": "4a99714e8e37527d883fdedee4a52726cc476ccf868c8eb9582f3f1858c472b4",
+      "size_bytes": 881
+    },
+    "valid-txt": {
+      "category": "valid",
+      "expected_class": null,
+      "expected_status": "succeeded",
+      "mime": "text/plain",
+      "sha256": "ff73521eab8543b95ec7c3e6c99685f77a63aae3f5a5f26be6a2bcd0a6446d75",
+      "size_bytes": 62
+    }
+  },
+  "corpus_version": "2"
+}

@@ -11,3 +11,4 @@ dist/
 .env.hardening.local
 .env.integration.local
 .env.phase2-test.local
+.env.phase4.local

@@ -28,6 +28,7 @@ from webdesk.ceremony.install import PreparedInstall, apply_install
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.intake import parse_service
 from webdesk.intake.ingest import IngestError, ingest_source
+from webdesk.intake.isolation import run_in_process
 from webdesk.intake.parse_service import ParseRefused
 from webdesk.intake.parsers import ParseResult, SegmentDraft
 from webdesk.projects import service as projects
@@ -567,7 +568,14 @@ def test_a_parser_exception_fails_only_that_version_and_writes_no_segments(
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", explode)
     assert (
-        as_worker(conn, parse_service.parse_version, conn, store, broken.source_version_id)
+        as_worker(
+            conn,
+            parse_service.parse_version,
+            conn,
+            store,
+            broken.source_version_id,
+            runner=run_in_process,
+        )
         == "failed"
     )
     assert _segment_count(conn, broken.source_version_id) == 0
@@ -595,7 +603,14 @@ def test_a_failed_segment_write_rolls_back_every_segment_of_that_attempt(
 
     monkeypatch.setitem(parse_service.PARSERS, "text/plain", two_drafts)
     assert (
-        as_worker(conn, parse_service.parse_version, conn, store, result.source_version_id)
+        as_worker(
+            conn,
+            parse_service.parse_version,
+            conn,
+            store,
+            result.source_version_id,
+            runner=run_in_process,
+        )
         == "failed"
     )
     assert _segment_count(conn, result.source_version_id) == 0

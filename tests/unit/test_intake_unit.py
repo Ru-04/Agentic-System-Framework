@@ -209,6 +209,9 @@ def test_an_unreadable_page_gives_partial_and_keeps_the_good_pages(
         def __init__(self, text: str | None) -> None:
             self._text = text
 
+        def get(self, _key: str, _default: Any = None) -> None:
+            return None
+
         def extract_text(self) -> str:
             if self._text is None:
                 raise RuntimeError("bad page")
@@ -252,16 +255,20 @@ def test_markdown_records_its_heading_path_and_paragraph_index() -> None:
 def test_text_lines_get_line_range_locators() -> None:
     result = parse_text(b"first line\n\nthird line\n")
     assert [s.locator for s in result.segments] == [
-        {"line_start": 1, "line_end": 1},
-        {"line_start": 3, "line_end": 3},
+        {"line_start": 1, "line_end": 1, "start_offset": 0, "end_offset": 10},
+        {"line_start": 3, "line_end": 3, "start_offset": 12, "end_offset": 22},
     ]
 
 
 def test_eml_yields_subject_and_body_and_lists_attachments_without_ingesting_them() -> None:
     result = parse_eml(_eml(with_attachment=True))
     parts = [s.locator for s in result.segments]
-    assert {"eml_part": "subject"} in parts
-    assert {"eml_part": "body"} in parts
+    subject, body = parts
+    assert subject["eml_part"] == "subject"
+    assert body["eml_part"] == "body"
+    # Approved offsets (P4-GOV-2026-10-28): 0 to the length of the normalized part text.
+    assert subject["start_offset"] == 0 and subject["end_offset"] == len(result.segments[0].text)
+    assert body["start_offset"] == 0 and body["end_offset"] == len(result.segments[1].text)
     assert len(result.unprocessed_attachments) == 1
     attachment = result.unprocessed_attachments[0]
     assert attachment["filename"] == "spec.pdf"

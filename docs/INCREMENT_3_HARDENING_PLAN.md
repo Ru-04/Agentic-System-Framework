@@ -1,6 +1,6 @@
 # Increment 3 Hardening Plan (for approval; no code written)
 
-**Status:** Proposed. Awaiting approval. No code, migration, test or specification change has been made.
+**Status:** Proposed. No WDS approval identity, date or channel is recorded in this repository. A relayed approval of the Phase 4 section is recorded in docs/GOVERNANCE_DECISION_REGISTER.md (entry P4-GOV-2026-10-28); its provenance is incomplete. This is not production approval, and no production change is made by this plan.
 
 **Baseline:** branch `feature/increment-1-foundation`, commit `acd5c51`.
 

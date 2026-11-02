@@ -420,3 +420,175 @@ rewrites no approved specification.
 - Production integration remains blocked.
 
 Contract text reflecting this: `docs/AI_FOUNDATION_READ_CONTRACT_v1.md` section 13A.
+
+## P4-GOV-2026-10-28 — Phase 4 parse robustness: decisions relayed as approved (2026-10-28)
+
+**Provenance and limits of this record.** On 2026-10-28 the WDS governance contact relayed, through the sales
+account in the Claude session, that WDS had approved the Phase 4 governance decision packet (draft dated 2026-10-28,
+kept in the session notes, not in this repository). The decisions below restate the packet as relayed. **Not
+recorded here, and to be confirmed by WDS:** the approver's name and role, the date and channel of WDS's own
+approval, and the approver's exact wording. Nothing in this entry supplies those. Until they are confirmed, this
+entry records the relayed decision, not an authenticated WDS signature. Production configuration is not approved
+by any item in this entry.
+
+### P-0 — Increment 3 hardening plan as the non-production engineering baseline
+
+- **Decision (as relayed):** The Increment 3 hardening plan (`docs/INCREMENT_3_HARDENING_PLAN.md`) is approved as the
+  non-production engineering baseline for Phase 4, subject to the clarifications recorded in this register.
+- **Scope:** Non-production engineering only. Not production readiness, not formal WDS acceptance of any H-item.
+- **Note:** The plan file's status line previously read "Proposed. Awaiting approval." It is corrected to point to this entry.
+
+### H-DEC-3 — Configurable parser limits for non-production
+
+- **Decision (as relayed):** Parser limits are configurable for non-production. The numeric defaults in
+  `src/webdesk/intake/limits.py` are **provisional**. They are not approved as production values.
+- **Values currently implemented** (all in `src/webdesk/intake/limits.py`):
+
+| Constant | Value | Provenance |
+|---|---|---|
+| `MAX_INPUT_BYTES` | 25 MiB (26 214 400) | Engineering proposal; not in the plan's H-DEC-3 list |
+| `MAX_PDF_PAGES` | 500 | Plan list: pages |
+| `MAX_PDF_PAGE_STREAM_BYTES` | 10 MiB (10 485 760) | Plan list: pages, per-page stream |
+| `MAX_ARCHIVE_UNCOMPRESSED_BYTES` | 100 MiB (104 857 600) | Plan list: uncompressed bytes |
+| `MAX_ARCHIVE_RATIO` | 100 (inflate ratio) | Plan list: ZIP ratio |
+| `MAX_DOCX_ELEMENTS` | 20 000 | Engineering proposal; not in the plan's list |
+| `MAX_SEGMENTS_PER_VERSION` | 5 000 | Plan list: segments |
+| `MAX_CHARS_PER_SEGMENT` | 20 000 | Plan list: characters per segment |
+| `PARSER_TIMEOUT_SECONDS` | 30 s | Engineering proposal; must stay below the 120 s job lease |
+| `PARSER_OUTPUT_BYTES` | 32 MiB (33 554 432) | Engineering proposal |
+| `PARSER_MEMORY_BYTES` | 1 GiB (1 073 741 824), POSIX `RLIMIT_AS` only | Engineering proposal; not enforced on Windows |
+
+- **Not approved by this entry:** any of the values above as a production value. Values outside the plan's list
+  (input size, DOCX elements, timeout, output cap, memory cap) need WDS confirmation before production.
+- **Change control:** A value changes only by a dated entry here, with the test that enforces it.
+
+### H-DEC-4 — Windows containment for non-production testing
+
+- **Decision (as relayed):** For non-production Windows testing, containment is the **process timeout plus input
+  pre-check** (30 s wall clock, 25 MiB input cap, 32 MiB child output cap, `CREATE_NO_WINDOW`). No job object.
+- **Residual risk (recorded):** On Windows the parser child has **no memory cap**. A parse of a crafted file can
+  allocate memory up to what the process timeout allows before it is killed. The ZIP and PDF expansion checks
+  (D2, D4 in the closure report) reduce but do not remove this residual.
+- **Production:** A separate WDS decision is required before any production deployment on Windows (for example a job
+  object with a memory limit, or an accepted residual). This entry does not approve production containment.
+
+### H-DEC-5 — DOCX table-cell locator extensions
+
+- **Decision (as relayed):** Table-cell locators are confirmed as an extension of `docx_paragraph` with explicit
+  `table_index`, `row` and `cell` provenance, alongside `paragraph_index` within the cell.
+- **Consequence recorded:** Paragraphs inside tables nested within a cell are not extracted. Each such nested table
+  is reported as a flagged region (`docx_nested_table:T.R.C`) and the version is `partial`. Nested-table locators are
+  not approved by this entry.
+
+### H-DEC-6 — HTML-only email body
+
+- **Decision (as relayed):** An email with an HTML-only body is **partial / unextractable**. The flagged region
+  (`eml_part:body_html_only`) is retained even where no text segment is produced, and is persisted in `parse_error`.
+- **Consequence recorded:** An HTML-only email with no subject is `partial` with zero segments, not `unsupported`.
+
+### EML character offsets
+
+- **Decision (as relayed):** For `eml_part` locators, offsets are **zero-based, end-exclusive Unicode code-point
+  offsets** (`char_start`, `char_end`) relative to the **decoded, normalized** text of the named part (`subject` or
+  `body`). Normalization is Unicode NFC followed by removal of leading and trailing whitespace; the segment text is
+  that normalized text. Each offset pair is identified by its message part (`eml_part`) and carries the Message-ID as
+  provenance, as before.
+- **Not approved:** raw-message byte offsets. They are not fabricated.
+- **Consequence recorded:** Because the segment text is the normalized part text, `char_start` is 0 and `char_end`
+  is the length of that text. The offsets verify the span and do not locate it inside the raw message.
+
+### Consequences for the Phase 4 status (recorded)
+
+- The decisions above take effect for non-production engineering only. QA and any production review use this
+  register, not the Phase 4 handoff, as the source for these decisions.
+- Formal WDS acceptance and production readiness are **not** claimed by this entry.
+
+## WDS-QA02-RULING-2026-10-28: partial, unsupported and failed classes (ruling recorded 2026-10-28)
+
+**Provenance.** The ruling below was relayed to the Phase 4 engineering session on 2026-10-28 in the Claude Code chat, in
+an instruction pasted by the account that holds the sales address. The approver's name, role, approval date as WDS
+records it, channel, and signature are **not recorded here and are not supplied by this entry**. The entry records the
+relayed text as the approved interpretation for engineering. It does not establish a formal WDS signature. Management must
+confirm the approver identity and date in the WDS record before formal acceptance.
+
+**Ruling (as relayed).**
+
+- A `partial` parse must contain at least one valid committed source segment and one or more flagged regions.
+- A zero-segment result must never be classified as `partial`.
+- Image-only PDF documents with no extractable text must remain `unsupported`, as ARCHITECTURE.md and EVAL-F14b(c) require.
+- HTML-only EML documents with no usable extracted segments follow the approved unsupported or extraction classification.
+- Unextractable-region diagnostics are preserved through a schema-compliant failure or metadata representation, not by
+  redefining `partial`.
+- The authoritative specification takes precedence over any conflicting implementation test or provisional decision
+  entry.
+
+**Source of the requirement.** REQUIREMENT_SCHEMA.md section 4 (the partial definition, line 105), ARCHITECTURE.md section 13
+(image-only PDF, line 260), and EVAL-F14b in EVALUATION_PLAN.md.
+
+**Implementation (commit `8d5b039`).**
+
+- `partial` only when at least one committed segment and at least one flagged region exist.
+- Zero segments: `unsupported`. Flagged regions are kept as `parse_error = {"class": "unsupported",
+  "unextractable_regions": [...]}`. The key is different from `flagged_regions` so no reader can take it for partial.
+- `failed` is raised as `ParserFailure` and never returned as a status.
+
+**Supersedes** the wording of P4-GOV-2026-10-28, H-DEC-6, "retaining flagged-region details even where no text segment is
+produced" as a `partial` result. The region is retained as `unsupported` metadata.
+
+## P4-GOV-2026-10-28 amendments (2026-10-28)
+
+- **EML and TXT offsets:** the approved schema field names are `start_offset` and `end_offset`
+  (REQUIREMENT_SCHEMA.md section 4.2). Earlier `char_start`/`char_end` keys are replaced. The semantics are unchanged:
+  zero-based, end-exclusive code points, relative to the normalized text (NFC, surrounding whitespace removed).
+- **H-DEC-3, input limit:** the parser input limit is the approved upload maximum of 20 MiB (ARCHITECTURE.md section 13),
+  the same unit and boundary as upload (`storage.MAX_BYTES`). The earlier proposed 25 MiB is withdrawn. Migration 0007 also
+  bounds `file_size_bytes` to 1..20971520.
+- **H-DEC-3, PDF expansion (new provisional application of H-31, QA-05):** before a PDF reader opens a file, every zlib-coded
+  stream is decoded with an output bound. The total decoded size is limited to `MAX_ARCHIVE_UNCOMPRESSED_BYTES` (100 MiB) and
+  the ratio to file size to `MAX_ARCHIVE_RATIO` (100). LZW and RunLength filters are refused. These values are provisional,
+  like the other H-DEC-3 values. This bounds decoded size. It does not provide a memory cap on Windows (H-DEC-4).
+- **H-DEC-4:** unchanged. Non-production containment only. Production requires a separate decision.
+- **H-DEC-5:** unchanged (table-cell extension). Nested tables remain flagged, not extracted.
+- **H-DEC-6:** amended as stated above. HTML-only email with no subject: `unsupported` with `unextractable_regions`.
+  HTML-only email with a subject: `partial`, beside the subject segment.
+
+## Corrections of earlier wording (2026-10-28)
+
+- The plan status line in `docs/INCREMENT_3_HARDENING_PLAN.md` said "Approved as the non-production engineering baseline".
+  That overstated the record. It now states that the approval is relayed and its provenance is incomplete.
+- The 120 s parser-timeout lease reference cites Phase 3 material that is not on this branch. It is unverified here (QA-07).
+
+## WDS-DECISIONS-2026-10-29: Phase 4 non-production decisions (communicated 29 October 2026, Asia/Kolkata)
+
+**Provenance and limits.** The authorization below was communicated to the Phase 4 engineering session on 29 October 2026
+(Asia/Kolkata) in the Claude Code chat, in an instruction pasted by the account that holds the sales address. The
+decision-maker's name, role, the authenticated approval channel, the exact approval wording as WDS records it, and any
+signature are **not recorded here and not supplied by this entry**. The entry records the communicated text as the
+approved interpretation for engineering. Administrative attestation (an authenticated WDS record that names the approver,
+the time and the artifact) is outstanding. Formal WDS acceptance is not recorded by this entry.
+
+**Scope.** The authorization is for non-production validation only. It does not waive technical security defects,
+production containment requirements, or independent QA. QA-05 and QA-06 have not been waived and require independent
+verification.
+
+**Decisions (as communicated).**
+
+- **H-DEC-3:** approve the reported parser numeric limits for non-production validation only, including the approved
+  20 MiB input limit and the provisional 100 MiB cumulative decoded-data limit and 100x expansion policy. Production parser
+  limits require separate capacity and security validation.
+- **H-DEC-4:** accept the documented Windows process-memory containment limitation for non-production testing only. This does
+  not authorize Windows production deployment without adequate containment or an approved alternative hosting strategy.
+- **H-DEC-5:** approve the documented DOCX paragraph, table-cell and nested-table locator semantics to the extent they match
+  the authoritative source-locator schema (REQUIREMENT_SCHEMA section 4).
+- **H-DEC-6:** partial requires at least one committed segment and at least one flagged region. A zero-segment result cannot
+  be partial. Unsupported and failed keep their distinct meanings.
+- **EML:** normalized text offsets using `start_offset` and `end_offset`, with subject/body provenance and the approved
+  normalization rules (Unicode NFC, surrounding whitespace removed; zero-based, end-exclusive code points).
+
+**Artifact binding (engineering record, not a WDS signature).** The implementation of these decisions is at the commits
+listed in `docs/PHASE4_QA_REMEDIATION.md` and in the final-review remediation commit. A document or register hash was not
+computed by this entry. Administrative attestation must bind each decision to a commit SHA or a document hash.
+
+**Evidence still required from WDS (administrative attestation).** Name of the approver and role; the approval time and
+channel as WDS records them; the exact approval wording; a WDS-authored statement binding each decision to a commit or
+document hash.
