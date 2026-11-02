@@ -30,9 +30,9 @@ from webdesk.intake.parsers import (
     _bounded_stream,
     _check_archive,
     _DecodeMeter,
+    open_pdf_structure,
     parse_docx,
     parse_eml,
-    open_pdf_structure,
     parse_pdf,
 )
 
@@ -274,8 +274,8 @@ def test_f3_a_text_box_offered_as_a_fallback_and_a_choice_is_extracted_once() ->
     """A Word text box is stored twice: a DrawingML choice and a VML fallback. Only the choice is
     read, so its text is not committed twice."""
     alternate = (
-        '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
-        'xmlns:v="urn:schemas-microsoft-com:vml">'
+        '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/'
+        '2006" xmlns:v="urn:schemas-microsoft-com:vml">'
         f'<mc:Choice Requires="wps">{_textbox_run(_paragraph_xml("ONCE_ONLY_TEXT"))}</mc:Choice>'
         "<mc:Fallback><w:r><w:pict><v:shape><v:textbox><w:txbxContent>"
         f"{_paragraph_xml('ONCE_ONLY_TEXT')}"
@@ -292,7 +292,9 @@ def test_f3_a_text_box_offered_as_a_fallback_and_a_choice_is_extracted_once() ->
 def test_f3_a_text_box_holding_a_table_is_flagged_not_dropped() -> None:
     document = Document()
     document.add_paragraph("Body.")
-    table = "<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc>" + _paragraph_xml("T") + "</w:tc></w:tr></w:tbl>"
+    table = (
+        "<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc>" + _paragraph_xml("T") + "</w:tc></w:tr></w:tbl>"
+    )
     document.paragraphs[-1]._p.append(parse_xml(_textbox_run(table)))
     result = parse_docx(_docx_bytes(document))
     assert result.flagged_regions == ["docx_textbox:1"]
@@ -511,8 +513,8 @@ def test_f5_admission_refuses_an_oversized_page_before_any_version_exists() -> N
 
 
 def test_f5_admission_does_not_refuse_a_page_the_parser_only_flags_for_its_filter() -> None:
-    """Negative control: an LZW page stream is refused at the decoder, which flags its page. Admission
-    admits the file, as the parser does, rather than refusing it."""
+    """Negative control: an LZW page stream is refused at the decoder, which flags its page.
+    Admission admits the file, as the parser does, rather than refusing it."""
     content = b"\x80\x0b\x60\x50\x22\x0c\x0c\x85\x01"
     data = _assemble(_pdf_objects(b"/Font << /F1 5 0 R >>", content, b"/Filter /LZWDecode"))
     assert open_pdf_structure(data) is False

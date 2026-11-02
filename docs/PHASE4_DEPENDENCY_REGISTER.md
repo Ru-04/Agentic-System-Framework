@@ -15,6 +15,18 @@ acceptance step or must be reconciled before merge.
 | D-H7 | EML character offsets: offsets into what | Not implemented | Acceptance of H-33 | WDS | Define the offset basis |
 | D-H8 | Migration `0013` (plan) versus this branch | `0013` does not exist here; no migration was added | Acceptance of H-33 | WDS, Phase 4 owner | Confirm that the locator CHECK needs no change for the agreed fields |
 | D-H9 | Numbering of Phase 4 migrations | None added | Avoiding collision with Phase 2 `0044`/`0045` and Phase 3 `0050` | Phase 4 owner | None while no migration is added |
+| D-H10 | F-3 DOCX text boxes and headers/footers (default: text boxes extracted with `{paragraph_index, textbox_index}`; headers and footers flagged, not extracted) | In code on the QA remediation commits | Acceptance of H-33 | WDS | Confirm or replace the default (`PHASE4_PDF_CONTAINMENT.md` section 10) |
+| D-H11 | F-4 replacement-only text (default: no segment; page flagged) | In code | Acceptance of D3 | WDS | Confirm or replace the default |
+| D-H12 | F-5 admission per-page bound (default: refuse at admission with `pdf_stream_limit`) and the page-count limit, which admission still does not apply | In code for the per-page bound; page count not applied at admission | Acceptance of QA-05 and D4 | WDS | Confirm the per-page default; rule on the page-count limit |
+| D-H13 | Images on pages with text: neither flagged nor OCRed | Not changed | Acceptance of H-33 | WDS | Rule whether such a page must be flagged |
+| D-H14 | F-2 upload request bound `MAX_UPLOAD_REQUEST_BYTES` (21 MiB) and its reliance on Starlette 0.41.3 `Request.receive` and `Request.form()` | In code; the bound is counted in the route's receive wrapper | Acceptance of D5 | WDS for the value; the Phase 4 owner for the Starlette pin | Confirm the value. Re-test the bound on any Starlette or FastAPI upgrade (`pyproject.toml` pins fastapi 0.115.4). |
+
+## Mechanisms that rely on library internals
+
+- **Starlette 0.41.3 (via FastAPI 0.115.4).** `api/routes.py` `_bounded_form` wraps `request.receive` and builds a new
+  `Request` from the same scope to parse the form. This relies on `Request.receive`, `Request.stream()` and
+  `Request.form()` behaving as they do in 0.41.3. Its tests (`tests/unit/test_upload_body_bound.py`,
+  `tests/committed/test_http_intake.py`) fail if the behaviour changes.
 
 ## Out of scope for this branch
 

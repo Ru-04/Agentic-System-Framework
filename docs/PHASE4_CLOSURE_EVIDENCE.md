@@ -113,9 +113,9 @@ Step 12 exits 1 by design: only the six listed files may fail the format check, 
 | ID | Requirement (summary) | Evidence | Status |
 |---|---|---|---|
 | H-30 | Per-version failure isolated and audited | Unit `test_a_segment_write_failure…`, `test_a_parser_exception_fails_only…`; committed neighbour and rollback tests; isolation child tests | Closed (engineering) |
-| H-31 | Resource limits | `limits.py` constants; hardening limit tests; D2 and D4 fixes and tests; values recorded under P4-GOV H-DEC-3 | Closed for non-production. Production values need a separate WDS decision. |
-| H-32 | Isolated parser process, timeout, crash containment | `isolation.py`, `parser_child.py`; 26 isolation tests; crash, hang and output-cap tests in steps 01 and 04 | Closed for non-production, with the Windows memory residual recorded under H-DEC-4. Production containment needs a separate decision. |
-| H-33 | TXT, PDF, DOCX and EML locators | TXT offsets; PDF image pages; DOCX cells; D3 nested tables flagged; EML message-id and approved offsets (§3); HTML-only flagged | Closed for the approved semantics |
+| H-31 | Resource limits | `limits.py` constants; hardening limit tests; D2 and D4 fixes and tests; values recorded under P4-GOV H-DEC-3; F-5 admission per-page bound and F-2 request bound (§11) | Closed for non-production, pending WDS confirmation of D-H12 and D-H14. Production values need a separate WDS decision. |
+| H-32 | Isolated parser process, timeout, crash containment | `isolation.py`, `parser_child.py`; isolation tests; crash, hang and output-cap tests in steps 01 and 04; output cap enforced while the child writes (F-6, §11) | Closed for non-production, with the Windows memory residual recorded under H-DEC-4. Production containment needs a separate decision. |
+| H-33 | TXT, PDF, DOCX and EML locators | TXT offsets; PDF image pages; nested image-only pages flagged (F-1); DOCX cells; DOCX text boxes extracted and headers and footers flagged (F-3); replacement-only text not committed (F-4); D3 nested tables flagged; EML message-id and approved offsets (§3); HTML-only flagged | Not closed by this document. The F-1, F-3 and F-4 fixes are in place. Acceptance needs WDS confirmation of D-H10, D-H11 and D-H13 (§11). |
 | H-34 | Flagged regions and partial extraction | D1 fix; committed partial and HTML-only tests; partial not reparseable | Closed |
 | H-35 | Committed-row atomicity and concurrency | Nine outcome tests and three concurrency tests on committed rows; rolled-back and stale-reparse paths | Closed for the paths listed in §5 |
 
@@ -139,4 +139,21 @@ Step 12 exits 1 by design: only the six listed files may fail the format check, 
 - Provenance of the WDS approval (§8).
 - Production containment and production limit values (§8).
 - The merge dependencies in §9.
-- Independent QA has not started.
+- Independent QA has not started. The remediation SHA in §11 is for the independent reviewer to re-test; it has not been
+  tested by anyone outside the engineering session.
+- WDS confirmation of the defaults and values in §11.
+
+## 11. Remediation of the independent QA of `178a419`
+
+Full record: `docs/PHASE4_QA_REMEDIATION.md` section 11. Engineering SHA for the independent reviewer to re-test:
+`b604e7b` (code). Documentation for that code is in the commit that adds this section.
+
+- Six findings fixed (F-1 to F-6). Each has a regression test that failed before its fix.
+- Gate on `b604e7b`: full regression with hardening configured 814 passed, exit 0. Focused gate, committed-row,
+  restricted-login and migration steps passed. Two rows are not clean: row 02 (no-hardening run, a harness KeyError in two
+  hardening test files that index an unset variable) and row 12 (base downgrade, not run). See section 11.1 of that file.
+- Decisions awaiting WDS confirmation: D-H10 (DOCX text boxes and header and footer flags), D-H11 (replacement-only
+  text), D-H12 (admission per-page bound, and page-count limit not applied at admission), D-H13 (images on text pages),
+  D-H14 (`MAX_UPLOAD_REQUEST_BYTES` value). Recorded in `docs/PHASE4_DEPENDENCY_REGISTER.md`.
+- Not closed by this section: Windows process memory (H-DEC-4), production limits, formal acceptance, and the Phase 2 and
+  Phase 3 integrations (§9).

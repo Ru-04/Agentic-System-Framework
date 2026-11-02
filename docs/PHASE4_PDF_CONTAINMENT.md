@@ -69,6 +69,10 @@ A visited set (by object identity) makes cyclic references terminate. The walk i
 text block (`BT` as a whole token) found anywhere in the graph flags the page. A walk that cannot complete, or a stream
 that cannot be decoded, also flags the page. A vector-only form is not flagged (negative control in the tests).
 
+The image-only rule uses the same walk (F-1, see section 10). An image XObject reachable from the page through the same
+forms, patterns and Type 3 fonts flags a page that has no extracted text, as a direct image on that page does. A page
+with extracted text and an image is not flagged by the image rule.
+
 The result follows the approved classification:
 
 - text extracted and nothing flagged: `succeeded`;
@@ -86,9 +90,11 @@ Within the parser process, for an input that is accepted:
 - Each compressed buffer is inflated at most once for accounting. Repeated reads of the same stream are not charged again.
 - LZW, RunLength, DCT, JPX and CCITT streams are never decoded. A stream the reader asks to decode with one of these
   refuses the page, or the file when the reader needs it to open.
-- Upload admission applies the same bound before a source version is created.
+- Upload admission applies the per-page content bound before a source version is created (F-5). It does not apply the
+  page-count limit (section 6).
 - Per-page content is additionally bounded at 10 MiB decoded (H-31).
-- The child process is bounded by a 30 s wall-clock timeout and a 32 MiB output cap (H-32).
+- The child process is bounded by a 30 s wall-clock timeout and a 32 MiB output cap (H-32). The output cap is enforced
+  while the child writes: the parent never holds more than the cap plus one byte, and an oversized child is killed (F-6).
 
 ## 6. Residual limitations (not contained)
 
@@ -97,8 +103,14 @@ Within the parser process, for an input that is accepted:
   address-space cap. The worst case the bound permits (100 MiB decoded) has not been measured for process memory. Do not
   describe the containment as memory containment.
 - **Time.** Bounded only by the 30 s child timeout on every platform, and by the 30 s wall-clock limit only in the child.
-  Admission runs in the API process with no separate timeout; the same metered open is bounded by the decode budget but not
-  by time. This is a known residual for admission.
+  Admission runs in the isolated child under the same 30 s timeout, and the API process does not open PDFs. Admission has
+  no separate memory bound beyond the child's timeout and output cap.
+- **Page count at admission.** The 500-page limit (`MAX_PDF_PAGES`) is applied by the parser only. A file over that limit
+  is admitted, creates a source version, and then fails its parse with `pdf_page_limit`. Applying the same refusal at
+  admission is an open decision (section 10).
+- **Images on pages that have text (F-1 scope).** The image rule flags a page only when it has no extracted text. An image
+  on a page with text, direct or nested, is not flagged. It is not OCRed and it is not reported. This is the image-only
+  rule as the code implements it. WDS has not ruled on images on text pages (section 10).
 - **Non-flate filters that expand.** ASCIIHex and ASCII85 can only shrink or halve their input, so they are not metered.
   Other filters are refused.
 - **Corrupt flate data is refused.** The meter refuses a deflate stream that does not inflate (`corrupt_structure`). This
@@ -120,11 +132,11 @@ Within the parser process, for an input that is accepted:
 | Object stream, FlateDecode | yes | yes, at object resolution | supported, metered |
 | Page content, FlateDecode (array allowed) | yes | yes | supported, metered and per-page bounded |
 | Page content, unfiltered | yes | no decode | supported |
-| Form XObject (direct or nested) | yes | yes | walked for text; flagged if text |
+| Form XObject (direct or nested) | yes | yes | walked for text and images; flagged if text, or if an image and no text (F-1) |
 | Tiling pattern stream | yes | yes | walked for text; flagged if text |
 | Type 3 font CharProcs | yes | yes | walked for text; flagged if text |
 | Annotation appearance stream | yes | yes | walked for text; flagged if text |
-| Image XObject | yes | never decoded | not walked; flagged only through the image-only rule |
+| Image XObject | yes | never decoded | found through the same walk as forms (F-1); flags the page only through the image-only rule (no text on the page) |
 | LZWDecode, RunLengthDecode | yes | refused at decoder | page flagged, or file refused when needed to open |
 | DCTDecode, JPXDecode, CCITTFaxDecode | yes | refused at decoder | page flagged when decoded |
 | ASCIIHexDecode, ASCII85Decode | yes | not metered (cannot expand) | supported |
@@ -149,12 +161,47 @@ Within the parser process, for an input that is accepted:
 - **Swallowed filter refusals (D2):** if the reader refuses a filter while it opens or rebuilds the file, the file fails
   with `pdf_filter_unsupported`. It does not return a silent empty result.
 - **Replacement characters (D3):** a page whose extracted text contains U+FFFD is flagged. The segment is kept, so the
-  result is partial when text exists.
+  result is partial when text exists. *Corrected in section 10: a segment made only of U+FFFD is not committed (F-4).*
 - **Admission (D4):** `open_pdf_in_child` runs PDF admission in the isolated child under the parse timeout and output cap.
   The API process no longer opens PDFs. The timeout is the enforced bound. It is not a memory bound. A self-referencing
   cross-reference loop from the review was not reproduced by a synthetic fixture.
 - **Upload read (D5):** the upload is read at most one byte past the approved 20 MiB maximum before validation. The
   multipart parser of the web framework still buffers the request body, so a complete request-size cap is not closed here.
+  *Corrected in section 10: the source upload's request body is now bounded before it is buffered (F-2).*
 
 **Residuals after this remediation.** Windows process memory (H-DEC-4). The admission timeout is the only time bound, and
-the framework body buffering in D5. Nested-form text is flagged, not extracted (QA-06, Option B).
+the framework body buffering in D5 for routes other than the source upload (see section 10). Nested-form text is flagged,
+not extracted (QA-06, Option B).
+
+## 10. Remediation after the independent QA of `178a419` (F-1 to F-6)
+
+Each item below has a regression test that failed before its fix and passes after it. The test names are in
+`tests/unit/test_pdf_containment.py`, `tests/unit/test_pdf_remediation.py`, `tests/unit/test_parse_defects.py`,
+`tests/unit/test_parse_isolation.py`, `tests/unit/test_upload_body_bound.py` and `tests/committed/test_http_intake.py`.
+
+- **F-1, image in a nested form (QA-06).** The image-only rule now walks the same forms, patterns and Type 3 fonts as the
+  text walk. A page with no extracted text and an image reachable through a nested form is flagged, as a direct image-only
+  page is. A vector-only nested form is not flagged.
+- **F-4, replacement characters (D3).** A page whose extracted text is only U+FFFD commits no segment. The page is flagged.
+  Text that is valid is kept, and a segment that mixes valid text with U+FFFD is kept as extracted and the page is flagged.
+  *Default decision, needs WDS confirmation.*
+- **F-5, admission bound.** Upload admission applies the per-page content bound (10 MiB decoded) before a source version
+  exists, so an over-bound page is refused with `pdf_stream_limit` as a 422 at upload. A page the parser only flags, for
+  an unsupported filter or any other fault, is still admitted. *Default decision, needs WDS confirmation.* The page-count
+  limit is still applied only by the parser (section 6).
+- **F-6, child output cap.** The child's stdout is read while the child runs. The parent holds at most the cap plus one
+  byte. Past the cap the child is killed and `parser_output_limit` is raised. The timeout is unchanged.
+- **F-2, upload request body (D5).** The source upload parses its multipart form only while the body stays within
+  `MAX_UPLOAD_REQUEST_BYTES` (the approved 20 MiB file plus one MiB for fields and framing). A declared `Content-Length`
+  over the limit is refused without reading the body. Otherwise the bytes are counted as they arrive, and the request is
+  refused with `413 too_large` once they pass the limit. A refused upload creates no source. The source upload is the only
+  route in `src/webdesk/api` that parses a multipart body.
+- **F-3, DOCX text boxes and headers and footers (H-33).** Text-box paragraphs anywhere in the document body, including
+  inside a table cell, are segments with the locator `{paragraph_index, textbox_index}`. The VML fallback copy of a text box is not
+  read a second time. A table inside a text box is flagged as `docx_textbox:N`, and the box's own paragraphs are still
+  extracted. Every header and footer that holds text is flagged as `docx_header:N` or `docx_footer:N` and is not
+  extracted. Footnotes, endnotes and comments are not read. *Default decision, needs WDS confirmation.*
+
+Still open after this remediation: Windows process memory (H-DEC-4); the page-count limit at admission (a WDS decision,
+since the parser refuses the file after a version exists); images on pages that have text, which are neither flagged nor
+OCRed (a WDS ruling is needed); and footnotes, endnotes and comments, which the DOCX parser does not read.
