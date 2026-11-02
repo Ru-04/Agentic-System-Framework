@@ -118,9 +118,10 @@ These fields are not available to the implementing agent. They are not filled in
   check on the changed files, and strict mypy on `src/webdesk` pass.
 - Findings closed in this remediation: F-A (approval triggers `webdesk_users_guard` and `webdesk_role_guard` on the database clock,
   under PH3-FC-01) and F-5 (`fn_worker_mark_inputs_changed` fenced by the caller's unexpired lease).
-- Independent QA: the separate re-test of `3065361` was incomplete when this record was written. Its F-3 mutation rerun,
-  its own full regression exit code, its ruff and mypy runs, and cluster teardown were pending. Its partial report is
-  `phase3-indep-qa-report-3065361.md` in the shared notes folder. It is not a PASS verdict.
+- Independent QA: the separate re-test of `3065361` returned QA PASSED for the technical scope (report
+  `phase3-indep-qa-report-3065361.md` in the shared notes folder). It covered the F-3 mutant (17 failures, exit 1), the full
+  regression on a clean `3065361` (747 passed, 0 failed, exit 0), ruff, strict mypy, and teardown of its cluster and volume. It is
+  not WDS acceptance.
 - A separate QA review was also carried out by the project owner, who reports no issues found. That review is recorded as
   reported. It is not an independent verdict and it does not replace the re-test above. The reviewer's identity and method are
   not recorded here, because they were not supplied.
