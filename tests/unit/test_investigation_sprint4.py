@@ -172,6 +172,7 @@ def test_only_the_authorized_boundaries_are_active_and_others_stay_inactive() ->
             ("bigcommerce", Edition.NOT_APPLICABLE),
             ("adobe_commerce", Edition.ADOBE_COMMERCE),
             ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
+            ("shopify", Edition.NOT_APPLICABLE),
         }
     )
     page = _page(

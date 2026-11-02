@@ -146,6 +146,24 @@ def test_platform_with_no_approved_source_is_unsupported_not_refused() -> None:
 
 
 def test_inactive_source_with_real_page_is_unsupported_not_an_authorization_refusal() -> None:
+    # Adobe shared PHP is approved but not activated, so a real page on it is unsupported.
+    shared_cap = Capability(
+        "php extension", "adobe_commerce", Edition.SHARED, ClaimKind.FEATURE, ("php",)
+    )
+    real = _page(
+        "https://developer.adobe.com/commerce/php/",
+        "PHP extensions for Adobe Commerce",
+        platform="adobe_commerce",
+        edition=Edition.SHARED,
+        synthetic=False,
+    )
+    finding = _investigate(shared_cap, [real])
+    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
+    assert any("not active" in r for r in finding.refusals)
+
+
+def test_a_shopify_page_outside_the_exact_plan_pages_is_refused() -> None:
+    # Activated 2 Nov 2026 for exact pages only. A sibling path is an authorization refusal.
     real = _page(
         "https://www.shopify.com/pricing/plans",
         "plan feature availability",
@@ -153,8 +171,7 @@ def test_inactive_source_with_real_page_is_unsupported_not_an_authorization_refu
         synthetic=False,
     )
     finding = _investigate(SHOPIFY_PLAN, [real])
-    assert finding.outcome is Outcome.UNSUPPORTED_SOURCE
-    assert any("not active" in r for r in finding.refusals)
+    assert finding.outcome is Outcome.REFUSED
 
 
 # --- sanitized output ----------------------------------------------------------------

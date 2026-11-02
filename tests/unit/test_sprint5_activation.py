@@ -49,10 +49,11 @@ def test_the_authorized_boundaries_and_only_those_are_active() -> None:
             ("bigcommerce", Edition.NOT_APPLICABLE),
             ("adobe_commerce", Edition.ADOBE_COMMERCE),
             ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
+            ("shopify", Edition.NOT_APPLICABLE),
         }
     )
     assert ("adobe_commerce", Edition.SHARED) not in engine.ACTIVE_BOUNDARIES
-    assert ("shopify", Edition.NOT_APPLICABLE) not in engine.ACTIVE_BOUNDARIES
+    assert ("shopify", Edition.NOT_APPLICABLE) in engine.ACTIVE_BOUNDARIES
 
 
 def test_the_registry_status_matches_the_active_boundaries() -> None:
@@ -62,7 +63,7 @@ def test_the_registry_status_matches_the_active_boundaries() -> None:
     assert entries["adobe_commerce_exact_pages"]["status"] == "APPROVED AND ACTIVE"
     assert entries["magento_open_source_release_notes"]["status"] == "APPROVED AND ACTIVE"
     assert entries["adobe_shared_php"]["status"] == "APPROVED BUT INACTIVE"
-    assert entries["shopify_docs"]["status"] == "APPROVED BUT INACTIVE"
+    assert entries["shopify_docs"]["status"] == "APPROVED AND ACTIVE"
 
 
 def test_a_sibling_adobe_page_is_never_requested() -> None:

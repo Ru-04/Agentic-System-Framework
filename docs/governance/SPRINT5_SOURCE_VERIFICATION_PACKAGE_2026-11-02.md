@@ -52,3 +52,16 @@ For each approved exact page, before activation:
 5. Edition: an Adobe-only page is not attributed to Magento Open Source.
 6. Requirement-level routing: the expected outcome in the frozen dataset agrees with the activation.
 7. The activation is recorded in `sources.json`, `ACTIVE_BOUNDARIES` and the activation matrix, and the consistency tests pass.
+
+## 5. WDS decision recorded (2 November 2026): "Approve table"
+
+Activated, exact pages only:
+- `https://www.shopify.com/pricing` (A6; S2-D08)
+- `https://help.shopify.com/en/manual/intro-to-shopify/pricing-plans/plans-features/basic-shopify-plan` (B1a; S2-D07)
+- `https://help.shopify.com/en/manual/b2b/getting-started/plan-features` (B1b; S2-D07)
+
+The approval is recorded as the S2-D07 and S2-D08 confirmation that the table required. `/plus` is not activated (it redirects). Dataset v8 amends S5-001 and S5-012 for this activation.
+
+Real-evidence result for these three pages: **unknown** for the plan-feature capability. None of the pages states a version, so no version-specific claim can be cited.
+
+Still held: the BigCommerce subtree question (section 2), B3, B5, B6, B7 and B8a as listed in section 1, A5, and B9 and B10.

@@ -281,7 +281,7 @@ def test_audit_record_does_not_contain_page_text() -> None:
 
 def test_shopify_synthetic_page_on_an_approved_host_is_labelled_synthetic() -> None:
     page = _page(
-        "https://www.shopify.com/pricing/plans",
+        "https://www.shopify.com/pricing",
         "Plan feature availability for apps.",
         platform="shopify",
     )

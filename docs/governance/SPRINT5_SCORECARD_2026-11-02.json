@@ -40,7 +40,7 @@
       "dimension": "edition and version accuracy",
       "metric": "version-unknown cases returned WITH_UNKNOWNS",
       "rule": "min 1.0",
-      "scenarios": 6,
+      "scenarios": 8,
       "value": 1.0,
       "verdict": "MET"
     },
@@ -67,8 +67,8 @@
       "verdict": "THRESHOLD PENDING"
     }
   ],
-  "dataset_id": "sprint5-scenarios-v7-2026-11-02",
-  "dataset_sha256": "a94ce0beeab857ca2bb2bbbac8f4d88c7e97c4fb685c4ef604602212abe9af48",
+  "dataset_id": "sprint5-scenarios-v8-2026-11-02",
+  "dataset_sha256": "d3486591cdbb3b6fbe0b17403c49c175af601d0df3046381912371c3e2bc14ff",
   "dimensions": [
     {
       "basis": "measured only through CLARIFY and capability matching",
@@ -189,13 +189,13 @@
       "authorization_failures": 0,
       "dimensions_covered": {
         "clarification behaviour": 3,
-        "unknown and unsupported outcomes": 2
+        "edition and version accuracy": 2
       },
       "failure_categories": {},
       "matched": 5,
       "mismatched": [],
       "scenarios": 5,
-      "uncited_support": 0
+      "uncited_support": 2
     },
     "standalone_applications": {
       "authorization_failures": 0,

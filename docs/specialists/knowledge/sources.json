@@ -18,17 +18,18 @@
         "shopify.dev",
         "help.shopify.com"
       ],
-      "paths": "Plan scopes as defined by SHOPIFY_PLAN_SCOPES in src/webdesk/evidence/allowlist.py",
-      "approval_reference": "S2-D07 to S2-D09, cited in src/webdesk/investigation/engine.py. The decision record was not located in the repository.",
-      "ownership_status": "NOT RECORDED",
-      "status": "APPROVED BUT INACTIVE",
+      "paths": "Exact pages only: www.shopify.com/pricing; help.shopify.com /en/manual/intro-to-shopify/pricing-plans/plans-features/basic-shopify-plan and /en/manual/b2b/getting-started/plan-features. /plus is not included (redirects). No subtree, no whole host.",
+      "approval_reference": "S2-D07 (help.shopify.com, permitted access, no bypass) and S2-D08 (shopify.com pricing), approved by WDS in the consolidated source table (2 Nov 2026). The approval is recorded as the S2-D08 and S2-D07 confirmation the table required.",
+      "ownership_status": "PUBLISHER-CONTROLLED (title and og:site_name check, 2 Nov 2026): Shopify; Shopify Help Center",
+      "status": "APPROVED AND ACTIVE",
       "engine_boundary": [
         "shopify",
         "not_applicable"
       ],
       "editions": [
         "not_applicable"
-      ]
+      ],
+      "activation_reference": "WDS approval, 2 Nov 2026 (consolidated source table). Read-only. Exact pages only."
     },
     {
       "source_id": "woocommerce_docs",

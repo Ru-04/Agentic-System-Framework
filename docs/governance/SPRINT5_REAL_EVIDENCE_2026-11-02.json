@@ -129,6 +129,79 @@
         "no approved page in the set states this capability for the requested version"
       ],
       "refusals": []
+    },
+    {
+      "case": "shopify_pricing",
+      "source_id": "shopify_docs",
+      "requested_url": "https://www.shopify.com/pricing",
+      "fetch": [
+        {
+          "status": "fetched",
+          "reason": "retrieved",
+          "retrieved_at": "2026-11-02T09:29:03.948795+00:00"
+        }
+      ],
+      "title": "Shopify Pricing: Find the Right Plan for Your Business - Shopify",
+      "final_url": "https://www.shopify.com/pricing",
+      "content_sha256": "0139b4345919781649b81c02d23f7abbff8d19a916cef8363858835df04ae2bc",
+      "capability": "plan feature availability",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": "Compare features across Shopify plans",
+      "passage_digest": "13effd7c0292daf10a3e03160603718322f2a1833c73101f277e2153382fe56b",
+      "unknowns": [
+        "version applicability is not established for at least one page",
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "shopify_help_basic_plan",
+      "source_id": "shopify_docs",
+      "requested_url": "https://help.shopify.com/en/manual/intro-to-shopify/pricing-plans/plans-features/basic-shopify-plan",
+      "fetch": [
+        {
+          "status": "unavailable",
+          "reason": "vendor returned an error",
+          "retrieved_at": null
+        }
+      ],
+      "title": null,
+      "final_url": null,
+      "content_sha256": null,
+      "capability": "plan feature availability",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": null,
+      "passage_digest": null,
+      "unknowns": [
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
+    },
+    {
+      "case": "shopify_help_b2b_plan_features",
+      "source_id": "shopify_docs",
+      "requested_url": "https://help.shopify.com/en/manual/b2b/getting-started/plan-features",
+      "fetch": [
+        {
+          "status": "unavailable",
+          "reason": "vendor returned an error",
+          "retrieved_at": null
+        }
+      ],
+      "title": null,
+      "final_url": null,
+      "content_sha256": null,
+      "capability": "plan feature availability",
+      "outcome": "unknown_support",
+      "citations": [],
+      "passage": null,
+      "passage_digest": null,
+      "unknowns": [
+        "no approved page in the set states this capability for the requested version"
+      ],
+      "refusals": []
     }
   ]
 }

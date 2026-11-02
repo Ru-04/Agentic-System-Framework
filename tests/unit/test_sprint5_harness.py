@@ -157,9 +157,9 @@ def test_a_specialist_without_an_active_source_is_unsupported_not_investigated()
             [
                 {
                     "scenario_id": "A",
-                    "specialist_id": "shopify",
+                    "specialist_id": "shift4shop",
                     "category": "synthetic_fixture",
-                    "requirement": "Check the plan feature availability.",
+                    "requirement": "Read products through the Shift4Shop product API.",
                     "expected": "INVESTIGATE",
                     "note": "",
                 }
@@ -201,7 +201,8 @@ def test_the_v2_runner_result_under_the_current_runner_has_one_mismatch() -> Non
     report = evaluate(load_dataset(V2_DATASET, V2_MANIFEST), observe)
     mismatched = {r.scenario_id for r in report.results if not r.matched}
     # S5-008 mismatches here: the Adobe exact page was activated on 2 Nov 2026 (v5 amends it).
-    assert mismatched == {"S5-006", "S5-008"}
+    # S5-001 and S5-008 mismatch here: the Shopify and Adobe pages were activated (v5 and v8).
+    assert mismatched == {"S5-001", "S5-006", "S5-008"}
     by_id = {r.scenario_id: r for r in report.results}
     # S5-006 stays a mismatch in v2 only: v2 expects INVESTIGATE, and no version is stated.
     assert by_id["S5-006"].observed == "INVESTIGATE_WITH_UNKNOWNS"
@@ -249,8 +250,8 @@ def test_the_v3_runner_result_under_the_current_runner_is_eleven_of_eleven() -> 
     from webdesk.evaluation.runner import observe
 
     report = evaluate(load_dataset(V3_DATASET, V3_MANIFEST), observe)
-    # S5-008 is the Adobe activation change, amended in v5.
-    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-008"]
+    # S5-001 is the Shopify activation and S5-008 the Adobe activation (amended in v8 and v5).
+    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-001", "S5-008"]
 
 
 V4_DATASET = DATA / "sprint5_scenarios_v4.json"
@@ -279,7 +280,7 @@ def test_v4_runner_result_differs_only_where_v5_amends_the_activation() -> None:
 
     report = evaluate(load_dataset(V4_DATASET, V4_MANIFEST), observe)
     mismatched = [r.scenario_id for r in report.results if not r.matched]
-    assert mismatched == ["S5-008", "S5-024", "S5-030"]
+    assert mismatched == ["S5-001", "S5-008", "S5-012", "S5-024", "S5-030"]
 
 
 V5_DATASET = DATA / "sprint5_scenarios_v5.json"
@@ -294,7 +295,11 @@ def test_v5_differs_from_the_runner_only_on_the_middleware_synchronisation_case(
     v5 = {s.scenario_id: s for s in v5_ds.scenarios}
     assert {sid for sid in v4 if v4[sid].expected != v5[sid].expected} == {"S5-008", "S5-024"}
     report = evaluate(v5_ds, observe)
-    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-030"]
+    assert [r.scenario_id for r in report.results if not r.matched] == [
+        "S5-001",
+        "S5-012",
+        "S5-030",
+    ]
 
 
 V6_DATASET = DATA / "sprint5_scenarios_v6.json"
@@ -309,7 +314,8 @@ def test_v6_matches_every_scenario_and_changes_only_the_middleware_case() -> Non
     v6 = {s.scenario_id: s for s in v6_ds.scenarios}
     assert {sid for sid in v5 if v5[sid].expected != v6[sid].expected} == {"S5-030"}
     report = evaluate(v6_ds, observe)
-    assert [r.scenario_id for r in report.results if not r.matched] == []
+    # Mismatches under the current runner: S5-001 and S5-012 (Shopify activation, amended in v8).
+    assert [r.scenario_id for r in report.results if not r.matched] == ["S5-001", "S5-012"]
 
 
 def test_the_redirect_request_is_refused_before_any_capability_match() -> None:
@@ -387,3 +393,24 @@ def test_a_version_named_in_the_requirement_is_read_from_the_text() -> None:
     assert stated_version("Read products on Magento Open Source 2.4.7.") == "2.4.7"
     assert stated_version("Read a product, API version v3.") == "v3"
     assert stated_version("Read a single product through the product page.") is None
+
+
+V8_DATASET = DATA / "sprint5_scenarios_v8.json"
+V8_MANIFEST = DATA / "sprint5_scenarios_v8.manifest.json"
+
+
+def test_v8_matches_every_scenario_and_changes_only_the_two_shopify_activation_cases() -> None:
+    from webdesk.evaluation.runner import observe
+
+    v7 = {
+        s.scenario_id: s
+        for s in load_dataset(
+            V6_DATASET.parent / "sprint5_scenarios_v7.json",
+            V6_DATASET.parent / "sprint5_scenarios_v7.manifest.json",
+        ).scenarios
+    }
+    v8_ds = load_dataset(V8_DATASET, V8_MANIFEST)
+    v8 = {s.scenario_id: s for s in v8_ds.scenarios}
+    assert {sid for sid in v7 if v7[sid].expected != v8[sid].expected} == {"S5-001", "S5-012"}
+    report = evaluate(v8_ds, observe)
+    assert [r.scenario_id for r in report.results if not r.matched] == []

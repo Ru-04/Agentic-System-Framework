@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
-from webdesk.evidence.allowlist import SHOPIFY_PLAN_SCOPES, VendorAllowlist
+from webdesk.evidence.allowlist import SHOPIFY_PLAN_SCOPES, ScopedHost, VendorAllowlist
 from webdesk.evidence.approved_boundaries import (
     ADOBE_COMMERCE_EXACT,
     ADOBE_SHARED,
@@ -57,16 +57,27 @@ class ClaimKind(StrEnum):
     RELEASE_VERSION = "release_version"
 
 
-# Shopify boundary as approved for the Sprint 2 evaluation (S2-D07 to S2-D09). Registered
-# here as INACTIVE: it is listed in no active set, so only synthetic pages are used.
-SHOPIFY_INACTIVE: Final[VendorAllowlist] = VendorAllowlist(
+# Shopify plan-feature boundary, exact pages only. Approved by WDS on 2 November 2026 (consolidated
+# source table). Pricing (S2-D08, /plus excluded because it redirects) and two Help Center pages
+# (S2-D07, permitted access only, no 403 bypass). No prefix, no subtree, no other path.
+SHOPIFY_PLAN_EXACT: Final[VendorAllowlist] = VendorAllowlist(
     frozenset(),
-    scoped=SHOPIFY_PLAN_SCOPES,
+    scoped=(
+        ScopedHost("www.shopify.com", (), exact_paths=("/pricing",)),
+        ScopedHost(
+            "help.shopify.com",
+            (),
+            exact_paths=(
+                "/en/manual/intro-to-shopify/pricing-plans/plans-features/basic-shopify-plan",
+                "/en/manual/b2b/getting-started/plan-features",
+            ),
+        ),
+    ),
 )
 
 # Approved boundary per (platform, edition). Inactive configuration, as approved.
 BOUNDARIES: Final[dict[tuple[str, Edition], VendorAllowlist]] = {
-    ("shopify", Edition.NOT_APPLICABLE): SHOPIFY_INACTIVE,
+    ("shopify", Edition.NOT_APPLICABLE): SHOPIFY_PLAN_EXACT,
     ("woocommerce", Edition.NOT_APPLICABLE): WOOCOMMERCE_DOCS,
     ("bigcommerce", Edition.NOT_APPLICABLE): BIGCOMMERCE_DOCS,
     ("adobe_commerce", Edition.ADOBE_COMMERCE): ADOBE_COMMERCE_EXACT,
@@ -90,6 +101,7 @@ ACTIVE_BOUNDARIES: Final[frozenset[tuple[str, Edition]]] = frozenset(
         ("bigcommerce", Edition.NOT_APPLICABLE),
         ("adobe_commerce", Edition.ADOBE_COMMERCE),
         ("magento_open_source", Edition.MAGENTO_OPEN_SOURCE),
+        ("shopify", Edition.NOT_APPLICABLE),
     }
 )
 

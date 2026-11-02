@@ -1,0 +1,23 @@
+{
+  "dataset_id": "sprint5-scenarios-v8-2026-11-02",
+  "sha256": "d3486591cdbb3b6fbe0b17403c49c175af601d0df3046381912371c3e2bc14ff",
+  "supersedes": {
+    "dataset_id": "sprint5-scenarios-v7-2026-11-02",
+    "file": "sprint5_scenarios_v7.json"
+  },
+  "changes": [
+    {
+      "scenario_id": "S5-001",
+      "from": "UNSUPPORTED_SOURCE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "Shopify plan-feature boundary activated (exact pages) on 2 Nov 2026. No version stated, so rule 4 applies."
+    },
+    {
+      "scenario_id": "S5-012",
+      "from": "UNSUPPORTED_SOURCE",
+      "to": "INVESTIGATE_WITH_UNKNOWNS",
+      "reason": "Shopify plan-feature boundary activated (exact pages) on 2 Nov 2026. No version stated, so rule 4 applies."
+    }
+  ],
+  "note": "Frozen manifest. Re-amended because a source activation changed expectations. Not approved as acceptance criteria."
+}
