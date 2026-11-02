@@ -222,3 +222,41 @@ def test_h60_a_wrong_type_file_is_415_even_with_a_stale_revision(
     assert response.json() == {"error": "unsupported_type"}
     assert _audit_count(http, "source.upload.refused", "unsupported_type") == 1
     assert _source_count(http) == 0
+
+
+def test_h60_size_and_type_are_checked_before_authorization(
+    http: dict[str, object],  # noqa: F811
+) -> None:
+    """F-1: a user refused upload (403) for a valid file still gets 415 and 413 for a bad one."""
+    client = _client(http)
+    engine = http["engine"]
+    assert isinstance(engine, Engine)
+    headers = _auth(str(http["admin_token"]))
+    data = {**FIELDS, "expected_project_revision": str(_revision(engine, str(http["project"])))}
+    url = f"/projects/{http['project']}/sources"
+
+    valid = client.post(
+        url, headers=headers, data=data, files={"file": ("notes.txt", b"valid\n", "text/plain")}
+    )
+    assert valid.status_code == 403, valid.text
+
+    wrong_type = client.post(
+        url,
+        headers=headers,
+        data=data,
+        files={"file": ("tool.exe", b"MZ not a document\n", "application/octet-stream")},
+    )
+    assert wrong_type.status_code == 415, wrong_type.text
+    assert wrong_type.json() == {"error": "unsupported_type"}
+
+    too_large = client.post(
+        url,
+        headers=headers,
+        data=data,
+        files={"file": ("big.txt", b"x" * (20 * 1024 * 1024 + 1), "text/plain")},
+    )
+    assert too_large.status_code == 413, too_large.text
+    assert too_large.json() == {"error": "too_large"}
+    assert _audit_count(http, "source.upload.refused", "unsupported_type") == 1
+    assert _audit_count(http, "source.upload.refused", "too_large") == 1
+    assert _source_count(http) == 0
