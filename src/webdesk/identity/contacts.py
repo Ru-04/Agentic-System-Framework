@@ -232,6 +232,13 @@ def approve_create(
             "SELECT webdesk_guard.fn_approve_create_with_proof(:p, :a, :ref)",
             {"p": proof, "a": approval_id, "ref": proof_ref.strip()},
         )
+    except ProofRefused as exc:
+        # Phase 2 (QA F-05) made the guard's approval_not_pending a named proof refusal. A create
+        # approval that loses a race to a concurrent decision keeps its audited 409 outcome.
+        if exc.reason != "approval_not_pending":
+            raise
+        _audit_denial(conn, approver, "contact.approve.denied", "approval_refused")
+        raise ContactServiceError(409, "approval_refused") from exc
     except SQLAlchemyError as exc:
         _audit_denial(conn, approver, "contact.approve.denied", "approval_refused")
         raise ContactServiceError(409, "approval_refused") from exc

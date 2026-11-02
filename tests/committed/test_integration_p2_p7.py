@@ -5,6 +5,8 @@
   both the claim's correlation UUID and the run's project.
 - On-demand expiry of a pending contact change is decided on the database wall clock (migration
   0057; relayed WDS ruling PH3-FC-01, H-76), not on the start time of the surrounding transaction.
+- A create approval that loses to a concurrent decision is an audited 409 contact refusal, as
+  before Phase 2 named the guard's ``approval_not_pending`` a proof refusal.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from tests.committed.test_durable_execution import (  # noqa: F401 - fixtures an
 from tests.support.people import _email, committed_active_user
 from tests.support.proofs import prove
 from webdesk.identity import contacts
+from webdesk.identity.contacts import ContactServiceError
 from webdesk.identity.email import ContactEmailPolicy
 from webdesk.runs import committed, jobs
 from webdesk.runs.errors import RunError
@@ -223,3 +226,47 @@ def test_on_demand_expiry_releases_a_change_that_expired_after_the_transaction_b
             {"a": stale},
         ).scalar_one()
     assert (status, int(held)) == ("expired", 0)
+
+
+# --- A losing create approval stays an audited 409 (Phase 2 F-05 with the create path) --------
+
+
+def test_a_create_approval_that_loses_to_a_committed_decision_is_an_audited_409(
+    committed_engine: Engine,
+    committed_admins: tuple[uuid.UUID, uuid.UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    creator, approver = committed_admins
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        _user, approval = contacts.request_create(
+            conn, prove(conn, creator, "contact.request.create"), POLICY, _email(), "Race"
+        )
+        pending = contacts._pending_approval(conn, approval, "create")
+    with committed_engine.begin() as conn:
+        conn.execute(text("SET LOCAL ROLE webdesk_app"))
+        contacts.approve_create(
+            conn, prove(conn, approver, "contact.approve.create", approval), approval, "ref-1"
+        )
+    # The loser read the approval as pending before the winner committed: the service check
+    # passes, and the guard refuses with approval_not_pending.
+    monkeypatch.setattr(contacts, "_pending_or_refuse", lambda *_args: pending)
+    with committed_engine.connect() as conn:
+        with conn.begin():
+            conn.execute(text("SET LOCAL ROLE webdesk_app"))
+            proof = prove(conn, approver, "contact.approve.create", approval)
+        with pytest.raises(ContactServiceError) as exc, conn.begin():
+            conn.execute(text("SET LOCAL ROLE webdesk_app"))
+            try:
+                contacts.approve_create(conn, proof, approval, "ref-2")
+            finally:
+                conn.execute(text("RESET ROLE"))
+                denied = conn.execute(
+                    text(
+                        """SELECT count(*) FROM audit_events
+                           WHERE event_type = 'contact.approve.denied'
+                             AND error_class = 'approval_refused'"""
+                    )
+                ).scalar_one()
+    assert (exc.value.status, exc.value.reason) == (409, "approval_refused")
+    assert int(denied) == 1
