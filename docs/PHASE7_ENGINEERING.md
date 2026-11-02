@@ -125,8 +125,22 @@ All four are new; no accepted migration (0001–0045) was edited.
   ("I have given my formal phase 7 acceptance"). The approver identity, signature, approval-channel reference and
   artifact digests are not in this repository and have not been filled in.
 - Post-acceptance, test-only commit 89d6ef2 closes QA finding F-1 (a test that H-60 size and type checks run
-  before authorization; mutation-checked). It changes no source code. Its independent re-check is part of the
-  cross-phase integration QA.
+  before authorization; mutation-checked). It changes no source code.
+- **Post-QA delta review of 89d6ef2: DELTA VERIFIED** (independent reviewer, a separate agent that did not write
+  the test; detached checkout `D:/WDS/qa-p7-delta-89d6ef2`, removed after the run). Findings:
+  - `89d6ef2` changes one file, `tests/integration/test_phase7_intake.py` (+38, no deletions). No existing assertion
+    was altered and no skip, xfail or new noqa was added.
+  - Focused run at 89d6ef2: `pytest tests/integration/test_phase7_intake.py`, 8 passed, 1 warning, exit 0. The file
+    holds 7 existing tests plus the new one.
+  - Mutation check: `validate_upload` moved after `_authorize` in a temporary copy. The new test fails
+    (`403 == 415`, `content_grant_missing`), exit 1. Restored copy passes again, exit 0.
+  - F-1 is resolved. The reviewer did not run the full suite, ruff or mypy, which were out of scope for this delta.
+  - Hygiene (LOW): the reviewer's tool output printed a restricted QA test database URL, including its password. The
+    password was not written to any file. Rotation is recommended and has not been done.
+  - Cosmetic (not blocking): the valid-file control expects 403 because the admin account is not a project member.
+    The docstring says "a user refused upload", and the variable name `admin_token` is misleading.
+- **Post-QA test delta verdict: VERIFIED.** The earlier QA pass on `ae032a2` did not cover `89d6ef2`. This delta
+  review covers only that commit.
 
 ## Cross-phase integration handoff
 
