@@ -57,3 +57,17 @@ Decision requested (one consolidated answer): approve, amend or reject each Part
 3. `engine.py` cites "S2-D07 to S2-D09" for Shopify. S2-D09 is the CRA decision. The citation needs correcting.
 4. The Sprint 2 global allowlist (`SPRINT2_ALLOWLIST`) and `PROPOSED_SHOPIFY_ALLOWLIST` permitted whole hosts. They now permit only the scoped Shopify plan pages and the CRA pages (Decision 2 applied in this cycle).
 5. The Sprint 2 corpus (16 `shopify.dev` pages, 22 October 2026) was fetched under the whole-host allowlist. No located decision approves those pages.
+
+## Part E. WDS decision recorded (2 November 2026)
+
+WDS decision: "Approve eligible rows."
+
+Result: **no new activation.** Part C found no row eligible beyond the sources already active (A2, A3, A4). The Part B rows are not eligible because their conditions are open: ownership checks, exact-path approvals, the S2-D08 confirmation, capability registration, or naming of a technology or product. No code, source status or dataset was changed by this decision.
+
+Rows still open, in the order they can be cleared:
+1. A5 (Adobe shared PHP): ownership check, then an activation decision.
+2. A6 (Shopify S2-D08 plan pages): WDS confirmation of S2-D08 and a permitted retrieval route.
+3. B1, B2, B3, B4 (Shopify help and shopify.dev): exact-path approvals under the restricted policy.
+4. B5 (Shift4Shop), B7 (Adobe REST reference): ownership checks and exact pages.
+5. B6 (WordPress core), B8 (BigCommerce orders): capability registration and host decisions.
+6. B9, B10: a named technology or product from WDS.
