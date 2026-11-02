@@ -850,16 +850,14 @@ def parse_eml(data: bytes) -> ParseResult:
     seen = {id(part) for part in parts}
     parts.extend(part for part in _eml_named_leaves(message) if id(part) not in seen)
     for part in parts:
-        if part.is_multipart():
-            # A named multipart part has no single decoded payload; its size is the serialized part.
-            payload = part.as_bytes()
-        else:
-            payload = part.get_payload(decode=True) or b""
+        payload = part.get_payload(decode=True) or b""
+        # A named multipart part has no single decoded payload; its size is the serialized part.
+        size = len(part.as_bytes()) if part.is_multipart() else len(payload)
         attachments.append(
             {
                 "filename": str(part.get_filename() or "attachment"),
                 "declared_mime_type": part.get_content_type(),
-                "declared_size_bytes": len(payload),
+                "declared_size_bytes": size,
                 "disposition": "unprocessed",
             }
         )
