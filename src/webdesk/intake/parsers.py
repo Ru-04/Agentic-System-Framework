@@ -798,11 +798,14 @@ def _eml_body(part: EmailMessage, subtype: str) -> EmailMessage | None:
 
 
 def _eml_named_leaves(part: EmailMessage) -> list[EmailMessage]:
-    """Named leaf parts (H-64), outside any attachment. The message itself counts when it is a
-    single named part."""
+    """Named parts (H-64), outside any attachment. The message itself counts when it is a single
+    named part. A named multipart part is one attachment and its children are not walked (ruled by
+    WDS in chat on 2 November 2026, "Report as attachment")."""
     if part.get_content_maintype() == "multipart" and part.is_multipart():
         if part.is_attachment():
             return []
+        if _eml_named(part):
+            return [part]
         leaves: list[EmailMessage] = []
         for child in part.iter_parts():
             leaves.extend(_eml_named_leaves(cast(EmailMessage, child)))
@@ -847,7 +850,11 @@ def parse_eml(data: bytes) -> ParseResult:
     seen = {id(part) for part in parts}
     parts.extend(part for part in _eml_named_leaves(message) if id(part) not in seen)
     for part in parts:
-        payload = part.get_payload(decode=True) or b""
+        if part.is_multipart():
+            # A named multipart part has no single decoded payload; its size is the serialized part.
+            payload = part.as_bytes()
+        else:
+            payload = part.get_payload(decode=True) or b""
         attachments.append(
             {
                 "filename": str(part.get_filename() or "attachment"),

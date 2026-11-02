@@ -69,6 +69,39 @@ def test_an_unnamed_single_part_message_is_still_the_body() -> None:
     assert _attachment_names(data) == []
 
 
+def test_a_named_multipart_part_is_one_attachment_and_its_children_are_not_parsed() -> None:
+    """Ruled by WDS in chat on 2 November 2026 ("Report as attachment")."""
+    nested = (
+        "--INNER\r\nContent-Type: text/plain\r\n\r\ninner text, not the body\r\n"
+        "--INNER\r\nContent-Type: text/html\r\n\r\n<p>inner html</p>\r\n--INNER--"
+    )
+    data = _multipart(
+        ('Content-Type: multipart/alternative; boundary=INNER; name="bundle"', nested),
+        ("Content-Type: text/plain", "the real body"),
+    )
+    result = parse_eml(data)
+    assert [segment.text for segment in result.segments] == ["Hello", "the real body"]
+    assert [item["filename"] for item in result.unprocessed_attachments] == ["bundle"]
+    assert result.unprocessed_attachments[0]["declared_mime_type"] == "multipart/alternative"
+    assert result.unprocessed_attachments[0]["declared_size_bytes"] > 0
+
+
+def test_a_named_multipart_part_alone_gives_no_body_and_is_reported() -> None:
+    nested = "--INNER\r\nContent-Type: text/plain\r\n\r\nonly inner text\r\n--INNER--"
+    data = _multipart(('Content-Type: multipart/mixed; boundary=INNER; name="bundle"', nested))
+    result = parse_eml(data)
+    assert [segment.text for segment in result.segments] == ["Hello"]
+    assert [item["filename"] for item in result.unprocessed_attachments] == ["bundle"]
+    assert result.flagged_regions == []
+
+
+def test_an_unnamed_multipart_part_is_still_walked() -> None:
+    nested = "--INNER\r\nContent-Type: text/plain\r\n\r\nnested body\r\n--INNER--"
+    data = _multipart(("Content-Type: multipart/alternative; boundary=INNER", nested))
+    assert _texts(data) == ["Hello", "nested body"]
+    assert _attachment_names(data) == []
+
+
 def test_a_named_html_part_is_not_an_html_only_body() -> None:
     data = _multipart(('Content-Type: text/html; name="page.html"', "<p>attached page</p>"))
     result = parse_eml(data)
