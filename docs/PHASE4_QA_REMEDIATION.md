@@ -83,7 +83,8 @@ ratio 100 to file size; per-page content and direct form stream 10 MiB; child ti
 
 ## 5. Known open residuals
 
-- QA-06: text in nested form XObjects is not followed and not flagged.
+- QA-06: text in nested form XObjects is flagged, not extracted (Option B). An image in a nested form flags an image-only
+  page (F-1, section 11). Images on pages that have text are not flagged (section 11).
 - QA-05 (Windows): no memory cap in the child on Windows (H-DEC-4, production blocker).
 - TXT and EML offset values are per the approved schema. Any dispute on offset basis belongs to WDS.
 
@@ -222,9 +223,9 @@ reviewer must re-test QA-05 and QA-06 from `PHASE4_PDF_CONTAINMENT.md` and `test
 |---|---|
 | D1 ASCII85 not metered | Fixed: worst-case reservation before decode |
 | D2 filter refusal swallowed by reader rebuild | Fixed: file fails with `pdf_filter_unsupported` |
-| D3 replacement characters without flag | Fixed: page flagged, segment kept |
+| D3 replacement characters without flag | Fixed: page flagged, segment kept. *Corrected by F-4 (section 11): a segment of only U+FFFD is not committed.* |
 | D4 admission in API process, no time bound | Fixed for the enforced bound: admission runs in the timed child. Reviewer's specific xref-loop repro not reproduced by a synthetic fixture |
-| D5 upload read unbounded before size check | Partly fixed: read capped at max+1. Framework multipart buffering remains a residual |
+| D5 upload read unbounded before size check | Partly fixed: read capped at max+1. Framework multipart buffering remains a residual. *Corrected by F-2 (section 11): the source upload's body is bounded before it is buffered.* |
 
 Gate on `f416716` (developer cluster `webdesk-p4-postgres`, system identifier `7701663525754380326`), run after the
 cluster was restarted without changing its data: focused 118 passed; committed outcomes 16 passed; concurrency 3 passed;
@@ -232,3 +233,78 @@ crash and timeout 3 passed (23 deselected); corpus 2 passed; full regression **7
 privilege audit 34 passed; migration and catalog ok; demonstration 1 passed; Ruff lint clean; Ruff format exit 1 with
 the six documented exception files; strict mypy clean. Earlier invalid runs (cluster down, and an overlapping run) are
 not counted.
+
+## 11. Remediation of the independent QA of `178a419` (F-1 to F-6)
+
+Independent QA verdict on `178a419`: FAILED, six confirmed defects (`C:/Users/baps/AppData/Local/Claude-Data/.../phase4-indep-qa-report.md`,
+held outside the repository). This section records the engineering remediation. It is not independent QA and not WDS
+acceptance. The independent reviewer re-tests the engineering SHA below.
+
+Engineering commits on `feature/foundation-phase-4`, in order:
+
+| Commit | Content |
+|---|---|
+| `ba710ee` | F-1, F-3, F-4: nested image-only pages, replacement-only text, DOCX text boxes, headers and footers |
+| `6c53aa8` | F-2: source upload body bounded before buffering |
+| `c42b9d7` | F-5: admission applies the per-page bound; F-6 is in the next commit |
+| `ee4d3b9` | F-6: child stdout read with the output cap enforced while the child writes |
+| `b604e7b` | Lint and strict typing for the remediation changes (no behaviour change). **Engineering SHA.** |
+
+Each finding has a regression test that failed before its fix and passes after it. Red was observed by running the
+new test against the unfixed code, except where noted.
+
+| Finding | Fix | Test (red before fix) | Control (passed before and after) |
+|---|---|---|---|
+| F-1 (High, QA-06) | The image rule walks forms, patterns and Type 3 fonts, with the text walk's bounds | `test_qa06_an_image_only_form_inside_a_page_flags_the_page_not_a_silent_omission`; `test_qa06_an_image_two_forms_deep_is_flagged_as_well` | `test_qa06_a_vector_only_nested_form_is_still_not_flagged` |
+| F-2 (High, D5) | `_bounded_form` in `api/routes.py`: declared length checked, then bytes counted as received; 413 `too_large` past `MAX_UPLOAD_REQUEST_BYTES` | `tests/unit/test_upload_body_bound.py::test_f2_a_body_over_the_limit_is_refused_before_the_rest_of_it_is_read`; `::test_f2_a_declared_length_over_the_limit_is_refused_without_reading_the_body`; `tests/committed/test_http_intake.py::test_f2_an_upload_over_the_request_bound_is_refused_and_no_source_is_created` (200 before, 413 after) | `::test_f2_a_body_within_the_limit_is_parsed_as_before` |
+| F-3 (Medium-High, H-33) | `textbox_index` locator for text-box paragraphs; table in a text box flagged; header and footer parts with text flagged; VML fallback not read twice | `test_f3_a_text_box_paragraph_is_a_segment_with_a_textbox_locator`; `test_f3_a_text_box_in_a_table_cell_is_extracted_once`; `test_f3_a_text_box_offered_as_a_fallback_and_a_choice_is_extracted_once`; `test_f3_a_text_box_holding_a_table_is_flagged_not_dropped`; `test_f3_footer_text_is_flagged_as_an_unextracted_region_and_not_extracted`; `test_f3_header_text_is_flagged_as_an_unextracted_region` | `test_f3_an_empty_header_and_footer_are_not_flagged` |
+| F-4 (Medium, D3) | A page whose text is only U+FFFD commits no segment; it stays flagged | `test_d3_a_page_whose_only_extracted_text_is_replacement_characters_commits_no_segment` (committed five U+FFFD) | Existing D3 test |
+| F-5 (Low-Medium) | `open_pdf_structure` applies the per-page bound; filter refusals and other faults are still admitted | `test_f5_admission_refuses_an_oversized_page_before_any_version_exists` (did not raise before) | `test_f5_admission_does_not_refuse_a_page_the_parser_only_flags_for_its_filter` |
+| F-5 (child path) | Same bound through `open_pdf_in_child` | `test_f5_the_admission_child_refuses_an_oversized_page_before_any_version_exists`. **Written after the fix; not observed red separately.** It goes through the same function as the red test above. | — |
+| F-6 (Low) | `_run_child` reads stdout while the child runs, at most cap plus one byte, then kills the child | `test_f6_an_endless_child_output_is_stopped_at_the_cap_not_at_the_timeout` (timed out at 20 s before); `test_f6_the_child_is_reaped_when_its_output_is_refused` (timed out before) | `test_f6_output_within_the_cap_is_returned_whole_with_the_exit_code` (failed before only on the changed return type) |
+
+Default decisions that need WDS confirmation are recorded as D-H10 to D-H14 in `PHASE4_DEPENDENCY_REGISTER.md`, and in
+section 10 of `PHASE4_PDF_CONTAINMENT.md`.
+
+**Known harness issue, not changed by this remediation.** Two hardening test files read `WEBDESK_HARDENING_OWNER_URL` with
+`os.environ[...]` and do not check it. When hardening is not configured they error instead of skipping. They are unchanged
+since `178a419`. Step 02 of the gate below shows this.
+
+### 11.1 Developer gate on `b604e7b`
+
+Cluster `webdesk-p4-postgres` (`127.0.0.1:55434`). The container had stopped (exit 255) and was started with
+`docker start`. Its volume was not changed. Databases: `webdesk_p4_integration`, `webdesk_p4_hardening`, and the scratch
+`webdesk_p4_migcheck`, which was created and dropped by the gate. The gate's 16 rows follow the QA report's G1 to G16 list.
+Row 12 (base downgrade) was not run. Full log and summary: the session scratchpad, `gate/summary.txt`.
+
+| # | Step | Result | Exit |
+|---|---|---|---|
+| 01 | Unit suite | 277 passed, 1 warning | 0 |
+| 02 | Full regression, hardening not configured | 605 passed, 6 failed, 203 skipped (harness KeyError, above) | 1 |
+| 03 | Hardening suites as restricted login | 210 passed | 0 |
+| 04 | Full regression, hardening configured | **814 passed**, 1 warning, 0 failed | 0 |
+| 05 | Focused Phase 4 gate | 234 passed, 1 warning | 0 |
+| 06 | Synthetic demonstration | 1 passed | 0 |
+| 07 | Ruff lint (`src tests`) | All checks passed | 0 |
+| 08 | Ruff format check | Two files only: the documented exceptions | 1 (by policy) |
+| 09 | Strict mypy (`src/webdesk`) | No issues in 60 files | 0 |
+| 10 | Alembic upgrade head, fresh database | `0043_phase2_review_fixes (head)` | 0 |
+| 11 | Alembic upgrade head, downgrade -1, upgrade head | head `0043_phase2_review_fixes`. The first attempt was a runner error (its sequence started on an empty database); the re-run passed | 0 |
+| 12 | Alembic downgrade base | **Not run.** QA saw DependentObjectsStillExist on a shared cluster | — |
+| 13 | Restricted-login privilege audit | 17 passed | 0 |
+| 14 | Corpus manifest | 2 passed | 0 |
+| 15 | Crash, hang, output cap | 29 passed | 0 |
+| 16 | Committed outcomes and concurrency | 19 passed | 0 |
+
+Totals: 814 passed in the configured full regression, against 793 passed at `f416716` (the earlier gate on the same cluster).
+Strict mypy is clean. Ruff lint is clean. Ruff format has only the two documented exceptions.
+
+### 11.2 Open, not in this remediation
+
+- Windows process memory (H-DEC-4) is not contained. Not touched.
+- Base migration round trip (row 12) is not run.
+- Page-count limit (500) is applied by the parser only, not at admission (D-H12).
+- Images on pages that have text are not flagged (D-H13).
+- Footnotes, endnotes and comments in DOCX are not read.
+- The two hardening test files that index the owner URL directly (step 02).
+- The QA-07 Phase 3 lease ordering is still unverified on this branch.
