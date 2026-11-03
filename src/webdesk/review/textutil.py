@@ -69,6 +69,11 @@ def clean_text(value: object, message: str) -> str:
     return _checked(stripped, message)
 
 
+def is_blank(value: object) -> bool:
+    """True for exact text that holds only whitespace and invisible characters."""
+    return type(value) is str and not _trim(value)
+
+
 def exact(value: object, cls: type[_T], message: str) -> _T:
     """Return ``value`` only when its type is exactly ``cls`` (no subclass, no duck type)."""
     if type(value) is not cls:

@@ -8,10 +8,11 @@ PROVISIONAL VOCABULARY. The source-status vocabulary (OPEN-07) and the confidenc
 (OPEN-08) are not confirmed. Every label below carries its open item, so that a later confirmed
 vocabulary replaces the labels in one place and no caller depends on the wording.
 
-Free text (identifier, source reference, edition, version) is shown beside the status. Text that
-reads as a verification claim is refused. The guard is best effort: it folds the Latin look-alikes
-listed below, and it does not map cross-script look-alikes such as Cyrillic letters. The status
-path does not depend on it, because status values come from a closed vocabulary.
+Free text (identifier, source reference, edition, version) is shown beside the status. A word in
+that text that claims verification is refused (see _claims_verification). The guard is best effort:
+it folds the Latin look-alikes listed below, and it does not map cross-script look-alikes such as
+Cyrillic letters. The status path does not depend on it, because status values come from a closed
+vocabulary and are refused at construction otherwise.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-from webdesk.review.textutil import clean_key, clean_text, exact
+from webdesk.review.textutil import clean_key, clean_text, exact, is_blank
 
 SOURCE_STATUS_OPEN_ITEM = "OPEN-07"
 CONFIDENCE_OPEN_ITEM = "OPEN-08"
@@ -67,25 +68,40 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
-# The assertion forms of the word: verified, verify, verifier. Not "unverified" (a status label in
-# the vocabulary), and not "verification" (an ordinary noun in a source name).
-_VERIFICATION_CLAIM = re.compile(r"(?<!un)verif(?:ied|y|ier)")
+# A word is a verification claim when it is the word "verif" in any inflection that asserts a
+# result: verified, verify, verifies, verifying, verifier, verifiable. The check works on whole
+# words, so "unverified" (a status label) and "verification" (a noun in a source name) are not
+# claims, and a word that happens to end in "un" (for example "Run") cannot hide a claim beside it.
+_LETTER_RUN = re.compile(r"[^\W\d_]+")
+_SPACED_LETTERS = re.compile(r"verif(?!ication)")
 
 
 def _claims_verification(text: str) -> bool:
-    """True when the text, once normalised, contains "verif".
+    """True when the text contains a word that claims verification, after normalisation.
 
-    Normalisation applies NFKC (fullwidth and compatibility forms), folds the Latin look-alikes
-    above, drops format and combining characters (zero-width spaces, dotted capitals), drops every
-    non-letter (spaces and punctuation used to split the word), and folds case.
+    Normalisation applies NFKC, folds the Latin look-alikes listed above, removes combining and
+    format characters (zero-width spaces, dotted capitals), and folds case. Words are then taken as
+    runs of letters. A word claims verification when it starts with "verif" and is not
+    "verification" or "verifications". Single letters that run together (a spelled-out word such as
+    "v e r i f i e d") are joined and checked as one word. Cross-script look-alikes are not mapped
+    (R5), and visual
+    look-alikes outside the fold table are not caught (R7).
     """
     folded = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
-    letters = "".join(
+    stripped = "".join(
         char
         for char in unicodedata.normalize("NFD", folded)
-        if unicodedata.category(char)[0] == "L"
+        if unicodedata.category(char) not in ("Mn", "Cf")
     )
-    return _VERIFICATION_CLAIM.search(letters) is not None
+    words = _LETTER_RUN.findall(stripped)
+    if any(_is_claim_word(word) for word in words):
+        return True
+    spelled = "".join(word for word in words if len(word) == 1)
+    return bool(spelled) and _SPACED_LETTERS.search(spelled) is not None and "verif" in spelled
+
+
+def _is_claim_word(word: str) -> bool:
+    return word.startswith("verif") and not word.startswith(("verification", "verifications"))
 
 
 @dataclass(frozen=True)
@@ -117,8 +133,8 @@ class Citation:
             raise ValueError("the confidence must be one of the recorded confidence levels")
         for name in ("edition", "version"):
             value = getattr(self, name)
-            if value is None or (type(value) is str and value == ""):
-                # An empty edition or version means that none was recorded.
+            if value is None or is_blank(value):
+                # An empty (or invisible-only) edition or version means none was recorded.
                 object.__setattr__(self, name, None)
                 continue
             object.__setattr__(self, name, clean_text(value, f"the citation {name} must be text"))

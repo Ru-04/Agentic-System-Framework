@@ -62,6 +62,10 @@ def _aware(value: object, name: str) -> datetime:
     checked = exact(value, datetime, f"{name} must be a datetime")
     if checked.utcoffset() is None:
         raise ValueError(f"{name} must be a timezone-aware datetime")
+    try:
+        checked.astimezone(UTC)
+    except (OverflowError, ValueError) as error:
+        raise ValueError(f"{name} is outside the supported range") from error
     return checked
 
 

@@ -26,6 +26,7 @@ from webdesk.review.estimates import (
     EstimateLine,
     EstimateSet,
     LineStatus,
+    decimal_text,
     render_total,
     total_estimate,
 )
@@ -304,8 +305,8 @@ def _requirement_row(req: Requirement) -> str:
     ack = req.acknowledgement
     if ack is not None:
         state += (
-            f", acknowledged by {ack.reviewer_id} at {ack.acknowledged_at.isoformat()}"
-            f" (reason: {ack.reason})"
+            f", acknowledged by {ack.reviewer_id} at "
+            f"{ack.acknowledged_at.astimezone(UTC).isoformat()} (reason: {ack.reason})"
         )
     return (
         f"<li>{_e(req.requirement_id)}: {_e(req.text)} "
@@ -335,7 +336,7 @@ def _estimate_row(line: EstimateLine, pending: frozenset[str]) -> str:
         else ""
     )
     if line.status == LineStatus.ESTIMATED:
-        hours = f"{line.low_hours}-{line.high_hours} hours"
+        hours = f"{decimal_text(line.low_hours)}-{decimal_text(line.high_hours)} hours"
     elif line.status == LineStatus.UNCERTAIN:
         hours = "uncertain, hours not stated"
     else:

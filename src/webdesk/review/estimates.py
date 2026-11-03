@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, localcontext
+from decimal import Context, Decimal, localcontext
 from enum import StrEnum
 
 from webdesk.review.textutil import clean_key, clean_text, enum_of, exact, items_of, text_items
@@ -243,7 +243,14 @@ def _count(lines: Sequence[EstimateLine], status: LineStatus) -> int:
     return sum(1 for line in lines if line.status == status)
 
 
+def decimal_text(value: Decimal | None) -> str:
+    """One text form per numeric value (1.5 and 1.50 both read 1.5; 1E+2 reads 100)."""
+    if value is None:
+        return "none"
+    return format(value.normalize(Context(prec=SUM_PRECISION)), "f")
+
+
 def _range_text(low: Decimal | None, high: Decimal | None) -> str:
     if low is None or high is None:
         return "none"
-    return f"{low}-{high}"
+    return f"{decimal_text(low)}-{decimal_text(high)}"
