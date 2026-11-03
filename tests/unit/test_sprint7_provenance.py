@@ -82,7 +82,9 @@ def test_a_raw_string_inferred_confirmed_without_acknowledgement_is_refused() ->
 def test_a_reviewer_acknowledgement_confirms_an_inference_and_keeps_its_source_type() -> None:
     confirmed = acknowledge_inference(_inferred(), _ack(), NOW)
     assert confirmed.is_confirmed
-    assert confirmed.acknowledgement == _ack()
+    assert confirmed.acknowledgement is not None
+    assert confirmed.acknowledgement.binding is not None
+    assert dataclasses.replace(confirmed.acknowledgement, binding=None) == _ack()
     assert confirmed.source_type is SourceType.INFERRED
     assert confirmed.source_label == "Inferred (not client-stated)"
 
@@ -129,12 +131,12 @@ def test_an_acknowledgement_within_clock_skew_is_accepted() -> None:
 
 
 def test_an_acknowledged_inference_cannot_be_relabelled_as_client_stated() -> None:
-    with pytest.raises(ValueError, match="only an inferred requirement"):
+    with pytest.raises(ValueError, match="only an acknowledged inference"):
         dataclasses.replace(_confirmed_inference(), source_type=SourceType.CLIENT_STATED)
 
 
 def test_an_acknowledged_inference_cannot_be_returned_to_pending_with_its_acknowledgement() -> None:
-    with pytest.raises(ValueError, match="must be confirmed"):
+    with pytest.raises(ValueError, match="belongs only to a confirmed"):
         dataclasses.replace(_confirmed_inference(), confirmation=ConfirmationState.PENDING_REVIEW)
 
 
@@ -144,7 +146,7 @@ def test_an_acknowledgement_cannot_be_moved_to_another_requirement() -> None:
 
 
 def test_a_client_stated_requirement_cannot_carry_an_acknowledgement() -> None:
-    with pytest.raises(ValueError, match="only an inferred requirement can carry"):
+    with pytest.raises(ValueError, match="only an acknowledged inference can be confirmed"):
         Requirement(
             requirement_id="REQ-T-1",
             text="Synthetic client text",
@@ -156,7 +158,7 @@ def test_a_client_stated_requirement_cannot_carry_an_acknowledgement() -> None:
 
 
 def test_an_acknowledgement_on_a_pending_requirement_is_refused() -> None:
-    with pytest.raises(ValueError, match="must be confirmed"):
+    with pytest.raises(ValueError, match="belongs only to a confirmed"):
         _inferred(acknowledgement=_ack())
 
 

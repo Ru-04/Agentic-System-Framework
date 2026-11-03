@@ -52,6 +52,13 @@ class EstimateLine:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "status", LineStatus(self.status))
+        # Copy the nested collections first, so a caller's list or generator cannot change the line
+        # after the assumption check below has run.
+        for name in ("complexity_drivers", "dependencies", "assumptions"):
+            items = tuple(getattr(self, name))
+            if not all(isinstance(item, str) for item in items):
+                raise ValueError(f"the estimate line {name} must hold text only")
+            object.__setattr__(self, name, items)
         for name, value in (
             ("line identifier", self.line_id),
             ("work item", self.work_item),

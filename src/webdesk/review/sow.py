@@ -44,9 +44,10 @@ class SowItem:
     refs: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "refs", tuple(self.refs))
         if not self.text.strip():
             raise ValueError("a SOW item needs text")
-        if not self.refs or not all(ref.strip() for ref in self.refs):
+        if not self.refs or not all(isinstance(ref, str) and ref.strip() for ref in self.refs):
             raise ValueError("every SOW item must carry at least one non-empty reference")
 
 
@@ -68,6 +69,22 @@ class DraftSowInput:
     citations: tuple[Citation, ...] = ()
 
     def __post_init__(self) -> None:
+        # Copy every collection into a tuple, so a caller's list cannot change the draft after
+        # its identifier and derived fields have been computed.
+        for name in (
+            "in_scope",
+            "out_of_scope",
+            "deliverables",
+            "acceptance_criteria",
+            "dependencies",
+            "assumptions",
+            "exclusions",
+            "uncertainties",
+            "risks",
+            "requirements",
+            "citations",
+        ):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
         if not self.title.strip() or not self.objective.strip():
             raise ValueError("a draft SOW needs a title and an objective")
         if not (self.in_scope and self.deliverables and self.acceptance_criteria):

@@ -17,10 +17,10 @@ import pytest
 from webdesk.review.estimates import EstimateLine, EstimateSet, LineStatus
 from webdesk.review.evidence import Citation
 from webdesk.review.provenance import (
-    ConfirmationState,
     Requirement,
     ReviewerAcknowledgement,
     SourceType,
+    acknowledge_inference,
 )
 from webdesk.review.sow import (
     APPROVAL_STATE,
@@ -46,25 +46,25 @@ def _items(raw: list[dict[str, Any]]) -> tuple[SowItem, ...]:
 
 
 def _requirement(raw: dict[str, Any]) -> Requirement:
-    ack_raw = raw.get("acknowledgement")
-    ack = (
-        ReviewerAcknowledgement(
-            requirement_id=raw["requirement_id"],
-            reviewer_id=ack_raw["reviewer_id"],
-            acknowledged_at=datetime.fromisoformat(ack_raw["acknowledged_at"]),
-            reason=ack_raw["reason"],
-        )
-        if ack_raw
-        else None
-    )
-    return Requirement(
+    # The fixture records a reviewer acknowledgement. It is applied through the same model call a
+    # reviewer uses, so the binding is produced by the code under test, not written by hand.
+    pending = Requirement(
         requirement_id=raw["requirement_id"],
         text=raw["text"],
         source_type=SourceType(raw["source_type"]),
         source_ref=raw["source_ref"],
-        confirmation=ConfirmationState(raw["confirmation"]),
-        acknowledgement=ack,
     )
+    ack_raw = raw.get("acknowledgement")
+    if not ack_raw:
+        return pending
+    acknowledged_at = datetime.fromisoformat(ack_raw["acknowledged_at"])
+    reviewer = ReviewerAcknowledgement(
+        requirement_id=raw["requirement_id"],
+        reviewer_id=ack_raw["reviewer_id"],
+        acknowledged_at=acknowledged_at,
+        reason=ack_raw["reason"],
+    )
+    return acknowledge_inference(pending, reviewer, acknowledged_at)
 
 
 def _estimate(raw: dict[str, Any] | None) -> EstimateSet | None:

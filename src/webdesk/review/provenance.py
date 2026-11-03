@@ -1,27 +1,32 @@
 """Provenance of requirements: client-stated versus inferred (S7-03).
 
 An inferred requirement is a statement the platform derived from client material. It is never a
-client statement. It can become CONFIRMED only through a reviewer acknowledgement that is bound to
-that requirement and names the reviewer, the time and the reason.
+client statement. In this model only an acknowledged inference can be CONFIRMED. A client-stated
+requirement stays PENDING_REVIEW (provisional decision P6), so no construction can yield a
+confirmed client requirement.
 
-An acknowledged inference carries an ``inference_seal``: a digest over the requirement identity,
-text, source and the acknowledgement. The seal is checked on every construction, so
-dataclasses.replace() cannot relabel an acknowledged inference as client-stated, drop its
-acknowledgement, or change its text or source while keeping the confirmation.
+An acknowledgement carries a ``binding``: a digest over the requirement identity, text, source and
+type, and over the acknowledgement's own reviewer, time and reason. ``acknowledge_inference`` sets
+it. Every Requirement that carries an acknowledgement checks the binding, so dataclasses.replace()
+cannot change the text, source, type, identity, reviewer, time or reason of an acknowledged
+inference while keeping the acknowledgement.
 
-Limits. A pure model cannot stop code that builds a new Requirement from nothing and declares it
-client-stated. That path is controlled where requirements are created from source material, which
-belongs to the S7-02 and S7-10 authority and is not implemented here. The time bound (no
-acknowledgement dated after the acceptance time plus CLOCK_SKEW) is checked in
-acknowledge_inference, which takes an explicit ``now``. The constructor has no clock, so it does
-not repeat that check. It is used to rebuild a record that has already been accepted.
+Limits (not enforced here, and recorded in the register):
+- A pure model cannot stop code that builds a fresh Requirement from nothing, or that drops the
+  acknowledgement and returns the object to pending as a client-stated requirement. Those routes
+  leave no confirmed record. Preventing silent relabelling needs an append-only, immutable store,
+  which is the S7-02 and S7-10 authority and is not implemented here.
+- The digest is unkeyed SHA-256. It detects accidental or partial edits. It does not authenticate
+  a reviewer, and a caller who computes the digest can forge an acknowledgement.
+- The time bound (no acknowledgement dated after the acceptance time plus CLOCK_SKEW) is checked in
+  acknowledge_inference, which takes an explicit ``now``. The constructor has no clock.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 
@@ -60,12 +65,18 @@ def _text(value: object, message: str) -> str:
 
 @dataclass(frozen=True)
 class ReviewerAcknowledgement:
-    """A reviewer's statement that they have read a named inference and accept it as confirmed."""
+    """A reviewer's statement that they have read a named inference and accept it as confirmed.
+
+    ``binding`` is filled in by ``acknowledge_inference``. A reviewer does not set it. It covers the
+    requirement's identity, text, source and type, and this acknowledgement's own reviewer, time and
+    reason, so none of them can change while the binding is kept.
+    """
 
     requirement_id: str
     reviewer_id: str
     acknowledged_at: datetime
     reason: str
+    binding: str | None = None
 
     def __post_init__(self) -> None:
         requirement_id = _text(self.requirement_id, "acknowledgement names no requirement")
@@ -85,7 +96,6 @@ class Requirement:
     source_ref: str
     confirmation: ConfirmationState = ConfirmationState.PENDING_REVIEW
     acknowledgement: ReviewerAcknowledgement | None = None
-    inference_seal: str | None = None
 
     def __post_init__(self) -> None:
         # Coerce first, so raw strings from untyped boundaries get the same checks as enums.
@@ -94,32 +104,25 @@ class Requirement:
         _text(self.requirement_id, "a requirement needs an identifier")
         _text(self.text, "a requirement needs text")
         _text(self.source_ref, "a requirement needs a source reference")
-        ack = self.acknowledgement
-        if ack is not None:
-            self._check_acknowledgement(ack)
-        if self.source_type == SourceType.INFERRED and self.is_confirmed and ack is None:
+        if self.is_confirmed and self.source_type != SourceType.INFERRED:
+            raise ValueError("only an acknowledged inference can be confirmed in this model")
+        if self.is_confirmed and self.acknowledgement is None:
             raise ValueError("an inferred requirement cannot be confirmed without acknowledgement")
-        if self.inference_seal is not None:
-            self._check_seal(ack)
+        if self.acknowledgement is not None:
+            self._check_acknowledgement(self.acknowledgement)
 
     def _check_acknowledgement(self, ack: object) -> None:
         if not isinstance(ack, ReviewerAcknowledgement):
             raise ValueError("the acknowledgement must be a ReviewerAcknowledgement")
-        if self.source_type != SourceType.INFERRED:
-            raise ValueError("only an inferred requirement can carry an acknowledgement")
+        if self.source_type != SourceType.INFERRED or not self.is_confirmed:
+            raise ValueError("an acknowledgement belongs only to a confirmed inferred requirement")
         if ack.requirement_id != self.requirement_id:
             raise ValueError("the acknowledgement names a different requirement")
-        if not self.is_confirmed:
-            raise ValueError("an acknowledged requirement must be confirmed")
-
-    def _check_seal(self, ack: ReviewerAcknowledgement | None) -> None:
-        # A sealed requirement is an acknowledged inference. Any drift from the seal is refused.
-        if self.source_type != SourceType.INFERRED or ack is None or not self.is_confirmed:
+        expected = _binding(self.requirement_id, self.text, self.source_ref, self.source_type, ack)
+        if ack.binding != expected:
             raise ValueError(
-                "an inference seal needs a confirmed, acknowledged inferred requirement"
+                "the acknowledgement does not bind this requirement's identity, text and source"
             )
-        if self.inference_seal != _seal(self.requirement_id, self.text, self.source_ref, ack):
-            raise ValueError("the inference seal does not match the requirement")
 
     @property
     def is_confirmed(self) -> bool:
@@ -133,7 +136,7 @@ class Requirement:
 def acknowledge_inference(
     requirement: Requirement, reviewer: ReviewerAcknowledgement, now: datetime
 ) -> Requirement:
-    """Return the requirement confirmed by a reviewer. The source type is kept as it was.
+    """Return the inferred requirement confirmed by a reviewer. The source type is kept as it was.
 
     ``now`` is supplied by the caller so that the time check is deterministic. The acknowledgement
     may not be dated after ``now`` plus CLOCK_SKEW.
@@ -146,18 +149,26 @@ def acknowledge_inference(
         raise ValueError("the acknowledgement must be a ReviewerAcknowledgement")
     if reviewer.requirement_id != requirement.requirement_id:
         raise ValueError("the acknowledgement names a different requirement")
-    if reviewer.acknowledged_at > _aware(now, "now") + CLOCK_SKEW:
+    try:
+        limit = _aware(now, "now") + CLOCK_SKEW
+    except OverflowError as error:
+        raise ValueError("now is too late to bound the acknowledgement time") from error
+    if reviewer.acknowledged_at > limit:
         raise ValueError("the acknowledgement is dated in the future")
-    return Requirement(
-        requirement_id=requirement.requirement_id,
-        text=requirement.text,
-        source_type=requirement.source_type,
-        source_ref=requirement.source_ref,
-        confirmation=ConfirmationState.CONFIRMED,
-        acknowledgement=reviewer,
-        inference_seal=_seal(
-            requirement.requirement_id, requirement.text, requirement.source_ref, reviewer
+    bound = replace(
+        reviewer,
+        binding=_binding(
+            requirement.requirement_id,
+            requirement.text,
+            requirement.source_ref,
+            requirement.source_type,
+            reviewer,
         ),
+    )
+    return replace(
+        requirement,
+        confirmation=ConfirmationState.CONFIRMED,
+        acknowledgement=bound,
     )
 
 
@@ -170,12 +181,19 @@ def pending_inferred_ids(requirements: tuple[Requirement, ...]) -> frozenset[str
     )
 
 
-def _seal(requirement_id: str, text: str, source_ref: str, ack: ReviewerAcknowledgement) -> str:
+def _binding(
+    requirement_id: str,
+    text: str,
+    source_ref: str,
+    source_type: SourceType,
+    ack: ReviewerAcknowledgement,
+) -> str:
     payload = json.dumps(
         [
             requirement_id,
             text,
             source_ref,
+            source_type.value,
             ack.requirement_id,
             ack.reviewer_id,
             ack.acknowledged_at.isoformat(),

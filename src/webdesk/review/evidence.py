@@ -12,6 +12,7 @@ vocabulary replaces the labels in one place and no caller depends on the wording
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field
 
 SOURCE_STATUS_OPEN_ITEM = "OPEN-07"
@@ -43,6 +44,23 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
+def _claims_verification(text: str) -> bool:
+    """True when the text, once normalised, contains "verif".
+
+    Normalisation applies NFKC (fullwidth and compatibility forms), drops format and combining
+    characters (zero-width spaces, dotted capitals), drops every non-letter (spaces and punctuation
+    used to split the word), and folds case. It does not map cross-script look-alikes such as
+    Cyrillic letters. That residual is recorded in the decision register.
+    """
+    decomposed = unicodedata.normalize("NFKC", text).casefold()
+    letters = "".join(
+        char
+        for char in unicodedata.normalize("NFD", decomposed)
+        if unicodedata.category(char)[0] == "L"
+    )
+    return "verif" in letters
+
+
 @dataclass(frozen=True)
 class Citation:
     citation_id: str
@@ -55,10 +73,16 @@ class Citation:
     def __post_init__(self) -> None:
         if not self.citation_id.strip() or not self.source_ref.strip():
             raise ValueError("a citation needs an identifier and a source reference")
-        # Edition and version are rendered as text. Words that read as a verification claim are
-        # refused, so recorded metadata cannot pose as a status next to the real one.
-        for name, value in (("edition", self.edition), ("version", self.version)):
-            if value is not None and "verif" in value.casefold():
+        # Free text is rendered beside the status. Text that reads as a verification claim is
+        # refused so that it cannot pose as a status. This is a best-effort guard, see
+        # _claims_verification.
+        for name, value in (
+            ("identifier", self.citation_id),
+            ("source reference", self.source_ref),
+            ("edition", self.edition),
+            ("version", self.version),
+        ):
+            if value is not None and _claims_verification(value):
                 raise ValueError(f"the citation {name} must not contain a verification claim")
 
 

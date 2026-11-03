@@ -34,7 +34,7 @@
       "text": "Synthetic client-stated requirement",
       "source_type": "client_stated",
       "source_ref": "SRC-SYN-001",
-      "confirmation": "confirmed"
+      "confirmation": "pending_review"
     },
     {
       "requirement_id": "REQ-SYN-002",

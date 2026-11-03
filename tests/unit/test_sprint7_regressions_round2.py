@@ -1,9 +1,8 @@
-"""Regression tests for the second independent QA of c2c3651 (N1 to N6, D1, D5, D7, D9, D10).
+"""Regression tests for the independent QA rounds 2 and 3 on Sprint 7 (N1 to N6, ND-A to ND-C).
 
-Each test names the finding it guards. These paths were not covered by the first regression file:
-dataclasses.replace() that drops an acknowledgement, replace() on derived DraftSow fields, in-scope
-items that rest on unacknowledged inferences, extreme decimal exponents, and mutable line
-containers.
+Each test names the finding it guards. Tests that pin a documented residual limit say so in their
+name, so that a reader can see which guarantees are model-level and which need the persistence
+layer.
 """
 
 from __future__ import annotations
@@ -48,7 +47,7 @@ def _confirmed() -> Requirement:
     return acknowledge_inference(inferred, _ack(), NOW)
 
 
-def _line(line_id: str, low: str, high: str) -> EstimateLine:
+def _line(line_id: str, low: str, high: str, assumptions: object = ASSUMPTION) -> EstimateLine:
     return EstimateLine(
         line_id=line_id,
         work_item="Synthetic work",
@@ -57,7 +56,7 @@ def _line(line_id: str, low: str, high: str) -> EstimateLine:
         provenance_ref="REQ-SYN-001",
         low_hours=Decimal(low),
         high_hours=Decimal(high),
-        assumptions=ASSUMPTION,
+        assumptions=assumptions,  # type: ignore[arg-type]
     )
 
 
@@ -85,73 +84,140 @@ def _source(
     )
 
 
-# --- N1 and D1: replace() cannot relabel or unbind an acknowledged inference --------------------
+# --- N1: an acknowledged inference cannot be relabelled or unbound by replace() ----------------
 
 
 def test_N1_replace_dropping_the_acknowledgement_is_refused() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cannot be confirmed without acknowledgement"):
         dataclasses.replace(_confirmed(), acknowledgement=None)
 
 
 def test_N1_replace_relabelling_and_dropping_the_acknowledgement_is_refused() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="only an acknowledged inference"):
         dataclasses.replace(
             _confirmed(), source_type=SourceType.CLIENT_STATED, acknowledgement=None
         )
 
 
-def test_N1_replace_returning_to_pending_and_dropping_the_acknowledgement_is_refused() -> None:
-    with pytest.raises(ValueError):
-        dataclasses.replace(
-            _confirmed(), confirmation=ConfirmationState.PENDING_REVIEW, acknowledgement=None
-        )
+def test_N1_replace_relabelling_and_keeping_the_acknowledgement_is_refused() -> None:
+    with pytest.raises(ValueError, match="only an acknowledged inference"):
+        dataclasses.replace(_confirmed(), source_type=SourceType.CLIENT_STATED)
+
+
+def test_N1_returning_to_pending_and_dropping_the_acknowledgement_stays_inferred() -> None:
+    # A pending inference is legitimate. The label stays "Inferred", so nothing is relabelled.
+    pending = dataclasses.replace(
+        _confirmed(), confirmation=ConfirmationState.PENDING_REVIEW, acknowledgement=None
+    )
+    assert pending.source_label == "Inferred (not client-stated)"
+    assert not pending.is_confirmed
+
+
+def test_N1_replace_returning_to_pending_and_keeping_the_acknowledgement_is_refused() -> None:
+    with pytest.raises(ValueError, match="belongs only to a confirmed"):
+        dataclasses.replace(_confirmed(), confirmation=ConfirmationState.PENDING_REVIEW)
+
+
+def test_N1_replace_removing_the_seal_field_is_not_a_route_any_more() -> None:
+    # The seal field is gone. Its removal was the route in round 3. The binding now lives on the
+    # acknowledgement, so the text change below is still refused with the seal field absent.
+    with pytest.raises(ValueError, match="does not bind"):
+        dataclasses.replace(_confirmed(), text="Store must never sync")
 
 
 def test_N1_replace_changing_the_text_of_an_acknowledged_inference_is_refused() -> None:
-    with pytest.raises(ValueError, match="seal"):
+    with pytest.raises(ValueError, match="does not bind"):
         dataclasses.replace(_confirmed(), text="A different client-facing claim")
 
 
 def test_N1_replace_changing_the_source_of_an_acknowledged_inference_is_refused() -> None:
-    with pytest.raises(ValueError, match="seal"):
+    with pytest.raises(ValueError, match="does not bind"):
         dataclasses.replace(_confirmed(), source_ref="SRC-OTHER")
 
 
-def test_N1_a_forged_seal_is_refused() -> None:
-    with pytest.raises(ValueError, match="seal"):
-        dataclasses.replace(_confirmed(), inference_seal="0" * 64)
+def test_N1_replace_changing_the_identity_of_an_acknowledged_inference_is_refused() -> None:
+    with pytest.raises(ValueError, match="different requirement"):
+        dataclasses.replace(_confirmed(), requirement_id="REQ-R-9")
 
 
-def test_N1_a_seal_on_a_pending_requirement_is_refused() -> None:
-    with pytest.raises(ValueError, match="must be confirmed"):
-        dataclasses.replace(_confirmed(), confirmation=ConfirmationState.PENDING_REVIEW)
-
-
-def test_N1_the_documented_limit_is_a_new_object_built_from_nothing() -> None:
-    # A pure model cannot stop code that builds a fresh client-stated requirement. This test
-    # records that boundary so that the control is placed where requirements are created.
-    fresh = Requirement(
-        "REQ-R-1", "Synthetic", SourceType.CLIENT_STATED, "SRC-1", ConfirmationState.CONFIRMED
-    )
-    assert fresh.source_label == "Client-stated"
-
-
-# --- N3: the seal and the future check on the acknowledgement path -----------------------------
-
-
-def test_N3_the_acknowledgement_time_is_bound_into_the_seal() -> None:
+def test_N1_a_forged_binding_is_refused() -> None:
     confirmed = _confirmed()
-    later = dataclasses.replace(
-        confirmed.acknowledgement or _ack(), acknowledged_at=NOW - timedelta(minutes=5)
+    assert confirmed.acknowledgement is not None
+    forged = dataclasses.replace(confirmed.acknowledgement, binding="0" * 64)
+    with pytest.raises(ValueError, match="does not bind"):
+        dataclasses.replace(confirmed, acknowledgement=forged)
+
+
+def test_N1_a_confirmed_client_stated_requirement_cannot_be_built() -> None:
+    with pytest.raises(ValueError, match="only an acknowledged inference"):
+        Requirement(
+            "REQ-R-1",
+            "Synthetic",
+            SourceType.CLIENT_STATED,
+            "SRC-1",
+            ConfirmationState.CONFIRMED,
+        )
+
+
+def test_N1_documented_limit_pending_client_statement_built_from_a_confirmed_one() -> None:
+    # Residual, recorded in the module: dropping the acknowledgement and returning the object to
+    # pending as client-stated leaves no confirmed record. Only an append-only store (S7-10) can
+    # prevent a silent relabel. This test pins the boundary so that it is visible.
+    relabelled = dataclasses.replace(
+        _confirmed(),
+        source_type=SourceType.CLIENT_STATED,
+        acknowledgement=None,
+        confirmation=ConfirmationState.PENDING_REVIEW,
     )
-    with pytest.raises(ValueError, match="seal"):
+    assert relabelled.source_label == "Client-stated"
+    assert not relabelled.is_confirmed
+
+
+def test_P6_a_client_stated_requirement_stays_pending_in_this_model() -> None:
+    req = Requirement("REQ-R-7", "Synthetic client text", SourceType.CLIENT_STATED, "SRC-R-7")
+    assert req.confirmation is ConfirmationState.PENDING_REVIEW
+
+
+# --- N3: the acknowledgement binding covers its own time, reviewer and reason ------------------
+
+
+def test_N3_changing_the_acknowledgement_time_is_refused() -> None:
+    confirmed = _confirmed()
+    assert confirmed.acknowledgement is not None
+    later = dataclasses.replace(
+        confirmed.acknowledgement, acknowledged_at=NOW - timedelta(minutes=5)
+    )
+    with pytest.raises(ValueError, match="does not bind"):
         dataclasses.replace(confirmed, acknowledgement=later)
+
+
+def test_N3_changing_the_reviewer_is_refused() -> None:
+    confirmed = _confirmed()
+    assert confirmed.acknowledgement is not None
+    other = dataclasses.replace(confirmed.acknowledgement, reviewer_id="rev-2")
+    with pytest.raises(ValueError, match="does not bind"):
+        dataclasses.replace(confirmed, acknowledgement=other)
+
+
+def test_N3_changing_the_reason_is_refused() -> None:
+    confirmed = _confirmed()
+    assert confirmed.acknowledgement is not None
+    other = dataclasses.replace(confirmed.acknowledgement, reason="Something else")
+    with pytest.raises(ValueError, match="does not bind"):
+        dataclasses.replace(confirmed, acknowledgement=other)
 
 
 def test_N3_acknowledge_refuses_a_future_time_at_the_boundary() -> None:
     inferred = Requirement("REQ-R-1", "Synthetic inferred", SourceType.INFERRED, "FIND-R-1")
     with pytest.raises(ValueError, match="future"):
         acknowledge_inference(inferred, _ack(at=NOW + timedelta(minutes=5, seconds=1)), NOW)
+
+
+def test_ND_C_a_now_at_the_end_of_time_is_a_value_error_not_an_overflow() -> None:
+    inferred = Requirement("REQ-R-1", "Synthetic inferred", SourceType.INFERRED, "FIND-R-1")
+    end_of_time = datetime.max.replace(tzinfo=UTC)
+    with pytest.raises(ValueError, match="too late"):
+        acknowledge_inference(inferred, _ack(), end_of_time)
 
 
 # --- N4: items that rest on an unacknowledged inference are flagged ----------------------------
@@ -169,6 +235,15 @@ def test_N4_an_in_scope_item_resting_on_an_acknowledged_inference_is_not_flagged
     html_text = render_html(
         assemble_draft_sow(_source(requirements=(_confirmed(),), in_scope=(item,)))
     )
+    assert "Rests on unacknowledged inference" not in html_text
+
+
+def test_N4_documented_limit_a_reference_to_a_requirement_not_supplied_is_not_flagged() -> None:
+    # Residual: the SOW can flag only the requirements it is given. A reference to a requirement
+    # that is not in the input is not known to be inferred. The requirements list is therefore
+    # the completeness input, and S7-02 must supply it in full.
+    item = SowItem(text="Build a checkout page", refs=("R9",))
+    html_text = render_html(assemble_draft_sow(_source(requirements=(), in_scope=(item,))))
     assert "Rests on unacknowledged inference" not in html_text
 
 
@@ -201,8 +276,7 @@ def test_N2_replaced_citation_views_are_refused() -> None:
         citation_id="CIT-R-1", source_ref="SRC-R-1", source_status="stale", confidence="supported"
     )
     sow = assemble_draft_sow(_source(citations=(cit,)))
-    forged = render_citation(cit)
-    forged_view = dataclasses.replace(forged, source_label="Verified source")
+    forged_view = dataclasses.replace(render_citation(cit), source_label="Verified source")
     with pytest.raises(ValueError, match="citation views"):
         dataclasses.replace(sow, citation_views=(forged_view,))
 
@@ -216,6 +290,38 @@ def test_N2_a_replaced_sow_identifier_is_refused() -> None:
 def test_N2_a_replacement_that_matches_its_source_is_accepted() -> None:
     sow = assemble_draft_sow(_source())
     assert dataclasses.replace(sow).sow_id == sow.sow_id
+
+
+# --- ND-B: a caller's collections cannot change a draft after assembly ---------------------------
+
+
+def test_ND_B_a_list_appended_after_assembly_does_not_change_the_render() -> None:
+    items = [_item("Synthetic first")]
+    source = DraftSowInput(
+        title="Synthetic draft",
+        objective="Synthetic objective",
+        in_scope=items,  # type: ignore[arg-type]
+        out_of_scope=(),
+        deliverables=(_item(),),
+        acceptance_criteria=(_item(),),
+    )
+    sow = assemble_draft_sow(source)
+    before = render_html(sow)
+    items.append(_item("Synthetic injected after assembly"))
+    assert render_html(sow) == before
+    assert "injected" not in render_html(sow)
+
+
+def test_ND_B_the_draft_input_holds_tuples_not_lists() -> None:
+    source = DraftSowInput(
+        title="Synthetic draft",
+        objective="Synthetic objective",
+        in_scope=[_item()],  # type: ignore[arg-type]
+        out_of_scope=(),
+        deliverables=(_item(),),
+        acceptance_criteria=(_item(),),
+    )
+    assert isinstance(source.in_scope, tuple)
 
 
 # --- N5 and D7: decimal exponent bound ----------------------------------------------------------
@@ -244,7 +350,7 @@ def test_N5_totals_are_order_independent_across_the_allowed_range() -> None:
     assert totals == {Decimal("1000000.500001")}
 
 
-# --- N6: the estimate set copies its lines -------------------------------------------------------
+# --- N6 and ND-A: the estimate set and its lines copy their collections -------------------------
 
 
 def test_N6_a_generator_of_lines_is_kept_in_full() -> None:
@@ -266,10 +372,40 @@ def test_N6_a_non_line_value_is_refused() -> None:
         EstimateSet("EST-N6", 1, "synthetic-owner", ("not a line",))  # type: ignore[arg-type]
 
 
-# --- D10: edition and version cannot carry a verification claim --------------------------------
+def test_ND_A_assumptions_cleared_after_validation_still_render() -> None:
+    assumptions = ["Synthetic assumption kept"]
+    line = _line("L1", "1", "2", assumptions=assumptions)
+    assumptions.clear()
+    estimate = EstimateSet("EST-A", 1, "synthetic-owner", (line,))
+    html_text = render_html(assemble_draft_sow(_source(estimate=estimate)))
+    assert "Assumptions: Synthetic assumption kept" in html_text
 
 
-@pytest.mark.parametrize("text", ["2024 ed. Verified: yes.", "verification pending", "UNVERIFIED"])
+def test_ND_A_a_generator_of_assumptions_is_kept() -> None:
+    line = _line("L1", "1", "2", assumptions=(text for text in ["Kept once"]))
+    assert line.assumptions == ("Kept once",)
+
+
+def test_ND_A_a_non_text_assumption_is_refused() -> None:
+    with pytest.raises(ValueError, match="text only"):
+        _line("L1", "1", "2", assumptions=("ok", 3))
+
+
+# --- D10: free text that claims verification is refused ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2024 ed. Verified: yes.",
+        "verification pending",
+        "UNVERIFIED",
+        "ｖｅｒｉｆｉｅｄ 2025",  # fullwidth letters
+        "ver​ified 2025",  # zero-width space inside the word
+        "VERİFIED 2025",  # dotted capital I
+        "v e r i f i e d",  # spaced out
+    ],
+)
 def test_D10_an_edition_with_a_verification_claim_is_refused(text: str) -> None:
     with pytest.raises(ValueError, match="verification claim"):
         Citation("CIT-D10", "SRC-D10", "stale", "supported", edition=text)
@@ -280,11 +416,28 @@ def test_D10_a_version_with_a_verification_claim_is_refused() -> None:
         Citation("CIT-D10", "SRC-D10", "stale", "supported", version="verified 2")
 
 
+def test_D10_a_source_reference_with_a_verification_claim_is_refused() -> None:
+    with pytest.raises(ValueError, match="verification claim"):
+        Citation("CIT-D10", "Verified by QA: yes", "stale", "supported")
+
+
+def test_D10_a_citation_identifier_with_a_verification_claim_is_refused() -> None:
+    with pytest.raises(ValueError, match="verification claim"):
+        Citation("VERIFIED-OK", "SRC-D10", "stale", "supported")
+
+
 def test_D10_an_ordinary_edition_is_accepted() -> None:
     assert Citation("CIT-D10", "SRC-D10", "stale", "supported", edition="2024 ed.").edition
 
 
-# --- D1 and D5 from round 1 still hold on the constructor path ---------------------------------
+def test_D10_documented_residual_cross_script_look_alikes_are_not_caught() -> None:
+    # Residual: a Cyrillic look-alike is not mapped to Latin. The guard is best-effort. The status
+    # path does not depend on it, because status values are checked against a closed vocabulary.
+    citation = Citation("CIT-D10", "SRC-D10", "stale", "supported", edition="веrif")
+    assert citation.edition
+
+
+# --- D5 from round 1 still holds on the constructor path ----------------------------------------
 
 
 def test_D5_a_naive_timestamp_is_still_refused() -> None:
