@@ -34,8 +34,15 @@ def _trim(text: str) -> str:
     return text[start:end]
 
 
+# Blank-looking characters that are not whitespace or format characters: the Hangul fillers and the
+# braille blank. Lone combining marks (category Mn) are also treated as noise at the edges.
+_BLANK_FILLERS = frozenset("ㅤᅟᅠ⠀ﾠ")
+
+
 def _is_edge_noise(char: str) -> bool:
-    return char.isspace() or unicodedata.category(char) == "Cf"
+    if char in _BLANK_FILLERS:
+        return True
+    return char.isspace() or unicodedata.category(char) in ("Cf", "Mn")
 
 
 def _checked(text: str, message: str) -> str:

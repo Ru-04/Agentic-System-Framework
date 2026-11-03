@@ -68,24 +68,23 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
-# A word is a verification claim when it is the word "verif" in any inflection that asserts a
-# result: verified, verify, verifies, verifying, verifier, verifiable. The check works on whole
-# words, so "unverified" (a status label) and "verification" (a noun in a source name) are not
-# claims, and a word that happens to end in "un" (for example "Run") cannot hide a claim beside it.
+# The stems that assert a result: verified, verify, verifies, verifying, verifier, verifiable.
+# "verification" and "verifications" are nouns in source names and are not matched.
+_CLAIM_STEM = re.compile(r"verif(?:ied|ies|ying|iable|ier|y)")
 _LETTER_RUN = re.compile(r"[^\W\d_]+")
-_SPACED_LETTERS = re.compile(r"verif(?!ication)")
+_STATUS_WORD = "unverified"
 
 
 def _claims_verification(text: str) -> bool:
-    """True when the text contains a word that claims verification, after normalisation.
+    """True when the text contains a claim of verification, after normalisation.
 
     Normalisation applies NFKC, folds the Latin look-alikes listed above, removes combining and
-    format characters (zero-width spaces, dotted capitals), and folds case. Words are then taken as
-    runs of letters. A word claims verification when it starts with "verif" and is not
-    "verification" or "verifications". Single letters that run together (a spelled-out word such as
-    "v e r i f i e d") are joined and checked as one word. Cross-script look-alikes are not mapped
-    (R5), and visual
-    look-alikes outside the fold table are not caught (R7).
+    format characters, and folds case. The letters of consecutive words are then joined, so a claim
+    split by a space, hyphen or stray punctuation ("Veri fied", "Not-Verified") is still found, and
+    a claim inside a longer word ("Notverified", "Reverified") is found too. A match is not a claim
+    when it lies wholly inside the status label "unverified", which is a recorded status and not an
+    assertion. "verification" is a noun and is not matched. Cross-script look-alikes are not mapped
+    (R5), and visual look-alikes outside the fold table are not caught (R7).
     """
     folded = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
     stripped = "".join(
@@ -94,14 +93,29 @@ def _claims_verification(text: str) -> bool:
         if unicodedata.category(char) not in ("Mn", "Cf")
     )
     words = _LETTER_RUN.findall(stripped)
-    if any(_is_claim_word(word) for word in words):
-        return True
-    spelled = "".join(word for word in words if len(word) == 1)
-    return bool(spelled) and _SPACED_LETTERS.search(spelled) is not None and "verif" in spelled
+    joined = "".join(words)
+    starts: list[int] = []
+    offset = 0
+    for word in words:
+        starts.append(offset)
+        offset += len(word)
+    for match in _CLAIM_STEM.finditer(joined):
+        index = _word_index(starts, match.start())
+        word = words[index]
+        inside_status_label = word == _STATUS_WORD and match.end() <= starts[index] + len(word)
+        if not inside_status_label:
+            return True
+    return False
 
 
-def _is_claim_word(word: str) -> bool:
-    return word.startswith("verif") and not word.startswith(("verification", "verifications"))
+def _word_index(starts: list[int], position: int) -> int:
+    index = 0
+    for candidate, start in enumerate(starts):
+        if start <= position:
+            index = candidate
+        else:
+            break
+    return index
 
 
 @dataclass(frozen=True)

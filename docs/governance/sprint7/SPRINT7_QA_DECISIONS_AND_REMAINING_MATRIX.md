@@ -104,6 +104,20 @@ a closed vocabulary.
 the free-text guard can be bypassed by a visual look-alike; R7 covers this, and the citation status
 cannot be upgraded by it.
 
+### 1.6 Independent QA 7 and 8, and the round-8 remediation
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 7 | `614c992` | **FAIL**: N-1 major (reopens D-1: "Run. Verified: yes" escaped the guard because a word ending in "un" blocked the match); N-2 to N-4 minor. |
+| Remediation | `ffd42d5` | Word-level guard; spelled-letter join; invisible-only edition is not recorded; timestamps out of range are a ValueError; the identifier covers the rendered text. |
+| Independent QA 8 | `ffd42d5` | **PASS WITH FINDINGS**: D-A medium (regression: "Notverified", "Reverified", "Veri fied" accepted); D-B minor (ordinary single-letter labels refused); D-C minor (invisible filler recorded as text); D-D minor (decimal_text not exact-typed). |
+| Round-8 remediation | this commit | The guard matches claim stems on the joined letters of the whole text and excludes only a match wholly inside the status label "unverified". Single-letter pooling is removed. Filler characters and lone combining marks at the edges are noise. `decimal_text` requires an exact Decimal. Regression tests: `tests/unit/test_sprint7_regressions_round8.py`. |
+
+**Accepted limit, recorded (part of the verification-claim guard, R7 family):** misspellings such as
+"verfied" and "vrified" are not claims under the stated rule, and digit look-alikes such as "ver1f1ed"
+are not caught. The citation status cannot be upgraded by free text, because status values come from a
+closed vocabulary and are refused at construction otherwise.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |

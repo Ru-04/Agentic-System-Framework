@@ -247,7 +247,8 @@ def decimal_text(value: Decimal | None) -> str:
     """One text form per numeric value (1.5 and 1.50 both read 1.5; 1E+2 reads 100)."""
     if value is None:
         return "none"
-    return format(value.normalize(Context(prec=SUM_PRECISION)), "f")
+    plain = exact(value, Decimal, "a number is written from an exact Decimal")
+    return format(plain.normalize(Context(prec=SUM_PRECISION)), "f")
 
 
 def _range_text(low: Decimal | None, high: Decimal | None) -> str:
