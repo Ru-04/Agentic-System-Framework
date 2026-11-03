@@ -30,6 +30,7 @@ from webdesk.review.provenance import (
     SourceType,
     pending_inferred_ids,
 )
+from webdesk.review.textutil import clean, text_tuple
 
 DRAFT_WATERMARK = "DRAFT - NOT APPROVED - NOT FOR CLIENT RELEASE"
 APPROVAL_STATE = "draft_unapproved"
@@ -44,11 +45,14 @@ class SowItem:
     refs: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "refs", tuple(self.refs))
-        if not self.text.strip():
-            raise ValueError("a SOW item needs text")
-        if not self.refs or not all(isinstance(ref, str) and ref.strip() for ref in self.refs):
+        object.__setattr__(self, "text", clean(self.text, "a SOW item needs text"))
+        refs = text_tuple(self.refs, "every SOW item must carry text references")
+        cleaned = tuple(
+            clean(ref, "every SOW item must carry at least one non-empty reference") for ref in refs
+        )
+        if not cleaned:
             raise ValueError("every SOW item must carry at least one non-empty reference")
+        object.__setattr__(self, "refs", cleaned)
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,8 @@ class DraftSowInput:
             "citations",
         ):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+        if self.estimate is not None and not isinstance(self.estimate, EstimateSet):
+            raise ValueError("a draft SOW holds an EstimateSet or no estimate")
         if not self.title.strip() or not self.objective.strip():
             raise ValueError("a draft SOW needs a title and an objective")
         if not (self.in_scope and self.deliverables and self.acceptance_criteria):
@@ -248,7 +254,7 @@ def _estimate_section(sow: DraftSow) -> str:
     rows = "".join(_estimate_row(line) for line in estimate.lines)
     return (
         f"<h2>Estimated effort</h2><p>{_e(sow.estimate_summary)}</p>"
-        f"<p>Owner: {_e(estimate.owner)}. Version {estimate.version}.</p><ul>{rows}</ul>"
+        f"<p>Owner: {_e(estimate.owner)}. Version {_e(str(estimate.version))}.</p><ul>{rows}</ul>"
     )
 
 

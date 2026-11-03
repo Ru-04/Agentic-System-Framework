@@ -2,7 +2,7 @@
 
 A citation is a reference to a source. This module only describes the status recorded for it. It
 never confirms a citation. No status in this module means "verified", and an upstream value of
-"verified" is refused and shown as unknown. Verification would need an authority this module does
+"verified" is shown as unknown. Verification would need an authority this module does
 not have.
 
 PROVISIONAL VOCABULARY. The source-status vocabulary (OPEN-07) and the confidence vocabulary
@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass, field
+
+from webdesk.review.textutil import clean
 
 SOURCE_STATUS_OPEN_ITEM = "OPEN-07"
 CONFIDENCE_OPEN_ITEM = "OPEN-08"
@@ -44,6 +46,10 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
+# Latin letters that look like other Latin letters once a diacritic or stroke is dropped.
+_SAME_SCRIPT_FOLDS = str.maketrans({"ı": "i", "ſ": "s"})
+
+
 def _claims_verification(text: str) -> bool:
     """True when the text, once normalised, contains "verif".
 
@@ -52,7 +58,7 @@ def _claims_verification(text: str) -> bool:
     used to split the word), and folds case. It does not map cross-script look-alikes such as
     Cyrillic letters. That residual is recorded in the decision register.
     """
-    decomposed = unicodedata.normalize("NFKC", text).casefold()
+    decomposed = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
     letters = "".join(
         char
         for char in unicodedata.normalize("NFD", decomposed)
@@ -71,8 +77,14 @@ class Citation:
     version: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.citation_id.strip() or not self.source_ref.strip():
-            raise ValueError("a citation needs an identifier and a source reference")
+        object.__setattr__(
+            self, "citation_id", clean(self.citation_id, "a citation needs an identifier")
+        )
+        object.__setattr__(
+            self,
+            "source_ref",
+            clean(self.source_ref, "a citation needs a source reference"),
+        )
         # Free text is rendered beside the status. Text that reads as a verification claim is
         # refused so that it cannot pose as a status. This is a best-effort guard, see
         # _claims_verification.
@@ -82,7 +94,11 @@ class Citation:
             ("edition", self.edition),
             ("version", self.version),
         ):
-            if value is not None and _claims_verification(value):
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise ValueError(f"the citation {name} must be text")
+            if _claims_verification(value):
                 raise ValueError(f"the citation {name} must not contain a verification claim")
 
 
@@ -112,7 +128,7 @@ def render_citation(citation: Citation) -> CitationView:
 
 
 def _source_label(status: str) -> tuple[str, str]:
-    if status in SOURCE_STATUS_LABELS:
+    if isinstance(status, str) and status in SOURCE_STATUS_LABELS:
         return _provisional(SOURCE_STATUS_LABELS[status], SOURCE_STATUS_OPEN_ITEM), ""
     note = (
         f"Recorded status {status!r} is not an accepted source status. "
@@ -122,6 +138,6 @@ def _source_label(status: str) -> tuple[str, str]:
 
 
 def _confidence_label(confidence: str) -> str:
-    if confidence in CONFIDENCE_LABELS:
+    if isinstance(confidence, str) and confidence in CONFIDENCE_LABELS:
         return _provisional(CONFIDENCE_LABELS[confidence], CONFIDENCE_OPEN_ITEM)
     return _provisional(UNKNOWN_CONFIDENCE_LABEL, CONFIDENCE_OPEN_ITEM)

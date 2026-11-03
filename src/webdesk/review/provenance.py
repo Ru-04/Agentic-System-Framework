@@ -30,6 +30,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+from webdesk.review.textutil import clean
+
 # An acknowledgement may not be dated more than this far after the moment it is accepted.
 CLOCK_SKEW = timedelta(minutes=5)
 
@@ -58,9 +60,7 @@ def _aware(value: object, name: str) -> datetime:
 
 
 def _text(value: object, message: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(message)
-    return value.strip()
+    return clean(value, message)
 
 
 @dataclass(frozen=True)
@@ -101,9 +101,13 @@ class Requirement:
         # Coerce first, so raw strings from untyped boundaries get the same checks as enums.
         object.__setattr__(self, "source_type", SourceType(self.source_type))
         object.__setattr__(self, "confirmation", ConfirmationState(self.confirmation))
-        _text(self.requirement_id, "a requirement needs an identifier")
+        object.__setattr__(
+            self, "requirement_id", _text(self.requirement_id, "a requirement needs an identifier")
+        )
         _text(self.text, "a requirement needs text")
-        _text(self.source_ref, "a requirement needs a source reference")
+        object.__setattr__(
+            self, "source_ref", _text(self.source_ref, "a requirement needs a source reference")
+        )
         if self.is_confirmed and self.source_type != SourceType.INFERRED:
             raise ValueError("only an acknowledged inference can be confirmed in this model")
         if self.is_confirmed and self.acknowledgement is None:

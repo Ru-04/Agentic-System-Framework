@@ -8,9 +8,9 @@ Rules enforced here:
 - An unestimated or uncertain line has no hours. Its hours are never stored as zero.
 - A total never counts unestimated or uncertain work as zero. A partial set states no total at all;
   it names the counts of unresolved work, and the per-line ranges stay visible in the SOW.
-- No line carries a single exact figure. An estimated line is a range (low, high).
-- Hours are Decimal values with a bounded number of significant digits, summed under an explicit
-  precision, so every total is exact and independent of line order.
+- An estimated line is a range (low, high). A degenerate range with low equal to high is allowed.
+- Hours are plain Decimal values with a bounded number of significant digits and exponent, summed
+  under an explicit precision, so every total is exact and independent of line order.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, localcontext
 from enum import StrEnum
+
+from webdesk.review.textutil import clean, text_tuple
 
 # Every estimate set is a draft until S7-07 provides an authorized approval path.
 DRAFT_STATE = "draft"
@@ -52,21 +54,27 @@ class EstimateLine:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "status", LineStatus(self.status))
+        object.__setattr__(
+            self, "line_id", clean(self.line_id, "an estimate line needs a line identifier")
+        )
+        object.__setattr__(
+            self, "work_item", clean(self.work_item, "an estimate line needs a work item")
+        )
+        object.__setattr__(
+            self,
+            "scope_boundary",
+            clean(self.scope_boundary, "an estimate line needs a scope boundary"),
+        )
+        object.__setattr__(
+            self,
+            "provenance_ref",
+            clean(self.provenance_ref, "an estimate line needs a provenance reference"),
+        )
         # Copy the nested collections first, so a caller's list or generator cannot change the line
-        # after the assumption check below has run.
+        # after the assumption check below has run. A bare string is refused as a collection.
         for name in ("complexity_drivers", "dependencies", "assumptions"):
-            items = tuple(getattr(self, name))
-            if not all(isinstance(item, str) for item in items):
-                raise ValueError(f"the estimate line {name} must hold text only")
+            items = text_tuple(getattr(self, name), f"the estimate line {name} must hold text only")
             object.__setattr__(self, name, items)
-        for name, value in (
-            ("line identifier", self.line_id),
-            ("work item", self.work_item),
-            ("scope boundary", self.scope_boundary),
-            ("provenance reference", self.provenance_ref),
-        ):
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"an estimate line needs a {name}")
         if self.status == LineStatus.ESTIMATED:
             self._check_range()
         elif self.low_hours is not None or self.high_hours is not None:
@@ -81,7 +89,7 @@ class EstimateLine:
             raise ValueError("estimated hours need low <= high")
         object.__setattr__(self, "low_hours", low)
         object.__setattr__(self, "high_hours", high)
-        if not any(isinstance(item, str) and item.strip() for item in self.assumptions):
+        if not any(item.strip() for item in self.assumptions):
             raise ValueError("an estimated line needs at least one stated assumption")
 
 
@@ -93,8 +101,12 @@ class EstimateSet:
     lines: tuple[EstimateLine, ...]
 
     def __post_init__(self) -> None:
-        if not self.estimate_id.strip() or not self.owner.strip():
-            raise ValueError("an estimate set needs an identifier and an owner")
+        object.__setattr__(
+            self, "estimate_id", clean(self.estimate_id, "an estimate set needs an identifier")
+        )
+        object.__setattr__(self, "owner", clean(self.owner, "an estimate set needs an owner"))
+        if isinstance(self.version, bool) or not isinstance(self.version, int):
+            raise ValueError("an estimate set version is a whole number")
         if self.version < 1:
             raise ValueError("an estimate set version starts at 1")
         # Copy into a tuple first: a generator is consumed once, and a caller's list cannot change
@@ -149,7 +161,13 @@ def total_estimate(estimate: EstimateSet) -> EstimateTotal:
 
 
 def render_total(estimate: EstimateSet, total: EstimateTotal) -> str:
-    """A plain-text statement of the total. A partial set states no total."""
+    """A plain-text statement of the total. A partial set states no total.
+
+    The total must be the one computed from the estimate. A total supplied by a caller that does not
+    match is refused, so a partial estimate cannot be rendered with a complete-looking total.
+    """
+    if total != total_estimate(estimate):
+        raise ValueError("the total does not match its estimate")
     header = f"Draft estimate {estimate.estimate_id} v{estimate.version} (state: {estimate.state})"
     if total.complete:
         body = f"total {_range_text(total.known_low, total.known_high)} hours"
@@ -167,19 +185,22 @@ def render_total(estimate: EstimateSet, total: EstimateTotal) -> str:
 def _hours(value: object) -> Decimal:
     if not isinstance(value, Decimal):
         raise ValueError("estimated hours must be a Decimal, not a float or text")
-    if not value.is_finite():
+    # Rebuild as a plain Decimal from its tuple, so that a subclass cannot change the comparisons
+    # or the value that is stored.
+    plain = Decimal(Decimal.__format__(value, "f"))
+    if not plain.is_finite():
         raise ValueError("estimated hours must be finite")
-    if value < 0:
+    if plain < 0:
         raise ValueError("estimated hours must not be negative")
-    if value > MAX_HOURS:
+    if plain > MAX_HOURS:
         raise ValueError("estimated hours exceed the bound for a single line")
-    if value.is_zero():
+    if plain.is_zero():
         return Decimal(0)
-    if len(value.as_tuple().digits) > MAX_SIGNIFICANT_DIGITS:
+    if len(plain.as_tuple().digits) > MAX_SIGNIFICANT_DIGITS:
         raise ValueError("estimated hours have too many significant digits")
-    if value.adjusted() < MIN_ADJUSTED_EXPONENT:
+    if plain.adjusted() < MIN_ADJUSTED_EXPONENT:
         raise ValueError("estimated hours are below the smallest bound for a single line")
-    return value
+    return plain
 
 
 def _sum(values: Iterable[Decimal | None]) -> Decimal | None:
