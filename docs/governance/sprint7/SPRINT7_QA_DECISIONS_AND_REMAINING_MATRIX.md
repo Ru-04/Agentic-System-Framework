@@ -118,6 +118,17 @@ cannot be upgraded by it.
 are not caught. The citation status cannot be upgraded by free text, because status values come from a
 closed vocabulary and are refused at construction otherwise.
 
+### 1.7 Independent QA 9, and the round-9 remediation
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 9 | `6064d64` | **PASS WITH FINDINGS**: D-E minor (the adverb and noun forms "verifiably" and "verifiability" were accepted); D-F minor (ordinary phrases such as "Recover if you lose access" and "Not verified" are refused because letters join across a word boundary); D-G minor (decimal_text on sNaN or infinity raised InvalidOperation or returned "Infinity"). |
+| Round-9 remediation | this commit | D-E: the stem list covers verifiab-forms. D-G: a non-finite number is a ValueError. D-F: a documented trade-off, see below. Regression tests: `tests/unit/test_sprint7_regressions_round9.py`. |
+
+**Decision needed from WDS (two items):**
+1. **Scope of the verification-claim guard.** It is applied to the four citation fields (identifier, source reference, edition, version). QA 9 notes that requirement text, SOW items and objective are not guarded, so "Verified: yes" is accepted there. Requirement text is inferred or client-stated text shown with its provenance label; it is not a citation status. WDS to confirm that this scope is intended, or to extend the guard.
+2. **Trade-off D-F (accepted unless WDS objects).** The guard joins letters across word boundaries so that a claim split by a space or hyphen is caught ("Veri fied: yes"). In exchange, a phrase whose joined letters form a stem is refused ("Recover if you lose access", "Not verified"). The choice is fail-closed: a refused citation field can be corrected; a missed claim would show a false status. A regex cannot distinguish a spaced claim from a phrase, so the trade-off stays.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |

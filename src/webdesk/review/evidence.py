@@ -68,9 +68,10 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
-# The stems that assert a result: verified, verify, verifies, verifying, verifier, verifiable.
+# The stems that assert a result: verified, verify, verifies, verifying, verifier, verifiable,
+# verifiably, verifiability.
 # "verification" and "verifications" are nouns in source names and are not matched.
-_CLAIM_STEM = re.compile(r"verif(?:ied|ies|ying|iable|ier|y)")
+_CLAIM_STEM = re.compile(r"verif(?:ied|ies|ying|iab|ier|y)")
 _LETTER_RUN = re.compile(r"[^\W\d_]+")
 _STATUS_WORD = "unverified"
 

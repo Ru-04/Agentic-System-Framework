@@ -28,7 +28,8 @@ from webdesk.review.textutil import clean_key, clean_text, enum_of, exact, items
 DRAFT_STATE = "draft"
 
 # Hours inputs are bounded so that the exact sum always fits the arithmetic precision below. The
-# exponent bound keeps the smallest value at 1E-6 hours, so 30 digits span every input exactly.
+# exponent bound keeps the leading digit at or above 1E-6 hours. A value of up to 30 significant
+# digits can still extend below that, down to about 1E-35; sums remain exact at SUM_PRECISION.
 MAX_HOURS = Decimal(1_000_000)
 MIN_ADJUSTED_EXPONENT = -6
 MAX_SIGNIFICANT_DIGITS = 30
@@ -248,6 +249,8 @@ def decimal_text(value: Decimal | None) -> str:
     if value is None:
         return "none"
     plain = exact(value, Decimal, "a number is written from an exact Decimal")
+    if not plain.is_finite():
+        raise ValueError("a number written as text must be finite")
     return format(plain.normalize(Context(prec=SUM_PRECISION)), "f")
 
 
