@@ -126,7 +126,7 @@ def _envelope(specialist: SpecialistId, **overrides: Any) -> dict[str, Any]:
         "project_id": str(PROJECT_ID),
         "specialist_id": specialist.value,
         "capability_id": CONTRACT_CAPABILITY[specialist],
-        "requirement_ids": ["REQ-1"],
+        "requirement_ids": ["REQ-001"],
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],

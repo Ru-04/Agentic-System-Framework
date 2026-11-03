@@ -31,7 +31,7 @@ def _source(source_id: str = "fx-1", **overrides: Any) -> SourceRecord:
         "source_id": source_id,
         "kind": SourceKind.VENDOR_DOC,
         "workspace_id": "ws-a",
-        "origin": "fixture://shopify/fixture-1",
+        "origin": "https://www.shopify.com/pricing/fixture-1",
         "title": "Fixture",
         "text": FIXTURE_TEXT,
         "retrieved_at": NOW,

@@ -27,7 +27,7 @@ def _source(text: str) -> Any:
         source_id="fx",
         kind=SourceKind.VENDOR_DOC,
         workspace_id="ws-a",
-        origin="fixture://shopify/options",
+        origin="https://www.shopify.com/pricing/options",
         title="Fixture",
         text="FIXTURE: " + text + "\n",
         retrieved_at=NOW,

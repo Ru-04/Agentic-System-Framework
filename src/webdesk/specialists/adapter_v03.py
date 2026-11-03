@@ -28,10 +28,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Final, Literal, Protocol
+from typing import Annotated, Final, Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 from webdesk.specialists.adapter_v02 import (
     ERROR_AUTHORIZATION_REFUSED,
@@ -62,6 +69,11 @@ class CheckOutcome(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+REQUIREMENT_REF_PATTERN: Final[str] = r"^REQ-[0-9]{3,}$"
+
+RequirementRef = Annotated[str, StringConstraints(pattern=REQUIREMENT_REF_PATTERN)]
+
+
 class AdapterRequest(BaseModel):
     """Envelope WebDesk sends to the adapter. Unknown fields are refused, including actor fields."""
 
@@ -74,7 +86,8 @@ class AdapterRequest(BaseModel):
     project_id: UUID
     specialist_id: SpecialistId
     capability_id: NonBlank
-    requirement_ids: tuple[NonBlank, ...] = Field(min_length=1)
+    # Run-scoped requirement references: each is REQ-NNN, and the run is run_id (contract 7).
+    requirement_ids: tuple[RequirementRef, ...] = Field(min_length=1)
     evidence_refs: tuple[EvidenceRef, ...] = ()
     task: NonBlank
     allowed_actions: tuple[NonBlank, ...] = Field(min_length=1)
@@ -192,9 +205,11 @@ class AdapterRequestError(ValueError):
         self.code = code
 
 
-# OPEN-07. Explicit one-to-one table from the adapter evidence vocabulary to the AI Engine
-# EvidenceStatus vocabulary (B-CMN). ``cited`` never maps to ``verified``: the citation check is
-# carried by ``check_outcome``. Any value not listed here raises ``UnmappedValueError``.
+# OPEN-07. Explicit table from the adapter evidence vocabulary to the AI Engine EvidenceStatus
+# vocabulary (B-CMN). Every adapter value has its own entry. The mapping is documented many-to-one:
+# ``cited`` and ``unverified`` both map to AI ``unverified``. ``cited`` never maps to ``verified``,
+# because the citation check is carried by ``check_outcome``. Any value not listed here raises
+# ``UnmappedValueError``; nothing is collapsed silently.
 AiEvidenceStatus = Literal[
     "verified", "partially_verified", "unverified", "conflicting", "not_applicable"
 ]

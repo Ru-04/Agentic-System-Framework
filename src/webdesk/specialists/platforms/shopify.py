@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any, Final
 
+from webdesk.evidence.allowlist import SPRINT2_ALLOWLIST
 from webdesk.evidence.citations import Citation, Claim, check_claim
 from webdesk.evidence.relevance import PARTIAL_MIN_TERMS, Relevance, judge_relevance, specific_terms
 from webdesk.evidence.retrieval import (
@@ -101,6 +102,13 @@ def _rank_key(task: str, passage: Passage) -> tuple[int, int, int, str, int]:
     has_signal = bool(_topics(passage.text) or classify_options(passage.text))
     overlap = len(content_terms(task) & content_terms(passage.text))
     return (grade_order, 0 if has_signal else 1, -overlap, passage.source.source_id, passage.start)
+
+
+def _origin_approved(passage: Passage) -> bool:
+    # Internal passages are not vendor documentation and carry no vendor origin to permit.
+    if passage.source.kind is not SourceKind.VENDOR_DOC:
+        return True
+    return SPRINT2_ALLOWLIST.permits(passage.source.origin)
 
 
 def _mentions_plan_or_version(text: str) -> bool:
@@ -200,13 +208,17 @@ class ShopifySpecialist:
                 frozenset(),
             )
 
-        # Passages from another workspace are dropped without being named in any output.
+        # Passages from another workspace are dropped without being named in any output. Vendor
+        # passages must also come from the approved Shopify allowlist: the retriever is not trusted
+        # to have applied that rule, so it is applied here, at the trusted boundary.
         in_workspace = tuple(
             passage
             for passage in result.passages
             if passage.source.workspace_id == request.workspace_id
         )
-        usable, quarantined = split_by_trust(in_workspace)
+        approved = tuple(passage for passage in in_workspace if _origin_approved(passage))
+        unapproved = len(in_workspace) - len(approved)
+        usable, quarantined = split_by_trust(approved)
         usable = tuple(sorted(usable, key=lambda p: _rank_key(request.task, p)))
         candidates_full = len(result.passages) >= CANDIDATE_LIMIT
         unknowns: list[str] = []
@@ -221,6 +233,11 @@ class ShopifySpecialist:
         if excluded:
             unknowns.append(
                 f"{excluded} candidate passage(s) contained instruction-like text and were excluded"
+            )
+        if unapproved:
+            unknowns.append(
+                f"{unapproved} candidate passage(s) came from a source outside the approved "
+                "allowlist and were excluded"
             )
         sources = {passage.source.source_id: passage.source for passage in usable}
         findings, coverage = self._findings(request, usable, sources, unknowns)
