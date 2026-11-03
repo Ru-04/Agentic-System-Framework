@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Context, Decimal
 
+from webdesk.review.clarifications import Clarification, ClarificationStatus
 from webdesk.review.estimates import (
     SUM_PRECISION,
     EstimateLine,
@@ -89,6 +90,7 @@ class DraftSowInput:
     requirements: tuple[Requirement, ...] = ()
     estimate: EstimateSet | None = None
     citations: tuple[Citation, ...] = ()
+    clarifications: tuple[Clarification, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "title", clean_text(self.title, "a draft SOW needs a title"))
@@ -120,6 +122,11 @@ class DraftSowInput:
             self,
             "citations",
             items_of(self.citations, Citation, "the citations must be Citation values"),
+        )
+        object.__setattr__(
+            self,
+            "clarifications",
+            items_of(self.clarifications, Clarification, "clarifications must be Clarification"),
         )
         if self.estimate is not None:
             exact(self.estimate, EstimateSet, "a draft SOW holds an EstimateSet or no estimate")
@@ -224,6 +231,7 @@ def render_html(sow: DraftSow) -> str:
         parts.append(_items_section(heading, items, pending))
     parts.append(_requirements_section(source.requirements))
     parts.append(_estimate_section(sow))
+    parts.append(_clarifications_section(source.clarifications))
     parts.append(_citations_section(sow.citation_views))
     parts.extend(["</body>", "</html>", ""])
     return "\n".join(parts)
@@ -349,6 +357,19 @@ def _estimate_row(line: EstimateLine, pending: frozenset[str]) -> str:
         f"{_e(hours)}. Complexity drivers: {_e(drivers)}. Dependencies: {_e(dependencies)}. "
         f"Assumptions: {_e(assumptions)}. Reference: {_e(line.provenance_ref)}{flag}</li>"
     )
+
+
+def _clarifications_section(clarifications: tuple[Clarification, ...]) -> str:
+    """Open clarifications are listed, so that a draft never hides an unresolved question."""
+    open_now = [item for item in clarifications if item.status == ClarificationStatus.OPEN]
+    if not open_now:
+        return "<h2>Open clarifications</h2><p>None open.</p>"
+    rows = "".join(
+        f"<li>{_e(item.clarification_id)}: {_e(item.question)} Owner: {_e(item.owner_id)}. "
+        f"Affects: {_e(', '.join(item.linked_finding_ids))}.</li>"
+        for item in open_now
+    )
+    return f"<h2>Open clarifications</h2><ul>{rows}</ul>"
 
 
 def _citations_section(views: tuple[CitationView, ...]) -> str:

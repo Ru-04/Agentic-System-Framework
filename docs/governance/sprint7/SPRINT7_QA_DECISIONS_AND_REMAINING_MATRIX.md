@@ -143,6 +143,31 @@ The rows are flagged; the summary line is a derived figure.
 **Design observation, recorded and not changed:** "verifiable" and "unverifiable" are refused by the stem
 rule. This is intended: they assert a verification property in an edition, version or source name.
 
+### 1.9 QA 11, publication, and the remaining Sprint 7 scope
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 11 (focused, six items) | `8bfbbff` | **PASS**, no mandatory defects. Verified: DEF-1 docstring matches the guard; DEF-2 bounds are consistent with the estimate path (decimal_text is a superset); control characters are refused or normalised in every field (4,485 constructions); the provenance docstring matches the datetime deep-copy effect; 352 Sprint 7 tests pass; no change outside src/webdesk/review. The five unit-suite failures (test_api_app.py, psycopg) are environmental. |
+| Published | `8bfbbff` | Pushed to `origin/feature/sprint7-human-review-estimation` (new branch). Remote SHA verified: `8bfbbffbd2bab78189acfc418c48d8e741141f63`. |
+| CI | `8bfbbff` | **No CI configured.** The repository has no `.github/workflows` in this checkout, and the GitHub check-runs API returns zero runs for this commit. No CI status is claimed. Verification is local (ruff, mypy --strict, pytest) plus independent QA. |
+
+**Accepted residuals recorded at the freeze (unchanged):** R1 to R7; D-F trade-off; the claim guard
+covers the four citation fields only; "verifiable" and "unverifiable" are refused by design.
+
+#### Requirement-by-requirement status (not accepted; independent QA of increment 2 is still needed)
+
+| ID | Status | What is implemented (model, fixtures only) | Blocked by, with the evidence needed |
+|---|---|---|---|
+| S7-01 | Partially implemented | `review/queue.py`: five case statuses and the allowed transitions; version advances. | Scoped access and cross-workspace denial need workspace identity (OPEN-11) and the S6 read path. Evidence to unblock: an approved workspace entity and membership read contract. |
+| S7-02 | Partially implemented | `review/decisions.py`: accept, amend, reject, request clarification; reviewer, time, reason, previous and new version; stale and concurrent decisions refused without change. | Authorization (unauthorized actors cannot approve) needs OPEN-11 and OPEN-17. Durable history needs S7-10. |
+| S7-04 | Partially implemented | `review/clarifications.py` and an open-clarifications section in the SOW: owner, linked findings, no answer without a source, resolution only with an explicit authority. | The resolution permission check needs a real authority (OPEN-11 and the authorization contract). With no authority supplied, nothing can resolve. |
+| S7-07 | Not implemented (blocked) | None. No approval or revision transition was added, because it would be an unauthorized mutation path. | Authorization (OPEN-11, OPEN-17) and durable audit (S7-10, OPEN-25). Evidence to unblock: approved authorization and audit contracts. |
+| S7-10 | Not implemented (blocked) | None. No new audit event types were invented. The Foundation has an append-only audit table and `record_event` with redaction (src/webdesk/audit/service.py). | The S7 event vocabulary and writer identity are not approved (OPEN-17, OPEN-25). Evidence to unblock: an approved event vocabulary and writer identity. |
+| S7-11 | Partially implemented | `review/report_state.py`: staleness using the Foundation's `input_revision_hash`; incomplete, partial, canceled and failed runs are never complete; a failed regeneration keeps prior records. | The live lifecycle (partial specialist results, cancel and fail transitions) needs the Sprint 6 run service (S6-INT). |
+| S7-12 | Not implemented (blocked) | None. The shared specialist contract exists only on the sprint5 branch, not in this checkout. | S6-INT, OPEN-12 and OPEN-22. Evidence to unblock: the merged Sprint 6 specialist contract and the two register items. |
+
+Sprint 7 is not accepted. No requirement is completed or accepted on the strength of QA 11.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |
