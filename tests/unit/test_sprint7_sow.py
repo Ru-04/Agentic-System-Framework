@@ -49,6 +49,7 @@ def _requirement(raw: dict[str, Any]) -> Requirement:
     ack_raw = raw.get("acknowledgement")
     ack = (
         ReviewerAcknowledgement(
+            requirement_id=raw["requirement_id"],
             reviewer_id=ack_raw["reviewer_id"],
             acknowledged_at=datetime.fromisoformat(ack_raw["acknowledged_at"]),
             reason=ack_raw["reason"],
@@ -221,12 +222,17 @@ def test_an_acknowledged_inference_names_its_reviewer_and_stays_inferred() -> No
     assert (
         "Inferred (not client-stated); confirmed, acknowledged by synthetic-reviewer-1" in html_text
     )
+    assert "at 2026-11-03T10:00:00+00:00 (reason: Synthetic acknowledgement for the fixture)" in (
+        html_text
+    )
 
 
 def test_a_partial_estimate_states_no_total_and_names_the_gaps() -> None:
     html_text = _html()
-    assert "partial, known hours 10.5-14 from 1 estimated line(s)" in html_text
-    assert "1 unestimated and 1 uncertain" in html_text
+    assert "partial; total not stated: 1 unestimated and 1 uncertain line(s)" in html_text
+    assert "10.5-14 hours" in html_text  # the per-line range stays visible
+    assert "10.5-14 from" not in html_text  # no known-hours sum for a partial set
+    assert "Owner: synthetic-owner" in html_text
     assert "not estimated, hours not stated" in html_text
     assert "uncertain, hours not stated" in html_text
 

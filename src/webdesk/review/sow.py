@@ -80,6 +80,15 @@ class DraftSow:
     watermark: str = DRAFT_WATERMARK
     approval_state: str = APPROVAL_STATE
 
+    def __post_init__(self) -> None:
+        _require_draft(self)
+
+
+def _require_draft(sow: DraftSow) -> None:
+    """The watermark and the draft state are fixed. Nothing in this module can change them."""
+    if sow.watermark != DRAFT_WATERMARK or sow.approval_state != APPROVAL_STATE:
+        raise ValueError("a draft SOW must carry the draft watermark and the draft state")
+
 
 def assemble_draft_sow(source: DraftSowInput) -> DraftSow:
     """Build the draft. The identifier is derived from the input, so equal inputs give equal ids."""
@@ -93,6 +102,7 @@ def assemble_draft_sow(source: DraftSowInput) -> DraftSow:
 
 def render_html(sow: DraftSow) -> str:
     """Render the draft as an HTML document. Preview and export both use this output."""
+    _require_draft(sow)
     source = sow.source
     parts = [
         "<!doctype html>",
@@ -167,16 +177,20 @@ def _requirements_section(requirements: tuple[Requirement, ...]) -> str:
         (SourceType.CLIENT_STATED, "Client-stated requirements"),
         (SourceType.INFERRED, "Inferred requirements (not client-stated)"),
     ):
-        selected = [req for req in requirements if req.source_type is source_type]
+        selected = [req for req in requirements if req.source_type == source_type]
         rows = "".join(_requirement_row(req) for req in selected) or "<li>None.</li>"
         sections.append(f"<h3>{_e(heading)}</h3><ul>{rows}</ul>")
     return "<h2>Requirements</h2>" + "".join(sections)
 
 
 def _requirement_row(req: Requirement) -> str:
-    state = "confirmed" if req.confirmation is ConfirmationState.CONFIRMED else "pending review"
-    if req.acknowledgement is not None:
-        state += f", acknowledged by {req.acknowledgement.reviewer_id}"
+    state = "confirmed" if req.confirmation == ConfirmationState.CONFIRMED else "pending review"
+    ack = req.acknowledgement
+    if ack is not None:
+        state += (
+            f", acknowledged by {ack.reviewer_id} at {ack.acknowledged_at.isoformat()}"
+            f" (reason: {ack.reason})"
+        )
     return (
         f"<li>{_e(req.requirement_id)}: {_e(req.text)} "
         f'<span class="provenance">{_e(req.source_label)}; {_e(state)}; '
@@ -189,21 +203,26 @@ def _estimate_section(sow: DraftSow) -> str:
     if estimate is None or sow.estimate_summary is None:
         return "<h2>Estimated effort</h2><p>No estimate recorded; no total is stated.</p>"
     rows = "".join(_estimate_row(line) for line in estimate.lines)
-    return f"<h2>Estimated effort</h2><p>{_e(sow.estimate_summary)}</p><ul>{rows}</ul>"
+    return (
+        f"<h2>Estimated effort</h2><p>{_e(sow.estimate_summary)}</p>"
+        f"<p>Owner: {_e(estimate.owner)}. Version {estimate.version}.</p><ul>{rows}</ul>"
+    )
 
 
 def _estimate_row(line: EstimateLine) -> str:
-    if line.status is LineStatus.ESTIMATED:
+    if line.status == LineStatus.ESTIMATED:
         hours = f"{line.low_hours}-{line.high_hours} hours"
-    elif line.status is LineStatus.UNCERTAIN:
+    elif line.status == LineStatus.UNCERTAIN:
         hours = "uncertain, hours not stated"
     else:
         hours = "not estimated, hours not stated"
     assumptions = "; ".join(line.assumptions) or "none stated"
+    drivers = "; ".join(line.complexity_drivers) or "none stated"
+    dependencies = "; ".join(line.dependencies) or "none stated"
     return (
         f"<li>{_e(line.line_id)}: {_e(line.work_item)} ({_e(line.scope_boundary)}). "
-        f"{_e(hours)}. Assumptions: {_e(assumptions)}. "
-        f"Reference: {_e(line.provenance_ref)}</li>"
+        f"{_e(hours)}. Complexity drivers: {_e(drivers)}. Dependencies: {_e(dependencies)}. "
+        f"Assumptions: {_e(assumptions)}. Reference: {_e(line.provenance_ref)}</li>"
     )
 
 

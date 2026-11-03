@@ -119,7 +119,7 @@ def test_an_estimated_line_needs_both_bounds() -> None:
 
 @pytest.mark.parametrize(("low", "high"), [("5", "4"), ("-1", "2")])
 def test_an_estimated_range_must_be_ordered_and_non_negative(low: str, high: str) -> None:
-    with pytest.raises(ValueError, match="0 <= low <= high"):
+    with pytest.raises(ValueError, match="low <= high|must not be negative"):
         _estimated("L1", low, high)
 
 

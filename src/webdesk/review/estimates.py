@@ -6,21 +6,27 @@ S7-07 and are not implemented here, so every estimate set is a draft.
 
 Rules enforced here:
 - An unestimated or uncertain line has no hours. Its hours are never stored as zero.
-- A total never counts unestimated or uncertain work as zero. It is reported as known hours only,
-  and a total is publishable only when every line is estimated.
+- A total never counts unestimated or uncertain work as zero. A partial set states no total at all;
+  it names the counts of unresolved work, and the per-line ranges stay visible in the SOW.
 - No line carries a single exact figure. An estimated line is a range (low, high).
-- Arithmetic uses Decimal, so totals do not depend on float rounding or on line order.
+- Hours are Decimal values with a bounded number of significant digits, summed under an explicit
+  precision, so every total is exact and independent of line order.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from enum import StrEnum
 
 # Every estimate set is a draft until S7-07 provides an authorized approval path.
 DRAFT_STATE = "draft"
+
+# Hours inputs are bounded so that the exact sum always fits the arithmetic precision below.
+MAX_HOURS = Decimal(1_000_000)
+MAX_SIGNIFICANT_DIGITS = 30
+SUM_PRECISION = 80
 
 
 class LineStatus(StrEnum):
@@ -43,15 +49,16 @@ class EstimateLine:
     assumptions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "status", LineStatus(self.status))
         for name, value in (
             ("line identifier", self.line_id),
             ("work item", self.work_item),
             ("scope boundary", self.scope_boundary),
             ("provenance reference", self.provenance_ref),
         ):
-            if not value.strip():
+            if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"an estimate line needs a {name}")
-        if self.status is LineStatus.ESTIMATED:
+        if self.status == LineStatus.ESTIMATED:
             self._check_range()
         elif self.low_hours is not None or self.high_hours is not None:
             raise ValueError("an unestimated or uncertain line must not carry hours")
@@ -59,11 +66,13 @@ class EstimateLine:
     def _check_range(self) -> None:
         if self.low_hours is None or self.high_hours is None:
             raise ValueError("an estimated line needs both a low and a high figure")
-        if not (self.low_hours.is_finite() and self.high_hours.is_finite()):
-            raise ValueError("estimated hours must be finite")
-        if self.low_hours < 0 or self.high_hours < self.low_hours:
-            raise ValueError("estimated hours need 0 <= low <= high")
-        if not any(item.strip() for item in self.assumptions):
+        low = _hours(self.low_hours)
+        high = _hours(self.high_hours)
+        if high < low:
+            raise ValueError("estimated hours need low <= high")
+        object.__setattr__(self, "low_hours", low)
+        object.__setattr__(self, "high_hours", high)
+        if not any(isinstance(item, str) and item.strip() for item in self.assumptions):
             raise ValueError("an estimated line needs at least one stated assumption")
 
 
@@ -92,7 +101,7 @@ class EstimateSet:
 
 @dataclass(frozen=True)
 class EstimateTotal:
-    """Known hours only. ``known_low`` and ``known_high`` are None when no line is estimated."""
+    """Counts and known hours. The known sums are internal; a partial total is never published."""
 
     known_low: Decimal | None
     known_high: Decimal | None
@@ -114,7 +123,7 @@ class EstimateTotal:
 
 
 def total_estimate(estimate: EstimateSet) -> EstimateTotal:
-    estimated = [line for line in estimate.lines if line.status is LineStatus.ESTIMATED]
+    estimated = [line for line in estimate.lines if line.status == LineStatus.ESTIMATED]
     return EstimateTotal(
         known_low=_sum(line.low_hours for line in estimated),
         known_high=_sum(line.high_hours for line in estimated),
@@ -125,30 +134,46 @@ def total_estimate(estimate: EstimateSet) -> EstimateTotal:
 
 
 def render_total(estimate: EstimateSet, total: EstimateTotal) -> str:
-    """A plain-text statement of the total. It never states a total for partial work as final."""
+    """A plain-text statement of the total. A partial set states no total."""
     header = f"Draft estimate {estimate.estimate_id} v{estimate.version} (state: {estimate.state})"
-    if total.estimated_count == 0:
-        body = "no line is estimated; no total is stated"
-    elif total.complete:
+    if total.complete:
         body = f"total {_range_text(total.known_low, total.known_high)} hours"
+    elif total.estimated_count == 0:
+        body = "no line is estimated; no total is stated"
     else:
         body = (
-            f"partial, known hours {_range_text(total.known_low, total.known_high)} from "
-            f"{total.estimated_count} estimated line(s); total not stated: "
-            f"{total.unestimated_count} unestimated and {total.uncertain_count} uncertain line(s)"
+            f"partial; total not stated: {total.unestimated_count} unestimated and "
+            f"{total.uncertain_count} uncertain line(s) are unresolved; "
+            f"{total.estimated_count} line(s) carry their own ranges"
         )
     return f"{header}: {body}."
+
+
+def _hours(value: object) -> Decimal:
+    if not isinstance(value, Decimal):
+        raise ValueError("estimated hours must be a Decimal, not a float or text")
+    if not value.is_finite():
+        raise ValueError("estimated hours must be finite")
+    if value < 0:
+        raise ValueError("estimated hours must not be negative")
+    if value > MAX_HOURS:
+        raise ValueError("estimated hours exceed the bound for a single line")
+    if len(value.as_tuple().digits) > MAX_SIGNIFICANT_DIGITS:
+        raise ValueError("estimated hours have too many significant digits")
+    return Decimal(0) if value.is_zero() else value
 
 
 def _sum(values: Iterable[Decimal | None]) -> Decimal | None:
     items = [value for value in values if value is not None]
     if not items:
         return None
-    return sum(items, Decimal(0))
+    with localcontext() as context:
+        context.prec = SUM_PRECISION
+        return sum(items, Decimal(0))
 
 
 def _count(lines: Sequence[EstimateLine], status: LineStatus) -> int:
-    return sum(1 for line in lines if line.status is status)
+    return sum(1 for line in lines if line.status == status)
 
 
 def _range_text(low: Decimal | None, high: Decimal | None) -> str:
