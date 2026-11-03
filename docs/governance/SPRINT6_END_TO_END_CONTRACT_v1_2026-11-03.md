@@ -15,6 +15,7 @@ Every claim cites a bracketed source key. Each key resolves to one file path at 
 |---|---|---|---|
 | APP | `docs/governance/SPRINT6_WDS_APPROVALS_2026-11-03.md` | `05b03e8` (branch `claude/sprint5-specialist-evaluations`) | `85b24b7d94` |
 | GOV | `docs/governance/SPRINT6_GOVERNANCE_RECORDS_2026-11-03.md` | `05b03e8` (last changed `889c143`) | `7902b7f195` |
+| G0 | `docs/governance/SPRINT6_G0_EVIDENCE_2026-11-03.md` | `05b03e8` (last changed `2117515`) | `e25b09adc6` |
 | S01 | `docs/governance/SPRINT6_STAGE0_STAGE1_RECORD_2026-11-02.md` | `05b03e8` (last changed `e901e29`) | `c706b4dc20` |
 | S5C | `docs/governance/SPRINT5_FINAL_CLOSURE_RECORD_2026-11-03.md` | `05b03e8` (last changed `f9d1232`); lines 1 to 40 only | `af46f2a22c` |
 | DSC-NN | `docs/integration-contract/NN-*.md` (00 to 10) | `9ca38ba` (branch `claude/integration-contract-discovery-cdfe14`); analysis base `6c458c8` | 10 = `6cf470d332` |
@@ -570,7 +571,7 @@ Test IDs are from [DSC-07]. Each gate names the SHA it must pass on.
 
 | Gate | Tests | Covers | Status |
 |---|---|---|---|
-| G0 technical baseline | T0, T1, T6, T6a, T7, T8, T18 | Candidate tip | G0 accepted for `5974d59` [APP §B]. Independent QA not started [APP §F] |
+| G0 technical baseline | T0, T1, T6, T6a, T7, T8, T18 | Candidate tip `5974d59` | Recorded in [G0 §3]: ruff check pass; mypy strict pass (71 files); Alembic single head `0059`, upgrade, downgrade one step and re-upgrade pass; pytest 1031 passed, 0 failed, 0 skipped. Format check shows the four documented frozen-migration exceptions. Accepted by WDS [APP §B]. Independent QA not started [APP §F]. Caveat: scratch-cluster grants ([G0 §2], OPEN-26). T8 and T6 across the full 16-database matrix are not in the G0 record |
 | AI read path | T2, T3, T4, T5, T9, T10, T11 | Sections 6.1, 12.1, 13, 14.1 | Not run |
 | Operator confirmation (proposed) | T14, T16 (new, after OPEN-03 and OPEN-04) | Section 8 | Not written |
 | Specialist adapter | T13, T15, T17 | Sections 5.2, 10.4, 12.3 | Not run. T13 forbidden-action list must match [S-AU] (`modify_routing`, `accept_inferred_requirement` and others), not the wording in [DSC-07] |
@@ -606,7 +607,8 @@ Each OPEN item lists the two sources in conflict or the missing source, and the 
 | OPEN-17 | Writer of persisted AI results | [AICON] §2 D-AI-4: a later write contract must specify a Foundation-controlled boundary. [GOV §4] D-7: persistence required. This document proposes PW-1 (Foundation worker) | Approve PW-1, or name another writer |
 | OPEN-18 | New migrations and their list | [GOV §4] D-8 permits the minimum. No list exists | Approve the revision list for section 9 and section 8, each with a T6 run on a scratch database |
 | OPEN-19 | Ruling 5 provenance | [F-INT] lists rulings 1 to 4 only. [GOV §2] (D-10): register update pending. [DSC-05 §9] F-1 | WDS to confirm ruling 5 with approver, date and channel, or direct a revert |
-| OPEN-20 | Which record governs the D-13 technical gate | [GOV §1]: "D-13 is therefore not passed on its technical evidence" (written earlier on 3 Nov). [APP §B] (later on 3 Nov): G0 technical evidence accepted for `5974d59` | WDS to confirm that [APP §B] supersedes [GOV §1] for the technical gate. Independent QA remains open either way ([APP §F]) |
+| OPEN-20 | Which record governs the D-13 technical gate | [GOV §1]: "D-13 is therefore not passed on its technical evidence" (written earlier on 3 Nov). [APP §B] and [G0 §3] (later on 3 Nov): G0 technical evidence on record for `5974d59`, 1031 passed, 0 failed, 0 skipped, Alembic single head `0059`. [G0 §5]: the run was a development-team run, not independent QA, and whether the management disposition meets the independent-review requirement is a WDS decision | WDS to confirm that [APP §B] and [G0 §3] supersede [GOV §1] for the technical gate, and to decide whether the management disposition satisfies the independent-review requirement. Independent QA of the final candidate remains open ([APP §F]) |
+| OPEN-26 | Scratch-cluster grants used for G0 | [G0 §2]: admin option on group roles and on `webdesk_test_clock`, granted in the scratch cluster only. [G0 §2] states this is broader than the documented setup and is not a production configuration | Confirm that G0 results do not stand for production least-privilege. Production role grants need their own check before any production claim |
 | OPEN-21 | Shopify implementation identity | [A-SH] on line A and `src/webdesk/specialists/platforms/shopify.py` on the specialist branch ([DSC-05 §5]) | Choose one implementation for the integration |
 | OPEN-22 | Source allowlists for six specialists | [DSC-03 §8]: only Shopify entries are approved. Six have none | Approve allowlists, or keep six specialists out of invocation |
 | OPEN-23 | Forbidden-action list used by the test plan | [DSC-07 T13] names `route` and `accept`. [S-AU] lists `modify_routing`, `accept_inferred_requirement` and others | Align the test plan to [S-AU] |
