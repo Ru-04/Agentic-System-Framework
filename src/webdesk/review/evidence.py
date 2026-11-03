@@ -83,9 +83,10 @@ def _claims_verification(text: str) -> bool:
     format characters, and folds case. The letters of consecutive words are then joined, so a claim
     split by a space, hyphen or stray punctuation ("Veri fied", "Not-Verified") is still found, and
     a claim inside a longer word ("Notverified", "Reverified") is found too. A match is not a claim
-    when it lies wholly inside the status label "unverified", which is a recorded status and not an
-    assertion. "verification" is a noun and is not matched. Cross-script look-alikes are not mapped
-    (R5), and visual look-alikes outside the fold table are not caught (R7).
+    when the whole word is the status label "unverified", which is a recorded status and not an
+    assertion. A hyphen or space inside it ("Un-verified") is not the label and is refused.
+    "verification" is a noun and is not matched. Cross-script look-alikes are not mapped (R5), and
+    visual look-alikes outside the fold table are not caught (R7).
     """
     folded = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
     stripped = "".join(

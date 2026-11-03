@@ -25,6 +25,22 @@ _T = TypeVar("_T")
 _E = TypeVar("_E", bound=StrEnum)
 
 
+def _control_checked(text: str, message: str) -> str:
+    """Refuse control characters (NUL, vertical tab and the rest); tab and newlines become spaces.
+
+    Control characters are not text: a NUL or vertical tab would reach the export unescaped.
+    """
+    out: list[str] = []
+    for char in text:
+        if char in {chr(9), chr(10), chr(13)}:
+            out.append(" ")
+        elif unicodedata.category(char) == "Cc":
+            raise ValueError(message)
+        else:
+            out.append(char)
+    return "".join(out)
+
+
 def _trim(text: str) -> str:
     start, end = 0, len(text)
     while start < end and _is_edge_noise(text[start]):
@@ -57,7 +73,7 @@ def clean_key(value: object, message: str) -> str:
     """Return a cleaned identifier. Invisible format characters are removed everywhere."""
     if type(value) is not str:
         raise ValueError(message)
-    normalised = unicodedata.normalize("NFKC", value)
+    normalised = _control_checked(unicodedata.normalize("NFKC", value), message)
     visible = "".join(char for char in normalised if unicodedata.category(char) != "Cf")
     stripped = _trim(visible)
     if not stripped:
@@ -70,7 +86,7 @@ def clean_text(value: object, message: str) -> str:
     if type(value) is not str:
         raise ValueError(message)
     # Free text is kept as written. NFKC is not applied, so "m²" stays "m²" in a requirement.
-    stripped = _trim(value)
+    stripped = _trim(_control_checked(value, message))
     if not stripped:
         raise ValueError(message)
     return _checked(stripped, message)

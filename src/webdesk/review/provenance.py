@@ -23,8 +23,8 @@ Limits (not enforced here, and recorded in the register):
   a reviewer, and a caller who computes the digest can forge an acknowledgement.
 - The time bound (no acknowledgement dated after the acceptance time plus CLOCK_SKEW) is checked in
   acknowledge_inference, which takes an explicit ``now``. The constructor has no clock. The tzinfo
-  of a datetime is trusted to report its own offset; the standard library zones are used in
-  practice.
+  of a datetime is trusted to report its own offset and to copy itself (the SOW identifier
+  deep-copies the datetime). The standard library zones are used in practice.
 """
 
 from __future__ import annotations

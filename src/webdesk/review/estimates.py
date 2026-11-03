@@ -251,6 +251,10 @@ def decimal_text(value: Decimal | None) -> str:
     plain = exact(value, Decimal, "a number is written from an exact Decimal")
     if not plain.is_finite():
         raise ValueError("a number written as text must be finite")
+    if not plain.is_zero() and not (-MIN_ADJUSTED_EXPONENT - 40 <= plain.adjusted() <= 40):
+        # The bound is far wider than any hours value the model accepts, so it only stops a
+        # caller from writing a value of millions of digits.
+        raise ValueError("a number written as text is outside the supported range")
     return format(plain.normalize(Context(prec=SUM_PRECISION)), "f")
 
 

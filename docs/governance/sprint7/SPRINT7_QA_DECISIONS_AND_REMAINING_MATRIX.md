@@ -129,6 +129,20 @@ closed vocabulary and are refused at construction otherwise.
 1. **Scope of the verification-claim guard.** It is applied to the four citation fields (identifier, source reference, edition, version). QA 9 notes that requirement text, SOW items and objective are not guarded, so "Verified: yes" is accepted there. Requirement text is inferred or client-stated text shown with its provenance label; it is not a citation status. WDS to confirm that this scope is intended, or to extend the guard.
 2. **Trade-off D-F (accepted unless WDS objects).** The guard joins letters across word boundaries so that a claim split by a space or hyphen is caught ("Veri fied: yes"). In exchange, a phrase whose joined letters form a stem is refused ("Recover if you lose access", "Not verified"). The choice is fail-closed: a refused citation field can be corrected; a missed claim would show a false status. A regex cannot distinguish a spaced claim from a phrase, so the trade-off stays.
 
+### 1.8 Independent QA 10, and the round-10 remediation
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 10 | `a2fabd3` | **PASS WITH FINDINGS**. All 16 checks pass within the accepted residuals and the two WDS decisions (guard scope; D-F). DEF-1 minor: the guard docstring said a match is excluded when it lies inside the status label, but "Un-verified" is refused, as the code does. DEF-2 low: the public `decimal_text` accepted a number of any size. Observation: NUL and vertical tab in free text reached the export unescaped. Observation: `asdict` in the SOW identifier deep-copies the caller's datetime, which runs the caller's tzinfo copy method, not documented. |
+| Round-10 remediation | this commit | DEF-1: docstring corrected to the whole-word rule. DEF-2: `decimal_text` refuses values outside a range far wider than the model's bounds. Control characters are refused in identifiers and free text; tab and newlines become spaces. The provenance docstring now documents the tzinfo copy. Regression tests: `tests/unit/test_sprint7_regressions_round10.py`. |
+
+**Design observation, recorded and not changed:** a total such as "total 10-20 hours" in the SOW summary
+is not itself flagged when one of its contributing estimate rows rests on an unacknowledged inference.
+The rows are flagged; the summary line is a derived figure.
+
+**Design observation, recorded and not changed:** "verifiable" and "unverifiable" are refused by the stem
+rule. This is intended: they assert a verification property in an edition, version or source name.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |
