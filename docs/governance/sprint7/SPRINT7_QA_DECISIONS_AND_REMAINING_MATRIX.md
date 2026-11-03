@@ -255,3 +255,28 @@ non-production. Everything else waits on a named WDS or Sprint 6 decision.
 - The adapter mapping (`ai_status_from_adapter`) is a constant table. It does not enforce contract 10.4's rule that a cited finding needs at least one citation, because no adapter-record ingestion exists in the review package.
 - `check_outcome` is caller-supplied, so a citation can be marked SUPPORTED without a substantiating passage. Contract 10.2 requires substantiation. The AI Engine owns the production of this value, so it is outside the review package.
 - The claim guard covers the four citation fields only, as WDS accepted. Other free text, such as SOW item text, can still contain the phrase "Evidence status: verified".
+
+### 1.12 WDS decisions of the directive, dependency corrections, and this increment
+
+**WDS decisions applied (3 November 2026 directive):**
+- Project-level authorization is authoritative. `workspace_id` is a compatibility label, not an authorization identity. The authorization port (`review/authz.py`) never reads it.
+- Minimum Sprint 7 audit events authorised: review decision, clarification opened, resolved and withdrawn, estimate created, revised, approved and rejected, report snapshot, SOW snapshot (`review/audit_events.py`, names follow `<domain>.<object>.<action>`).
+
+**Dependency corrections (exact evidence, replacing stale claims):**
+- Specialist adapter v0.3 exists at commit `c2d3eb3f45e9f847cd7977369f38262f9b6de635`, on `claude/s6-specialists-adapter-v03-a37409` (head `5ea6baa`). An earlier statement in this register that v0.3 is not implemented was wrong, because it confused merge state in this worktree with existence.
+- AI Engine Lineage B is the selected engine (OPEN-13, decided). Its registry lives on Line B, which is not merged into this worktree.
+- OPEN-11 is decided at project level, with the workspace relationship validated through Foundation. The Foundation has no workspace entity; the earlier block on S7-01, S7-02 and S7-04 scope is resolved by the project-level rule.
+- The final Sprint 6 integrated candidate is not verified complete. S7-12 real integration waits for it.
+
+**The five unit-suite failures are environmental, and reproducible:** the psycopg libpq DLL fails to load when the worktree path is long. A clone of the published candidate in a short path runs `tests/unit` to 724 passed. The earlier run of 719 passed plus 5 failed came from the long path.
+
+**Implemented in this increment (models and Foundation delegation, fixtures and doubles only):**
+- `review/authz.py`: project-scoped authorization. Queue viewing uses the Foundation `requirement.view` permission through the real engine (membership for analysts, project grant for reviewers and approvers). Decisions, clarification resolution, estimate approval and revision have no Foundation permission, so they are refused with the reason named.
+- `review/audit_events.py`: the Sprint 7 event vocabulary and a writer that calls Foundation `record_event` on the caller's connection and counts an event recorded only when the insert returns an identifier. Details are restricted to identifier-shaped values, so free text is refused.
+
+**Not done in this increment, and why:**
+- **S7-07 approval transition.** Foundation's `sow.approve` row is empty, so approval is denied by policy, and no estimate-approval permission exists. Approving also needs a decision on whether an approved estimate may still be `draft`: the earlier model fixes every estimate to draft, and changing that is a WDS decision. Both are needed before any approval transition is written.
+- **Durable audit verification.** `WEBDESK_TEST_DATABASE_URL` is not set in this environment, so the PostgreSQL persistence test is skipped with its reason, and no durable success is claimed.
+- **Real project-isolation tests on PostgreSQL.** Same reason: the SQL-store test is written and skipped.
+- **S7-12 ingestion.** Not started. It needs the published adapter v0.3 contract read in full and the Line B registry, and real integration waits for the verified Sprint 6 candidate.
+- **Wiring.** The authorization port and audit writer have no caller yet, because no service layer or route exists in this Sprint 7 scope.
