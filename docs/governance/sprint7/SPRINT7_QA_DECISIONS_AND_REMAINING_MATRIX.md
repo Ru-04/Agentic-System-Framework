@@ -237,10 +237,21 @@ non-production. Everything else waits on a named WDS or Sprint 6 decision.
 |---|---|---|
 | Contract register received | n/a | OPEN-07 and OPEN-08 corrected as above (P5). Workspace: none exists on the Foundation candidate; OPEN-11 keeps the project-level boundary, and `workspace_id` is a compatibility label only. Contract corrections `2387fe3` to `e9fb188` are local to the contract session and not pushed; they are not relied on here. |
 | Independent QA of increment 2 | `8393059` | **FAIL**: mandatory (1) the S7-11 stale status line dropped the missing-evidence clause; mandatory (2) exact-type gaps in report_state (snapshot, assessment, input tuples) and in the resolution actor identifier. Minor: duplicate entities were refused only at assessment. All other items passed (queue all 25 pairs, decisions, clarification resolution, SOW escaping, no forbidden imports, no change outside review). |
-| Remediation | this commit | Both mandatory groups fixed. Duplicate entities refused at construction. S7-05 realigned to the approved vocabularies (see P5). Regression tests: `tests/unit/test_sprint7_regressions_increment2.py`. Full unit suite 724 passed; the five test_api_app.py failures are environmental (psycopg). |
+| Remediation | this commit | Both mandatory groups fixed. Duplicate entities refused at construction. S7-05 realigned to the approved vocabularies (see P5). Regression tests: `tests/unit/test_sprint7_regressions_increment2.py`. Full unit suite: 719 passed and 5 failed, with 724 collected. The five failures are in test_api_app.py and are environmental (psycopg libpq). |
 
 **Blocked requirements, corrected reasons (for WDS):**
 - **S7-10 (audit):** the approved event list in contract section 14.2 (OPEN-25) covers Sprint 6 events only. The Sprint 7 events (review decisions, estimate revisions, report snapshots) are not in it, so they need a WDS decision to add them. Writing them needs the PW-1 Foundation worker, which does not exist yet (D-DEP-2).
 - **S7-01, S7-02, S7-04 (scope and authorization):** workspace identity is not in the Foundation (D-DEP-1). Scoped access and approval authorization stay blocked until the scope entity or rule is defined.
 - **S7-07 (estimate approval):** needs authorization (D-DEP-1, OPEN-04 approver rules) and durable audit (S7-10).
 - **S7-12 (seven specialists):** needs the merged Sprint 6 specialist contract (adapter 0.3, D-DEP-4) and the shared registry (OPEN-12 decided; the registry lives on Line B).
+
+### 1.11 Independent re-verification of daa0706
+
+| Step | SHA | Result |
+|---|---|---|
+| Re-verification (scope: changes since 8393059) | `daa0706` | **PASS**, no mandatory defects. The stale status line names missing evidence; exact types hold for snapshots, assessments, input tuples and the actor identifier; the citation vocabularies match the approved OPEN-07 and OPEN-08 values; no approved value can render as "verified"; the claim guard is unchanged. Unit suite: 719 passed, 5 environmental failures (test_api_app.py, psycopg). |
+
+**Non-mandatory residuals recorded from the re-verification:**
+- The adapter mapping (`ai_status_from_adapter`) is a constant table. It does not enforce contract 10.4's rule that a cited finding needs at least one citation, because no adapter-record ingestion exists in the review package.
+- `check_outcome` is caller-supplied, so a citation can be marked SUPPORTED without a substantiating passage. Contract 10.2 requires substantiation. The AI Engine owns the production of this value, so it is outside the review package.
+- The claim guard covers the four citation fields only, as WDS accepted. Other free text, such as SOW item text, can still contain the phrase "Evidence status: verified".
