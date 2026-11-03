@@ -1,6 +1,7 @@
 # Credential exposure record (sanitized), 3 November 2026
 
-**Status: CLOSED on owner confirmation (recorded 3 November 2026). Closure authorized by WDS.**
+**Status: CLOSED BY WDS MANAGEMENT ATTESTATION — INDEPENDENT TECHNICAL EVIDENCE NOT AVAILABLE IN REPOSITORY.**
+(Recorded 3 November 2026. WDS Authorized Approver disposition.)
 
 Neither the original nor the replacement password is recorded here, in the repository, or in any commit.
 
@@ -27,6 +28,15 @@ Neither the original nor the replacement password is recorded here, in the repos
 - Basis of closure, stated precisely: the confirmation was relayed to the engineering session in a WDS directive.
   The directive is not in this repository. The owner's own written confirmation artifact, if one exists, is held
   by the owner. This record does not show that a written confirmation was received, and it does not claim one.
+
+## Disposition and the distinctions it preserves
+- The infrastructure owner confirmed rotation to WDS, and WDS accepted that confirmation as a management disposition.
+  A separate written owner confirmation is not mandatory for this disposition.
+- No written owner confirmation is present in this repository.
+- Independent QA did not itself verify the secret rotation. No independent technical check of the rotation exists here.
+- No authentication-log review has been completed or is evidenced.
+- This disposition closes the management evidence question. It does not override any mandatory independent technical
+  security control.
 
 ## What this record does NOT claim
 - It does not record the owner's verification steps in detail. The engineering session did not perform or observe them.
