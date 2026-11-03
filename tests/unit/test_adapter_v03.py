@@ -3,6 +3,8 @@ OPEN-07, OPEN-08). Synthetic inputs only. No test here depends on live documenta
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 from uuid import UUID
 
@@ -41,6 +43,12 @@ PROJECT_ID = UUID("6f1c2d3e-0000-4000-8000-000000000002")
 TASK = "storefront product checkout settings in the admin"
 
 
+def _actions_digest(actions: Any) -> str:
+    # Contract v1.1 encoding: SHA-256 hex of the sorted unique compact JSON array.
+    canonical = json.dumps(sorted(set(actions)), separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
 def _envelope(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "adapter_contract_version": "0.3",
@@ -58,6 +66,8 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "confirmation_ref": "conf-opaque-1",
     }
     data.update(overrides)
+    if "allowed_actions_digest" not in overrides:
+        data["allowed_actions_digest"] = _actions_digest(data["allowed_actions"])
     return data
 
 
@@ -215,13 +225,15 @@ def test_binding_digests_change_with_requirements_and_actions() -> None:
     assert binding_for(_request(request_id="REQ-OTHER")) == base
 
 
-def test_a_refusal_after_verification_still_reports_the_verified_actor() -> None:
+def test_a_forbidden_action_is_refused_before_the_confirmation_is_consumed() -> None:
     provider = MockSpecialist(SpecialistId.SHOPIFY)
+    verifier = RecordingVerifier()
     response, verified = call_adapter(
-        provider, _request(allowed_actions=["approve_artifact"]), RecordingVerifier()
+        provider, _request(allowed_actions=["approve_artifact"]), verifier
     )
     assert provider.calls == 0
-    assert verified == VerifiedConfirmation(actor_ref="actor-from-proof")
+    assert verifier.calls == []
+    assert verified is None
     assert response.error == AdapterError(code="action_forbidden")
 
 

@@ -6,6 +6,8 @@ whole module, so no live documentation can be fetched by accident.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import socket
 from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime, timedelta
@@ -117,6 +119,12 @@ def _provider(specialist: SpecialistId, retriever: CountingRetriever) -> Any:
     return PLATFORM_CLASSES[specialist](retriever, **kwargs)
 
 
+def _actions_digest(actions: Any) -> str:
+    # Contract v1.1 encoding: SHA-256 hex of the sorted unique compact JSON array.
+    canonical = json.dumps(sorted(set(actions)), separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
 def _envelope(specialist: SpecialistId, **overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "adapter_contract_version": "0.3",
@@ -134,6 +142,8 @@ def _envelope(specialist: SpecialistId, **overrides: Any) -> dict[str, Any]:
         "confirmation_ref": f"conf-{specialist.value}",
     }
     data.update(overrides)
+    if "allowed_actions_digest" not in overrides:
+        data["allowed_actions_digest"] = _actions_digest(data["allowed_actions"])
     return data
 
 

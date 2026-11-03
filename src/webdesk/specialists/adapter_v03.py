@@ -47,6 +47,7 @@ from webdesk.specialists.adapter_v02 import (
     check_allowed_actions,
     resolve_capability,
 )
+from webdesk.specialists.authority import Action
 from webdesk.specialists.catalog import SpecialistId
 from webdesk.specialists.contract import CONTRACT_VERSION, EvidenceRef, NonBlank
 from webdesk.specialists.errors import SpecialistError
@@ -61,6 +62,11 @@ CONFIDENCE_STATUS: Final[Literal["not_assessed"]] = "not_assessed"
 
 ERROR_VERSION_UNSUPPORTED: Final[str] = "adapter_version_unsupported"
 ERROR_CONFIRMATION_NOT_VERIFIED: Final[str] = "confirmation_not_verified"
+ERROR_ACTIONS_DIGEST_MISMATCH: Final[str] = "allowed_actions_digest_mismatch"
+
+# The closed allowed_actions vocabulary (contract v1.1). Anything else is refused, and so is any
+# FORBIDDEN_ACTIONS value. The check is the same one the v0.2 adapter uses.
+CLOSED_ACTION_VOCABULARY: Final[frozenset[str]] = frozenset(action.value for action in Action)
 
 
 class CheckOutcome(StrEnum):
@@ -75,10 +81,10 @@ RequirementRef = Annotated[str, StringConstraints(pattern=REQUIREMENT_REF_PATTER
 
 # SHA-256 hex of the sorted unique JSON array of the run's approved source allowlist entries.
 # An empty allowlist gives the digest of "[]", and then the specialist does no retrieval.
-SOURCE_SCOPE_DIGEST_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
+SHA256_HEX_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
 EMPTY_SOURCE_SCOPE_DIGEST: Final[str] = hashlib.sha256(b"[]").hexdigest()
 
-SourceScopeDigest = Annotated[str, StringConstraints(pattern=SOURCE_SCOPE_DIGEST_PATTERN)]
+Sha256Hex = Annotated[str, StringConstraints(pattern=SHA256_HEX_PATTERN)]
 
 
 class AdapterRequest(BaseModel):
@@ -98,7 +104,8 @@ class AdapterRequest(BaseModel):
     evidence_refs: tuple[EvidenceRef, ...] = ()
     task: NonBlank
     allowed_actions: tuple[NonBlank, ...] = Field(min_length=1)
-    source_scope_digest: SourceScopeDigest
+    allowed_actions_digest: Sha256Hex
+    source_scope_digest: Sha256Hex
     confirmation_ref: NonBlank
 
 
@@ -335,6 +342,13 @@ def call_adapter(
     The verifier is called exactly once, because a Foundation confirmation is single-use. The
     verified actor is returned alongside the response, for the audit record only.
     """
+    # Checked before the verifier, so a malformed action set never spends a confirmation.
+    if _digest(request.allowed_actions) != request.allowed_actions_digest:
+        return _refused(request, request.capability_id, ERROR_ACTIONS_DIGEST_MISMATCH), None
+    try:
+        check_allowed_actions(request.allowed_actions, CLOSED_ACTION_VOCABULARY)
+    except ValueError as exc:
+        return _refused(request, request.capability_id, str(exc)), None
     try:
         verified = verifier.verify(request.confirmation_ref, binding_for(request))
     except Exception:

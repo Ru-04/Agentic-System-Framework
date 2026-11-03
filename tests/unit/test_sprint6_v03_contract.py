@@ -7,6 +7,7 @@ this branch. Those tests are marked CONTRACT DOUBLE. Genuine integration verific
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -72,6 +73,12 @@ class CountingRetriever:
         return self._inner.search(query)
 
 
+def _actions_digest(actions: Any) -> str:
+    # Contract v1.1 encoding: SHA-256 hex of the sorted unique compact JSON array.
+    canonical = json.dumps(sorted(set(actions)), separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
 def _envelope(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "adapter_contract_version": "0.3",
@@ -89,6 +96,8 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "confirmation_ref": "conf-s6-1",
     }
     data.update(overrides)
+    if "allowed_actions_digest" not in overrides:
+        data["allowed_actions_digest"] = _actions_digest(data["allowed_actions"])
     return data
 
 
@@ -322,3 +331,40 @@ def test_the_source_scope_digest_is_required() -> None:
     del data["source_scope_digest"]
     with pytest.raises(AdapterRequestError):
         parse_request(data)
+
+
+def test_an_altered_action_set_is_refused_without_consuming_the_confirmation() -> None:
+    verifier = CountingVerifier()
+    # The digest is for read_evidence only, but the envelope now asks for more.
+    envelope = _envelope(allowed_actions=["read_evidence", "propose_candidates"])
+    envelope["allowed_actions_digest"] = _actions_digest(["read_evidence"])
+    response, verified = call_adapter(
+        _shopify(CountingRetriever([])), parse_request(envelope), verifier
+    )
+    assert verifier.calls == 0
+    assert verified is None
+    assert response.error is not None
+    assert response.error.code == "allowed_actions_digest_mismatch"
+
+
+@pytest.mark.parametrize(
+    "actions", [["fly_to_moon"], ["approve_artifact"], ["read_evidence", "grant_permission"]]
+)
+def test_out_of_vocabulary_or_forbidden_actions_are_refused_before_verification(
+    actions: list[str],
+) -> None:
+    verifier = CountingVerifier()
+    response, verified = call_adapter(
+        _shopify(CountingRetriever([])), parse_request(_envelope(allowed_actions=actions)), verifier
+    )
+    assert verifier.calls == 0
+    assert verified is None
+    assert response.error is not None
+    assert response.error.code in {"action_unknown", "action_forbidden"}
+
+
+def test_the_allowed_actions_digest_is_required() -> None:
+    envelope = _envelope()
+    del envelope["allowed_actions_digest"]
+    with pytest.raises(AdapterRequestError):
+        parse_request(envelope)
