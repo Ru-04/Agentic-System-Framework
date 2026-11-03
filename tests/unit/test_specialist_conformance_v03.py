@@ -130,6 +130,7 @@ def _envelope(specialist: SpecialistId, **overrides: Any) -> dict[str, Any]:
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
+        "source_scope_digest": "a" * 64,
         "confirmation_ref": f"conf-{specialist.value}",
     }
     data.update(overrides)

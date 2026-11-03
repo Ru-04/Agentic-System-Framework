@@ -73,6 +73,13 @@ REQUIREMENT_REF_PATTERN: Final[str] = r"^REQ-[0-9]{3,}$"
 
 RequirementRef = Annotated[str, StringConstraints(pattern=REQUIREMENT_REF_PATTERN)]
 
+# SHA-256 hex of the sorted unique JSON array of the run's approved source allowlist entries.
+# An empty allowlist gives the digest of "[]", and then the specialist does no retrieval.
+SOURCE_SCOPE_DIGEST_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
+EMPTY_SOURCE_SCOPE_DIGEST: Final[str] = hashlib.sha256(b"[]").hexdigest()
+
+SourceScopeDigest = Annotated[str, StringConstraints(pattern=SOURCE_SCOPE_DIGEST_PATTERN)]
+
 
 class AdapterRequest(BaseModel):
     """Envelope WebDesk sends to the adapter. Unknown fields are refused, including actor fields."""
@@ -91,6 +98,7 @@ class AdapterRequest(BaseModel):
     evidence_refs: tuple[EvidenceRef, ...] = ()
     task: NonBlank
     allowed_actions: tuple[NonBlank, ...] = Field(min_length=1)
+    source_scope_digest: SourceScopeDigest
     confirmation_ref: NonBlank
 
 
@@ -147,6 +155,7 @@ class ConfirmationBinding:
     capability_id: str
     requirement_refs_digest: str
     allowed_actions_digest: str
+    source_scope_digest: str
 
 
 @dataclass(frozen=True)
@@ -271,6 +280,7 @@ def binding_for(request: AdapterRequest) -> ConfirmationBinding:
         capability_id=request.capability_id,
         requirement_refs_digest=_digest(request.requirement_refs),
         allowed_actions_digest=_digest(request.allowed_actions),
+        source_scope_digest=request.source_scope_digest,
     )
 
 
@@ -348,6 +358,19 @@ def _run_verified(
         check_allowed_actions(request.allowed_actions, provider.declared_actions)
     except ValueError as exc:
         return _refused(request, capability_id, str(exc))
+    if request.source_scope_digest == EMPTY_SOURCE_SCOPE_DIGEST:
+        # No approved source is in scope for this run, so the specialist is not invoked at all.
+        return AdapterResponse(
+            adapter_contract_version=ADAPTER_CONTRACT_VERSION,
+            specialist_contract_version=CONTRACT_VERSION,
+            request_id=request.request_id,
+            workspace_id=request.workspace_id,
+            specialist_id=request.specialist_id,
+            capability_id=capability_id,
+            registry_version=REGISTRY_VERSION,
+            status="incomplete",
+            unknowns=("no approved source is in scope for this run; no retrieval was attempted",),
+        )
 
     raw_request: Mapping[str, object] = {
         "contract_version": CONTRACT_VERSION,

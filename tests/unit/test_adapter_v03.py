@@ -54,6 +54,7 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
+        "source_scope_digest": "a" * 64,
         "confirmation_ref": "conf-opaque-1",
     }
     data.update(overrides)

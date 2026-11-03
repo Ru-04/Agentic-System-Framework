@@ -85,6 +85,7 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
+        "source_scope_digest": "a" * 64,
         "confirmation_ref": "conf-s6-1",
     }
     data.update(overrides)
@@ -285,3 +286,39 @@ def test_requirement_digest_is_sha256_of_the_sorted_unique_compact_array() -> No
         binding_for(parse_request(_envelope(requirement_refs=refs))).requirement_refs_digest
         == expected
     )
+
+
+def test_an_empty_source_scope_runs_no_retrieval_and_no_provider() -> None:
+    empty = hashlib.sha256(b"[]").hexdigest()
+    retriever = CountingRetriever([_vendor("https://www.shopify.com/pricing/plans")])
+    response, verified = call_adapter(
+        _shopify(retriever),
+        parse_request(_envelope(source_scope_digest=empty)),
+        CountingVerifier(),
+    )
+    assert retriever.calls == 0
+    assert verified == VerifiedConfirmation(actor_ref="proof-actor")
+    assert response.status == "incomplete"
+    assert response.findings == ()
+    assert response.error is None
+
+
+def test_the_source_scope_digest_is_part_of_the_verified_binding() -> None:
+    first = binding_for(parse_request(_envelope(source_scope_digest="a" * 64)))
+    second = binding_for(parse_request(_envelope(source_scope_digest="b" * 64)))
+    assert first.source_scope_digest == "a" * 64
+    assert first != second
+
+
+@pytest.mark.parametrize("digest", ["A" * 64, "a" * 63, "g" * 64, "", "[]"])
+def test_a_malformed_source_scope_digest_is_refused(digest: str) -> None:
+    with pytest.raises(AdapterRequestError) as raised:
+        parse_request(_envelope(source_scope_digest=digest))
+    assert raised.value.code == ERROR_REQUEST_INVALID
+
+
+def test_the_source_scope_digest_is_required() -> None:
+    data = _envelope()
+    del data["source_scope_digest"]
+    with pytest.raises(AdapterRequestError):
+        parse_request(data)
