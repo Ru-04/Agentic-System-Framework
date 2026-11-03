@@ -1,0 +1,97 @@
+"""Evidence relevance for a requirement (M1 S2, management decision 2 of 22 October 2026).
+
+Keyword overlap alone was shown to be insufficient (QA3 and the spot-checks). This module grades how
+well one passage addresses one requirement, using deterministic rules over the requirement's own
+meaningful terms:
+
+Platform-generic words (for example "shopify", "store", "product") are not counted at all.
+
+- DIRECT: at least three distinct requirement terms, and at least half of the requirement's terms,
+  appear in the passage.
+- PARTIAL: at least three distinct requirement terms appear (PARTIAL_MIN_TERMS), but not enough
+  for DIRECT. The passage may support part of the requirement but is not sufficient on its own.
+- IRRELEVANT: fewer than three terms appear. The passage is excluded.
+
+This is a lexical grade. It can miss a direct answer phrased in other words, and a shared specific
+word can still be a coincidence. It therefore never establishes technical feasibility, and its
+grades are reported with that limit. A semantic validator may be plugged in later. It is not
+enabled, because it would need a model call, which is not authorized (D09). See SemanticValidator.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Final, Protocol
+
+from webdesk.evidence.retrieval import content_terms
+
+DIRECT_MIN_TERMS: Final[int] = 3
+DIRECT_MIN_RATIO: Final[float] = 0.5
+PARTIAL_MIN_TERMS: Final[int] = 3
+
+
+class Relevance(StrEnum):
+    DIRECT = "direct"
+    PARTIAL = "partial"
+    IRRELEVANT = "irrelevant"
+
+
+# Platform-generic words appear in almost every Shopify passage. They say nothing about a specific
+# requirement, so they are not counted as evidence of relevance (QA4-04).
+PLATFORM_GENERIC_TERMS: Final[frozenset[str]] = frozenset(
+    {
+        "shopify",
+        "store",
+        "online",
+        "merchant",
+        "customer",
+        "order",
+        "product",
+        "platform",
+        "business",
+        "client",
+        "site",
+        "website",
+        "system",
+        "feature",
+        "solution",
+        "support",
+        "using",
+        "based",
+        "app",
+    }
+)
+
+
+def specific_terms(text: str) -> set[str]:
+    """Requirement or passage terms that count for relevance (platform-generic words removed)."""
+    return content_terms(text) - PLATFORM_GENERIC_TERMS
+
+
+def judge_relevance(requirement: str, passage_text: str) -> Relevance:
+    required = specific_terms(requirement)
+    if not required:
+        return Relevance.IRRELEVANT
+    matched = required & specific_terms(passage_text)
+    if len(matched) >= DIRECT_MIN_TERMS and len(matched) / len(required) >= DIRECT_MIN_RATIO:
+        return Relevance.DIRECT
+    if len(matched) >= PARTIAL_MIN_TERMS:
+        return Relevance.PARTIAL
+    return Relevance.IRRELEVANT
+
+
+class SemanticValidationDisabled(RuntimeError):
+    """Raised when a semantic validator is invoked before D09 approval."""
+
+
+class SemanticValidator(Protocol):
+    def judge(self, requirement: str, passage_text: str) -> Relevance: ...
+
+
+class DisabledSemanticValidator:
+    """The interface is present. Calling it refuses, because no model is approved (D09)."""
+
+    def judge(self, requirement: str, passage_text: str) -> Relevance:
+        raise SemanticValidationDisabled(
+            "semantic validation needs an approved provider, model ID, credentials and budget (D09)"
+        )

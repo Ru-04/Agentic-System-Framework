@@ -1,0 +1,34 @@
+{
+  "_label": "SYNTHETIC FIXTURE. Not platform evidence. Not vendor retrieval. Not an investigation result.",
+  "adapter_contract_version": "0.1",
+  "specialist_contract_version": "1.0.0",
+  "request": {
+    "request_id": "SYN-SLICE-0001",
+    "workspace_id": "ws-synthetic",
+    "actor_id": "synthetic-operator",
+    "specialist_id": "shopify",
+    "requirement_ids": ["REQ-SYN-1"],
+    "task": "storefront product checkout settings in the admin",
+    "allowed_actions": ["read_evidence", "propose_candidates", "declare_unknowns"],
+    "evidence_refs": []
+  },
+  "expected_response_shape": {
+    "adapter_contract_version": "0.1",
+    "specialist_contract_version": "1.0.0",
+    "request_id": "SYN-SLICE-0001",
+    "status": "incomplete",
+    "findings": [],
+    "unknowns": [
+      "no approved evidence source is configured for Shopify; no retrieval was attempted",
+      "feasibility is not determined",
+      "CLARIFY: confirm the platform plan or edition and the store setup this requirement assumes"
+    ]
+  },
+  "checks": [
+    "workspace in response equals workspace in request",
+    "request_id in response equals request_id in request",
+    "no forbidden action in allowed_actions",
+    "status is completed only with DIRECT evidence (none in this fixture)",
+    "no evidence cited from outside an approved origin"
+  ]
+}
