@@ -50,7 +50,7 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "project_id": str(PROJECT_ID),
         "specialist_id": SpecialistId.SHOPIFY.value,
         "capability_id": REGISTRY_CAPABILITY_IDS[SpecialistId.SHOPIFY],
-        "requirement_ids": ["REQ-001"],
+        "requirement_refs": ["REQ-001"],
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
@@ -209,7 +209,7 @@ def test_verifier_receives_the_reference_and_the_exact_binding() -> None:
 
 def test_binding_digests_change_with_requirements_and_actions() -> None:
     base = binding_for(_request())
-    assert binding_for(_request(requirement_ids=["REQ-002"])) != base
+    assert binding_for(_request(requirement_refs=["REQ-002"])) != base
     assert binding_for(_request(allowed_actions=["propose_candidates"])) != base
     assert binding_for(_request(request_id="REQ-OTHER")) == base
 

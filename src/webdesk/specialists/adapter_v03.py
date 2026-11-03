@@ -87,7 +87,7 @@ class AdapterRequest(BaseModel):
     specialist_id: SpecialistId
     capability_id: NonBlank
     # Run-scoped requirement references: each is REQ-NNN, and the run is run_id (contract 7).
-    requirement_ids: tuple[RequirementRef, ...] = Field(min_length=1)
+    requirement_refs: tuple[RequirementRef, ...] = Field(min_length=1)
     evidence_refs: tuple[EvidenceRef, ...] = ()
     task: NonBlank
     allowed_actions: tuple[NonBlank, ...] = Field(min_length=1)
@@ -145,7 +145,7 @@ class ConfirmationBinding:
     project_id: UUID
     specialist_id: SpecialistId
     capability_id: str
-    requirement_ids_digest: str
+    requirement_refs_digest: str
     allowed_actions_digest: str
 
 
@@ -256,7 +256,10 @@ def check_outcome(assessments: Sequence[CitationAssessment]) -> CheckOutcome:
 
 
 def _digest(values: Sequence[str]) -> str:
-    canonical = json.dumps(list(values), separators=(",", ":"), ensure_ascii=True)
+    # Contract v1.1 encoding: SHA-256 hex of the sorted unique JSON array, compact separators.
+    canonical = json.dumps(
+        sorted(set(values)), separators=(",", ":"), sort_keys=True, ensure_ascii=True
+    )
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
@@ -266,7 +269,7 @@ def binding_for(request: AdapterRequest) -> ConfirmationBinding:
         project_id=request.project_id,
         specialist_id=request.specialist_id,
         capability_id=request.capability_id,
-        requirement_ids_digest=_digest(request.requirement_ids),
+        requirement_refs_digest=_digest(request.requirement_refs),
         allowed_actions_digest=_digest(request.allowed_actions),
     )
 
@@ -351,7 +354,7 @@ def _run_verified(
         "request_id": request.request_id,
         "workspace_id": request.workspace_id,
         "specialist_id": request.specialist_id.value,
-        "requirement_ids": list(request.requirement_ids),
+        "requirement_ids": list(request.requirement_refs),
         "evidence_refs": [ref.model_dump() for ref in request.evidence_refs],
         "task": request.task,
     }

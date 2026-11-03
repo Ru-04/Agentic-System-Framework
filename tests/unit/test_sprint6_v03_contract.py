@@ -6,6 +6,7 @@ this branch. Those tests are marked CONTRACT DOUBLE. Genuine integration verific
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +26,7 @@ from webdesk.specialists.adapter_v03 import (
     ConfirmationBinding,
     RefuseAllConfirmations,
     VerifiedConfirmation,
+    binding_for,
     call_adapter,
     map_evidence_status,
     parse_request,
@@ -79,7 +81,7 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "project_id": PROJECT_ID,
         "specialist_id": SpecialistId.SHOPIFY.value,
         "capability_id": REGISTRY_CAPABILITY_IDS[SpecialistId.SHOPIFY],
-        "requirement_ids": ["REQ-001"],
+        "requirement_refs": ["REQ-001"],
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
@@ -116,7 +118,7 @@ def test_request_schema_forbids_extra_fields_and_actor_authority() -> None:
     schema = AdapterRequest.model_json_schema()
     assert schema["additionalProperties"] is False
     assert {"actor_id", "operator_confirmed"}.isdisjoint(schema["properties"])
-    assert {"confirmation_ref", "run_id", "project_id", "requirement_ids"} <= set(
+    assert {"confirmation_ref", "run_id", "project_id", "requirement_refs"} <= set(
         schema["required"]
     )
 
@@ -142,7 +144,7 @@ def test_version_zero_two_is_not_accepted_as_zero_three() -> None:
 
 @pytest.mark.parametrize("ref", ["REQ-001", "REQ-0001", "REQ-123456"])
 def test_valid_requirement_references_are_accepted(ref: str) -> None:
-    assert parse_request(_envelope(requirement_ids=[ref])).requirement_ids == (ref,)
+    assert parse_request(_envelope(requirement_refs=[ref])).requirement_refs == (ref,)
 
 
 @pytest.mark.parametrize(
@@ -150,7 +152,7 @@ def test_valid_requirement_references_are_accepted(ref: str) -> None:
 )
 def test_malformed_requirement_references_are_refused(ref: str) -> None:
     with pytest.raises(AdapterRequestError) as raised:
-        parse_request(_envelope(requirement_ids=[ref]))
+        parse_request(_envelope(requirement_refs=[ref]))
     assert raised.value.code == ERROR_REQUEST_INVALID
 
 
@@ -273,3 +275,13 @@ def test_lineage_b_serialization_carries_check_outcome_separately() -> None:
         assert record["evidence_status"] in LINEAGE_B_EVIDENCE_STATUS
         assert record["check_outcome"] in {"SUPPORTED", "UNSUPPORTED", "UNKNOWN"}
         assert record["evidence_status"] != "verified"
+
+
+def test_requirement_digest_is_sha256_of_the_sorted_unique_compact_array() -> None:
+    # Contract v1.1: SHA-256 hex of the sorted unique JSON array, compact separators.
+    refs = ["REQ-002", "REQ-001", "REQ-001"]
+    expected = hashlib.sha256(b'["REQ-001","REQ-002"]').hexdigest()
+    assert (
+        binding_for(parse_request(_envelope(requirement_refs=refs))).requirement_refs_digest
+        == expected
+    )
