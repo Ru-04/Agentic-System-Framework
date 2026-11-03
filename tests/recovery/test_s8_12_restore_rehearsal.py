@@ -16,8 +16,10 @@ What is rehearsed, against a real committed database with installed Administrato
 All verification reads go through the cluster administrator's psql inside the container, because the
 test owner cannot read the migration bookkeeping table. Both databases are read the same way.
 
-Requires the dedicated cluster and two environment variables:
-    S8_RECOVERY=1 S8_DOCKER_CONTAINER=<container name> S8_CLUSTER_ADMIN=<admin role> pytest tests/recovery -q
+Requires the dedicated cluster and these environment variables:
+    S8_RECOVERY=1 S8_DOCKER_CONTAINER=<container name>
+    S8_CLUSTER_ADMIN=<admin role>
+Run with: pytest tests/recovery -q
 Without them the module is skipped on purpose; it is a rehearsal, not a gate.
 """
 
