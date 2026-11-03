@@ -24,7 +24,12 @@ from webdesk.review.estimates import (
     total_estimate,
 )
 from webdesk.review.evidence import Citation, CitationView, render_citation
-from webdesk.review.provenance import ConfirmationState, Requirement, SourceType
+from webdesk.review.provenance import (
+    ConfirmationState,
+    Requirement,
+    SourceType,
+    pending_inferred_ids,
+)
 
 DRAFT_WATERMARK = "DRAFT - NOT APPROVED - NOT FOR CLIENT RELEASE"
 APPROVAL_STATE = "draft_unapproved"
@@ -82,6 +87,15 @@ class DraftSow:
 
     def __post_init__(self) -> None:
         _require_draft(self)
+        # Derived fields are recomputed, never trusted. A caller cannot supply a total, a citation
+        # status or an identifier that the source does not produce.
+        if self.sow_id != _sow_identifier(self.source):
+            raise ValueError("the SOW identifier does not match its source")
+        if self.estimate_summary != _estimate_summary(self.source.estimate):
+            raise ValueError("the estimate summary does not match its source")
+        expected_views = tuple(render_citation(c) for c in self.source.citations)
+        if self.citation_views != expected_views:
+            raise ValueError("the citation views do not match their source")
 
 
 def _require_draft(sow: DraftSow) -> None:
@@ -119,6 +133,7 @@ def render_html(sow: DraftSow) -> str:
         f"Approval state: {_e(sow.approval_state)}. Not final, not signed off.</p>",
         f"<h2>Objective</h2><p>{_e(source.objective)}</p>",
     ]
+    pending = pending_inferred_ids(source.requirements)
     for heading, items in (
         ("In scope", source.in_scope),
         ("Out of scope", source.out_of_scope),
@@ -130,7 +145,7 @@ def render_html(sow: DraftSow) -> str:
         ("Risks", source.risks),
         ("Acceptance criteria", source.acceptance_criteria),
     ):
-        parts.append(_items_section(heading, items))
+        parts.append(_items_section(heading, items, pending))
     parts.append(_requirements_section(source.requirements))
     parts.append(_estimate_section(sow))
     parts.append(_citations_section(sow.citation_views))
@@ -158,15 +173,26 @@ def _e(value: str) -> str:
     return html.escape(value, quote=True)
 
 
-def _items_section(heading: str, items: tuple[SowItem, ...]) -> str:
+def _items_section(heading: str, items: tuple[SowItem, ...], pending: frozenset[str]) -> str:
     if not items:
         return f"<h2>{_e(heading)}</h2><p>None stated.</p>"
-    rows = "".join(
-        f"<li>{_e(item.text)} <span class=\"refs\">References: "
-        f"{_e(', '.join(item.refs))}</span></li>"
-        for item in items
-    )
+    rows = "".join(_item_row(item, pending) for item in items)
     return f"<h2>{_e(heading)}</h2><ul>{rows}</ul>"
+
+
+def _item_row(item: SowItem, pending: frozenset[str]) -> str:
+    # An item that rests on an unacknowledged inference says so, wherever it appears.
+    unresolved = [ref for ref in item.refs if ref in pending]
+    flag = (
+        f' <span class="provenance">Rests on unacknowledged inference: '
+        f"{_e(', '.join(unresolved))}</span>"
+        if unresolved
+        else ""
+    )
+    return (
+        f"<li>{_e(item.text)} <span class=\"refs\">References: "
+        f"{_e(', '.join(item.refs))}</span>{flag}</li>"
+    )
 
 
 def _requirements_section(requirements: tuple[Requirement, ...]) -> str:

@@ -23,8 +23,10 @@ from enum import StrEnum
 # Every estimate set is a draft until S7-07 provides an authorized approval path.
 DRAFT_STATE = "draft"
 
-# Hours inputs are bounded so that the exact sum always fits the arithmetic precision below.
+# Hours inputs are bounded so that the exact sum always fits the arithmetic precision below. The
+# exponent bound keeps the smallest value at 1E-6 hours, so 30 digits span every input exactly.
 MAX_HOURS = Decimal(1_000_000)
+MIN_ADJUSTED_EXPONENT = -6
 MAX_SIGNIFICANT_DIGITS = 30
 SUM_PRECISION = 80
 
@@ -88,9 +90,15 @@ class EstimateSet:
             raise ValueError("an estimate set needs an identifier and an owner")
         if self.version < 1:
             raise ValueError("an estimate set version starts at 1")
-        if not self.lines:
+        # Copy into a tuple first: a generator is consumed once, and a caller's list cannot change
+        # the set after the checks below have run.
+        lines = tuple(self.lines)
+        if not all(isinstance(line, EstimateLine) for line in lines):
+            raise ValueError("an estimate set holds only EstimateLine values")
+        object.__setattr__(self, "lines", lines)
+        if not lines:
             raise ValueError("an estimate set needs at least one line")
-        ids = [line.line_id for line in self.lines]
+        ids = [line.line_id for line in lines]
         if len(set(ids)) != len(ids):
             raise ValueError("estimate line identifiers must be unique")
 
@@ -158,9 +166,13 @@ def _hours(value: object) -> Decimal:
         raise ValueError("estimated hours must not be negative")
     if value > MAX_HOURS:
         raise ValueError("estimated hours exceed the bound for a single line")
+    if value.is_zero():
+        return Decimal(0)
     if len(value.as_tuple().digits) > MAX_SIGNIFICANT_DIGITS:
         raise ValueError("estimated hours have too many significant digits")
-    return Decimal(0) if value.is_zero() else value
+    if value.adjusted() < MIN_ADJUSTED_EXPONENT:
+        raise ValueError("estimated hours are below the smallest bound for a single line")
+    return value
 
 
 def _sum(values: Iterable[Decimal | None]) -> Decimal | None:

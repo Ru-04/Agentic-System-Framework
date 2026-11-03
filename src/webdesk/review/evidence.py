@@ -55,6 +55,11 @@ class Citation:
     def __post_init__(self) -> None:
         if not self.citation_id.strip() or not self.source_ref.strip():
             raise ValueError("a citation needs an identifier and a source reference")
+        # Edition and version are rendered as text. Words that read as a verification claim are
+        # refused, so recorded metadata cannot pose as a status next to the real one.
+        for name, value in (("edition", self.edition), ("version", self.version)):
+            if value is not None and "verif" in value.casefold():
+                raise ValueError(f"the citation {name} must not contain a verification claim")
 
 
 @dataclass(frozen=True)
