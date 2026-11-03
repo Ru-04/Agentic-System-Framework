@@ -666,3 +666,25 @@ def test_the_worker_path_is_not_open_to_the_public_role(world: World) -> None:
             )
         ).scalar_one()
     assert public is False
+
+
+def test_worker_audit_rows_name_the_proof_linked_operator(world: World) -> None:
+    """The worker path has no caller actor. Its audit rows name the Approver on the proof."""
+    execution = world.ready_execution()
+    version, segment, digest = world.clean_segment(world.project, b"attribution passage\n")
+    world.persist(execution, "completed", [_evidence(version, segment, digest)])
+    with world.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT event_type, actor_type, actor_id_or_service FROM audit_events"
+                " WHERE event_type IN ('specialist.execution.started', 'ai.result.persisted')"
+                " ORDER BY occurred_at"
+            )
+        ).all()
+    assert [row.event_type for row in rows] == [
+        "specialist.execution.started",
+        "ai.result.persisted",
+    ]
+    for row in rows:
+        assert row.actor_type == "human"
+        assert row.actor_id_or_service == str(world.approver)

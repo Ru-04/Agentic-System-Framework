@@ -13,6 +13,8 @@
 | `0061_s6_r2_confirmation` | `operator_confirmation` table (binding, digests, 15-minute maximum lifetime, states `confirmed`/`consumed`/`revoked`); `fn_confirm_specialist_execution_with_proof`; `fn_revoke_specialist_confirmation_with_proof`; `fn_record_specialist_audit` | 8.2 to 8.4, 11.3 R-2 |
 | `0062_s6_r3_results` | `specialist_execution`, `ai_result`, `ai_finding`, `citation` tables; `fn_begin_specialist_execution` (atomic consumption plus execution record); `fn_persist_specialist_result` (provenance-checked persistence) | 9.2, 9.3, 10.1 to 10.4, 11.3 R-3 |
 
+The column `requirement_refs_digest` (renamed from `requirement_ids_digest` at the contract session's request, contract 1955eb0) is in 0061 and 0062. A scratch database that applied the earlier SHA must re-run the chain.
+
 Verified on the scratch cluster (section 3):
 - `alembic heads` -> `0062_s6_r3_results (head)`: one head.
 - `alembic upgrade head` from `0059_int_mark_inputs_fence`: passed.
@@ -25,9 +27,9 @@ Frozen revisions `0001` to `0059` are unchanged. Migration `0060` embeds the dep
 
 | Suite | Result |
 |---|---|
-| Full suite, final state (`uv run pytest -ra -v -p no:warnings`, all DB variables set) | **1058 passed, 0 failed, 0 skipped** (862.89 s) |
+| Full suite, final state (`uv run pytest -ra -p no:warnings`, all DB variables set, 1059 collected) | **1058 passed, 1 failed** (5484 s). The failure is `tests/committed/test_phase2_identity.py::test_an_activation_refused_after_its_approval_lapses_is_audited_through_activate`, a timing-sensitive test with a 6-second approval window that asserts one audit row. The module then passed 7 of 7 on two consecutive reruns (30.5 s and 30.2 s). A clean full run on the final SHA is not yet recorded |
 | `tests/committed/test_ai_read_v1.py` (the 33 `ai-read/v1` PostgreSQL tests) | 33 passed |
-| `tests/committed/test_specialist_confirmation.py` (new, PostgreSQL) | 21 passed |
+| `tests/committed/test_specialist_confirmation.py` (new, PostgreSQL) | 22 passed (21 at the earlier run, plus the audit-attribution test added later) |
 | `tests/hardening/test_privilege_audit.py`, `tests/integration/test_phase_a.py`, `tests/unit/test_rbac_engine.py` (re-run after pin and matrix update) | 78 passed |
 | `tests/unit` (no database) | 312 passed |
 

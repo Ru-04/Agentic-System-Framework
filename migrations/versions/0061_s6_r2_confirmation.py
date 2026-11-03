@@ -43,7 +43,7 @@ CREATE TABLE operator_confirmation (
     proof_id uuid NOT NULL UNIQUE REFERENCES operation_proofs (proof_id),
     specialist_id text NOT NULL CHECK (specialist_id ~ '^[a-z][a-z0-9_]{2,63}$'),
     capability_id text NOT NULL CHECK (capability_id ~ '^CAP-[A-Z0-9_-]{1,80}$'),
-    requirement_ids_digest text NOT NULL CHECK (requirement_ids_digest ~ '^[0-9a-f]{64}$'),
+    requirement_refs_digest text NOT NULL CHECK (requirement_refs_digest ~ '^[0-9a-f]{64}$'),
     allowed_actions_digest text NOT NULL CHECK (allowed_actions_digest ~ '^[0-9a-f]{64}$'),
     operation text NOT NULL CHECK (operation = 'specialist.execution.confirm'),
     state text NOT NULL CHECK (state IN ('confirmed', 'consumed', 'revoked')),
@@ -74,7 +74,7 @@ $fn$;
 
 CREATE FUNCTION webdesk_guard.fn_confirm_specialist_execution_with_proof(
     p_proof uuid, p_run uuid, p_specialist text, p_capability text,
-    p_requirement_digest text, p_actions_digest text, p_ttl_seconds integer)
+    p_requirement_refs_digest text, p_actions_digest text, p_ttl_seconds integer)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $fn$
 DECLARE
     run_project uuid;
@@ -118,9 +118,9 @@ BEGIN
     END IF;
     UPDATE operation_proofs SET consumed_at = now() WHERE proof_id = p_proof;
     INSERT INTO operator_confirmation (run_id, project_id, operator_user_id, proof_id, specialist_id,
-                                       capability_id, requirement_ids_digest, allowed_actions_digest,
+                                       capability_id, requirement_refs_digest, allowed_actions_digest,
                                        operation, state, expires_at)
-    VALUES (p_run, run_project, actor, p_proof, p_specialist, p_capability, p_requirement_digest,
+    VALUES (p_run, run_project, actor, p_proof, p_specialist, p_capability, p_requirement_refs_digest,
             p_actions_digest, 'specialist.execution.confirm', 'confirmed',
             now() + make_interval(secs => p_ttl_seconds))
     RETURNING confirmation_id INTO new_id;

@@ -100,22 +100,23 @@ SET ROLE webdesk_guard_owner;
 
 CREATE FUNCTION webdesk_guard.fn_begin_specialist_execution(
     p_confirmation uuid, p_run uuid, p_specialist text, p_capability text,
-    p_requirement_digest text, p_actions_digest text)
+    p_requirement_refs_digest text, p_actions_digest text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $fn$
 DECLARE
     conf_project uuid;
+    conf_operator uuid;
     new_id uuid;
 BEGIN
     UPDATE operator_confirmation c SET state = 'consumed', consumed_at = now()
      WHERE c.confirmation_id = p_confirmation AND c.run_id = p_run AND c.state = 'confirmed'
        AND c.expires_at > now()
        AND c.specialist_id = p_specialist AND c.capability_id = p_capability
-       AND c.requirement_ids_digest = p_requirement_digest
+       AND c.requirement_refs_digest = p_requirement_refs_digest
        AND c.allowed_actions_digest = p_actions_digest
        AND EXISTS (
            SELECT 1 FROM workflow_runs w JOIN projects pr ON pr.project_id = w.project_id
             WHERE w.run_id = c.run_id AND w.status IN __ACTIVE__ AND pr.status = 'active')
-    RETURNING c.project_id INTO conf_project;
+    RETURNING c.project_id, c.operator_user_id INTO conf_project, conf_operator;
     IF NOT FOUND THEN
         PERFORM webdesk_guard.fn_record_specialist_audit(NULL, 'system', 'specialist-worker',
             'specialist.execution.refused', 'denied', 'confirmation_not_usable',
@@ -125,7 +126,7 @@ BEGIN
     INSERT INTO specialist_execution (confirmation_id, run_id, project_id, specialist_id, capability_id, state)
     VALUES (p_confirmation, p_run, conf_project, p_specialist, p_capability, 'started')
     RETURNING execution_id INTO new_id;
-    PERFORM webdesk_guard.fn_record_specialist_audit(conf_project, 'system', 'specialist-worker',
+    PERFORM webdesk_guard.fn_record_specialist_audit(conf_project, 'human', conf_operator::text,
         'specialist.execution.started', 'success', NULL,
         jsonb_build_array(p_run::text, new_id::text, p_confirmation::text));
     RETURN new_id;
@@ -143,6 +144,7 @@ DECLARE
     c jsonb;
     new_finding uuid;
     stamp text;
+    exec_operator uuid;
 BEGIN
     IF p_status NOT IN ('completed', 'incomplete', 'failed') THEN
         RAISE EXCEPTION 'result_status_invalid' USING ERRCODE = 'check_violation';
@@ -211,7 +213,9 @@ BEGIN
     UPDATE specialist_execution
        SET state = CASE WHEN p_status = 'failed' THEN 'failed' ELSE 'completed' END, finished_at = now()
      WHERE execution_id = p_execution;
-    PERFORM webdesk_guard.fn_record_specialist_audit(exec_row.project_id, 'system', 'specialist-worker',
+    SELECT c.operator_user_id INTO exec_operator
+      FROM operator_confirmation c WHERE c.confirmation_id = exec_row.confirmation_id;
+    PERFORM webdesk_guard.fn_record_specialist_audit(exec_row.project_id, 'human', exec_operator::text,
         'ai.result.persisted', 'success', NULL, jsonb_build_array(p_run::text, new_result::text));
     RETURN new_result;
 END
