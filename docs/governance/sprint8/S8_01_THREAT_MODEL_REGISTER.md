@@ -74,9 +74,9 @@ Status key: **VERIFIED-REPO** (control and named test exist); **PARTIAL**; **UNK
 | ID | Boundary | Threat (STRIDE) | Mitigation in repository | Evidence in repository | Status | Gap or unknown | Owner |
 |---|---|---|---|---|---|---|---|
 | T-01 | TB-1 | Spoofed session or forged bearer token (S) | Session token stored as hash only (`auth/service.py` `session_token_hash`; `ratelimit/limiter.py` `subject_hash`); AI token stored as SHA-256 hash (`api/ai.py` `_hash`); human and AI schemes separate; human route refuses AI credential | `tests/committed/test_ai_read_v1.py`; `tests/hardening/test_eval_f11j.py` | VERIFIED-REPO | Token lifetime on the human path is not re-measured here | Foundation |
-| T-02 | TB-1 | Forged operation proof (S) | Proof must exist, be unspent and bound; unknown proof refused `proof_missing` | `tests/sprint8/test_s8_02_fail_closed_db.py::test_a_forged_proof_is_refused_and_creates_no_project` (**BLOCKED**, see §6); `tests/hardening/test_eval_f11j.py` | VERIFIED-REPO (existing); S8-02 copy BLOCKED | DB execution needs scratch credentials | Foundation |
+| T-02 | TB-1 | Forged operation proof (S) | Proof must exist, be unspent and bound; unknown proof refused `proof_missing` | `tests/sprint8/test_s8_02_fail_closed_db.py::test_a_forged_proof_is_refused_and_creates_no_project` (passed on dedicated cluster, §6); `tests/hardening/test_eval_f11j.py` | VERIFIED-REPO | — | Foundation |
 | T-03 | TB-1 | Replay of a spent proof (R) | `consumed_at` one-time consumption; `proof_spent` refusal | `tests/integration/test_phase2_guards.py`, `tests/hardening/test_proof_rollback.py` | VERIFIED-REPO | — | Foundation |
-| T-04 | TB-1 | Expired proof used later (S, R) | 30-second TTL checked against `now()` in the guard (`0024`) | `tests/hardening/test_eval_f11j.py` (`proof_expired`) | VERIFIED-REPO (existing) | The S8-02 expiry test uses a real 31 s wait on committed rows; not executed | Foundation |
+| T-04 | TB-1 | Expired proof used later (S, R) | 30-second TTL checked against `now()` in the guard (`0024`) | `tests/hardening/test_eval_f11j.py` (`proof_expired`) | VERIFIED-REPO (existing) | The S8-02 expiry test uses a real 31 s wait on committed rows; passed on dedicated cluster (§6) | Foundation |
 | T-05 | TB-2 | Stolen or leaked authority shared secret (S, E) | Secret of at least 32 characters; authority refuses `WEBDESK_ENV=production` | `authority/server.py`; `tests/hardening/conftest.py` | PARTIAL | No key custody, rotation or revocation procedure (`PRODUCTION_BOUNDARY.md` §2) | WDS decision; Foundation |
 | T-06 | TB-2 | Interception of authority traffic (I) | Loopback only; `client.py` rejects non-loopback and non-HTTP addresses | `tests/sprint8/test_s8_02_fail_closed_unit.py::test_the_authority_client_refuses_non_loopback_or_non_http_addresses` (3 cases, passed) | PARTIAL | No TLS and no mutual authentication. Accepted only for non-production (`PRODUCTION_BOUNDARY.md` §3) | WDS decision; Foundation |
 | T-07 | TB-2 | Authority unreachable, client trusts stale session (S) | `AuthorityUnavailable`; no session trusted | `tests/sprint8/test_s8_02_fail_closed_unit.py::test_an_unreachable_authority_fails_closed_and_trusts_no_session` (passed) | VERIFIED-REPO | — | Foundation |
@@ -91,9 +91,9 @@ Status key: **VERIFIED-REPO** (control and named test exist); **PARTIAL**; **UNK
 | T-16 | TB-5 | Specialist bypasses Foundation authorization (E) | None: no specialist code | none | **UNKNOWN** | S6-INT; specialist contracts not implemented | Sprint 6 integration |
 | T-17 | TB-6 | Unapproved review, approval or report export (E, I) | Not built at `5974d59` | none | **NOT IN REPO** | Sprint 7; S7-07 and S7-10 are RED | Sprint 7 |
 | T-18 | TB-7 | Two workers process the same job (D) | `FOR UPDATE SKIP LOCKED`; claim is a guard; one live lease per job | `tests/committed/test_durable_execution.py::test_two_workers_racing_for_one_queued_job_get_exactly_one_claim`; `tests/committed/test_committed_runs.py` | VERIFIED-REPO | — | Foundation |
-| T-19 | TB-7 | Stale worker writes after its lease was reclaimed (T, R) | Every state change fenced by `lease_owner` and unexpired lease (`0050`, `0051`, `0055`, `0059`) | `tests/committed/test_durable_execution.py` (fencing cases); `tests/sprint8/test_s8_07_08_replay_and_fencing.py::test_a_stale_claim_replayed_after_another_worker_sent_is_fenced` (BLOCKED in this run) | VERIFIED-REPO (existing) | S8 copy not executed | Foundation |
+| T-19 | TB-7 | Stale worker writes after its lease was reclaimed (T, R) | Every state change fenced by `lease_owner` and unexpired lease (`0050`, `0051`, `0055`, `0059`) | `tests/committed/test_durable_execution.py` (fencing cases); `tests/sprint8/test_s8_07_08_replay_and_fencing.py::test_a_stale_claim_replayed_after_another_worker_sent_is_fenced` (passed, §6) | VERIFIED-REPO | — | Foundation |
 | T-20 | TB-7 | Worker role gains write or other-role access (E) | `webdesk_worker` holds SELECT on three tables only; pins in privilege audit | `docs/PHASE3_WORKER_PRIVILEGE_MATRIX.md`; `tests/committed/test_worker_login.py` | VERIFIED-REPO | Production worker login provisioning is open | Foundation |
-| T-21 | TB-7 | Duplicate outbox send after lost lease (D) | Idempotency key = notice ID on every attempt; lease fence before and after the send | `src/webdesk/outbox/worker.py`; `tests/integration/test_outbox_worker.py`; `tests/sprint8/test_s8_07_08_replay_and_fencing.py` (BLOCKED in this run) | PARTIAL | The transport must honour the key. Delivery is at-least-once, not exactly-once; no webhook guarantee is claimed | Foundation; transport owner |
+| T-21 | TB-7 | Duplicate outbox send after lost lease (D) | Idempotency key = notice ID on every attempt; lease fence before and after the send | `src/webdesk/outbox/worker.py`; `tests/integration/test_outbox_worker.py`; `tests/sprint8/test_s8_07_08_replay_and_fencing.py` (passed, §6) | PARTIAL | The transport must honour the key. Delivery is at-least-once, not exactly-once; no webhook guarantee is claimed | Foundation; transport owner |
 | T-22 | TB-7 | Retry storm or unbounded retry (D) | Exponential backoff capped at 300 seconds; dead letter at threshold; alert written | `outbox/worker.py` (`backoff_seconds`); `tests/integration/test_outbox_worker.py` | VERIFIED-REPO | Threshold and lease values are configuration, not approved SLOs | Foundation; WDS decision |
 | T-23 | TB-8 | Malformed or hostile file crashes or exhausts the host (D, E) | Parser child process with memory and time bounds; `ParserFailure` classes; 20 MiB and 50-file limits per ARCHITECTURE §13 | `src/webdesk/intake/isolation.py`; `tests/unit/test_parse_isolation.py`, `tests/unit/test_parse_defects.py`, `tests/committed/test_parse_concurrency.py` | VERIFIED-REPO (repository tests) | Parser bounds are not a load test (S8-10 is out of this scope) | Foundation |
 | T-24 | TB-8 | Quarantined or restricted source reaches an LLM (I) | Quarantined never parsed, retrieved or supplied; restricted never returned to AI | `ARCHITECTURE.md` §13; contract §5; `tests/committed/test_ai_read_v1.py` | VERIFIED-REPO | Malware scanner absent: `not_scanned` is the state for every file | WDS decision (scanner) |
@@ -104,13 +104,15 @@ Status key: **VERIFIED-REPO** (control and named test exist); **PARTIAL**; **UNK
 | T-29 | TB-12 | Contact ciphertext opened under the wrong purpose or user (I, T) | AES-GCM with associated data (purpose, user) | `src/webdesk/crypto/contact_box.py`; `tests/unit/test_contact_box.py`; outbox tests (unreadable row dead-lettered) | VERIFIED-REPO | Key custody open | WDS decision |
 | T-30 | All | Unbounded request, body or payload size (D) | Upload body bound; AI response limit 10 MiB; per-subject rate limits | `tests/unit/test_upload_body_bound.py`; contract §9; `src/webdesk/ratelimit/limiter.py` | PARTIAL | Load and capacity behaviour is S8-10, out of this scope | Foundation |
 
-## 6. Verification status of this session's tests (S8-02, S8-07, S8-08)
+## 6. Verification status of the S8-02, S8-07 and S8-08 tests
+
+See the run record in §6A below (dedicated cluster, executed counts).
 
 | Test module | Result in this session | Reason |
 |---|---|---|
 | `tests/sprint8/test_s8_02_fail_closed_unit.py` | **18 passed** | No database needed. Run with `pytest tests/sprint8/test_s8_02_fail_closed_unit.py`. |
-| `tests/sprint8/test_s8_02_fail_closed_db.py` | **Not executed. BLOCKED** | No PostgreSQL credential for the scratch cluster at `127.0.0.1:56544` is provisioned in this worktree. The module is skipped with a `BLOCKED:` reason. |
-| `tests/sprint8/test_s8_07_08_replay_and_fencing.py` | **Not executed. BLOCKED** | Same reason. |
+| `tests/sprint8/test_s8_02_fail_closed_db.py` | **9 passed, 2 BLOCKED placeholders** | Dedicated Sprint 8 PostgreSQL 16.4 cluster (§6 of the review record). |
+| `tests/sprint8/test_s8_07_08_replay_and_fencing.py` | **5 passed, 1 BLOCKED placeholder** | Same cluster. |
 
 The DB-backed tests have not been run. They are written against the existing `committed_engine` and `committed_admins` fixtures and were checked only for lint, format and undefined names. Their results must not be read as PASS.
 
@@ -122,7 +124,7 @@ The DB-backed tests have not been run. They are written against the existing `co
 4. **Production identities and secrets.** Login provisioning, key custody, rotation and revocation are open (`PRODUCTION_BOUNDARY.md` §2, §4).
 5. **Transport security.** No TLS or mutual authentication between application and authority (T-06).
 6. **Malware scanning.** No scanner is configured; every source is `not_scanned` (T-24).
-7. **Scratch database isolation for this session.** Scratch-cluster DB tests not run (§6).
+7. **Shared scratch cluster.** The DB tests were not run on `127.0.0.1:56544` (no credential). They ran on a dedicated cluster instead (§6).
 8. **Restore and recovery.** Not verified here (S8-12 is RED).
 
 ## 8. Owners and next actions
@@ -130,6 +132,15 @@ The DB-backed tests have not been run. They are written against the existing `co
 | Action | Owner | Gate |
 |---|---|---|
 | Resolve OPEN-11 | WDS decision | Blocks T-12 and S8-02 workspace test |
-| Provide scratch PostgreSQL credential for `127.0.0.1:56544` to run `tests/sprint8/*_db.py` and `*_replay_and_fencing.py` | Engineering (environment) | Blocks execution of 14 DB-backed checks |
+| Scratch credential for `127.0.0.1:56544` | Not needed: DB checks run on a dedicated Sprint 8 cluster | Closed |
 | Close production blockers 1–7 in `PRODUCTION_BOUNDARY.md` | WDS decision and deployment | Not part of Sprint 8 acceptance here |
 | Independent review of this register | Independent reviewer (not this session) | Required for S8-01 completion |
+
+## 6A. Execution record (dedicated cluster, engineering run)
+
+- Cluster: PostgreSQL 16.4 Docker container `s8-verify-pg`, `127.0.0.1:55808` only. Created for Sprint 8. Other containers on the host were not touched.
+- Database owner role `s8_test_owner` (LOGIN, NOSUPERUSER, CREATEDB, CREATEROLE). Migrations ran as this role. Group memberships for the owner, granted by the cluster administrator, were `webdesk_app`, `webdesk_ceremony`, `webdesk_authority`, `webdesk_guard_owner`, `webdesk_worker`, `webdesk_outbox`, `webdesk_test_clock` (INHERIT, SET, ADMIN), the same test-only shape as `docs/governance/SPRINT6_G0_EVIDENCE_2026-11-03.md` §2.
+- Test-only app roles: the tests use `SET LOCAL ROLE webdesk_app` and the other group roles, as the existing committed suite does.
+- Results: `tests/sprint8/test_s8_02_fail_closed_db.py` 9 passed. `tests/sprint8/test_s8_07_08_replay_and_fencing.py` 5 passed. Each module has its BLOCKED placeholders.
+- Regression on the same cluster: `tests/integration/test_outbox_worker.py`, `tests/committed/test_ai_read_v1.py`, `tests/committed/test_durable_execution.py`, `tests/integration/test_projects.py`, `tests/integration/test_phase2_guards.py`, `tests/integration/test_runs_db.py`: 132 passed, exit 0.
+- Two S8-02 expectations were wrong in the first commit and were corrected in the engineering commit. Migration 0042 issues `project.create`, `project.membership.add` and `project.membership.revoke` proofs to any live session. It refuses only the Administrator-only operations (`role.revoke`, `role.assign`, and similar). The RBAC check then runs in the service, and for membership add the database itself refuses with `proof_permission_not_held`. The corrected tests assert those refusals. Neither correction relaxes an authorization assertion.

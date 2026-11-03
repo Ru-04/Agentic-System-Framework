@@ -171,19 +171,36 @@ def test_an_expired_proof_is_refused_by_the_database_clock(
     assert _project_count(committed_engine, name) == 0
 
 
-def test_a_revoked_role_cannot_obtain_a_new_proof(
+def test_a_revoked_administrator_cannot_obtain_a_new_administrator_proof(
     committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
-    admin, _ = committed_admins
-    analyst = _analyst(committed_engine, committed_admins, "revoked-new")
-    assignment = _analyst_assignment(committed_engine, analyst)
+    """The authority issues Administrator-only operations only to a live Administrator.
+
+    Migration 0042 gates ``role.revoke``, ``role.assign`` and similar operations on an active
+    Administrator assignment. Other operations (for example ``project.create``) are issued to any
+    live session and are refused later by the service's RBAC check, so this test uses an
+    Administrator-only operation.
+    """
+    admin, other = committed_admins
+    with committed_engine.connect() as conn:
+        assignment = uuid.UUID(
+            str(
+                conn.execute(
+                    text(
+                        "SELECT assignment_id FROM role_assignments WHERE user_id = :u"
+                        " AND role = 'Administrator' AND revoked_at IS NULL"
+                    ),
+                    {"u": other},
+                ).scalar_one()
+            )
+        )
     with committed_engine.begin() as conn:
         _app(conn)
         revoke_role(conn, prove(conn, admin, "role.revoke", assignment), assignment)
     with committed_engine.begin() as conn:
         _app(conn)
         with pytest.raises(ProofNotIssued):
-            prove(conn, analyst, "project.create")
+            prove(conn, other, "role.revoke", assignment)
 
 
 def test_a_proof_issued_before_revocation_is_refused_after_it(
@@ -245,16 +262,31 @@ def test_a_member_of_one_project_is_denied_read_of_another(
     assert (denied.allowed, denied.reason) == (False, "membership_missing")
 
 
-def test_a_member_of_one_project_cannot_obtain_a_proof_to_change_another(
+def test_a_member_of_one_project_cannot_change_another_through_the_service(
     committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
+    """The authority issues ``project.membership.add`` to a live session; the database refuses it.
+
+    Migration 0024 onward checks ``proof_permission_not_held`` inside ``fn_proof_actor`` before the
+    service runs. The Analyst's proof for another project is refused there, and no membership row
+    is written.
+    """
     admin, _ = committed_admins
     project_b = _project(committed_engine, admin, f"wb-{uuid.uuid4().hex[:8]}")
+    staff = committed_active_user(committed_engine, admin, committed_admins[1], "wb-staff")
     analyst = _analyst(committed_engine, committed_admins, "xwrite")
     with committed_engine.begin() as conn:
         _app(conn)
-        with pytest.raises(ProofNotIssued):
-            prove(conn, analyst, "project.membership.add", project_b)
+        proof = prove(conn, analyst, "project.membership.add", project_b)
+        with pytest.raises(ProofRefused) as refused:
+            projects.add_member(conn, proof, project_b, staff)
+    assert refused.value.reason == "proof_permission_not_held"
+    with committed_engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT count(*) FROM project_memberships WHERE project_id = :p AND user_id = :u"),
+            {"p": project_b, "u": staff},
+        ).scalar_one()
+    assert rows == 0
 
 
 @pytest.mark.skip(
