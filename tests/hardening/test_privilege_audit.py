@@ -141,7 +141,9 @@ CEREMONY_EXECUTE = frozenset(
 )
 WORKER_EXECUTE = frozenset(
     {
+        "fn_begin_specialist_execution",
         "fn_mark_downstream_stale",
+        "fn_persist_specialist_result",
         "fn_worker_begin_parse",
         "fn_worker_claim_job",
         "fn_worker_finish_job",
@@ -175,6 +177,7 @@ OUTBOX_EXECUTE = frozenset(
 )
 AUTHORITY_EXECUTE = frozenset(
     {
+        "fn_confirm_specialist_execution_with_proof",
         "fn_consume_token",
         "fn_issue_operation_proof",
         "fn_issue_ai_principal_with_proof",
@@ -182,6 +185,7 @@ AUTHORITY_EXECUTE = frozenset(
         "fn_issue_read_grant",
         "fn_mark_token_sent",
         "fn_revoke_source_read_grant",
+        "fn_revoke_specialist_confirmation_with_proof",
     }
 )
 

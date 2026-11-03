@@ -1,67 +1,85 @@
-# Sprint 6 Foundation read evidence (3 November 2026)
+# Sprint 6 Foundation engineering evidence (3 November 2026)
 
 **Branch:** `sprint6-foundation-read`, cut from `feature/foundation-integration-p2-p7` at `5974d59`.
-**Scope:** the five `ai-read/v1` GET endpoints (contract `docs/AI_FOUNDATION_READ_CONTRACT_v1.md`, sections 4 to 10), and the OPEN-02 route move for the two AI-principal human routes (`SPRINT6_OPEN_DECISION_REGISTER_2026-11-03.md`, OPEN-02; `SPRINT6_END_TO_END_CONTRACT_v1.1_2026-11-03.md`, section 6.2).
-**Status:** static checks recorded below. **PostgreSQL integration tests are NOT yet run** (section 3). This record does not claim they pass.
+**Commits:** `ffce468` (OPEN-02 route move and contract-shape 405), then the commit that carries this record (SHA reported in the handoff).
+**Scope:** the five `ai-read/v1` GET endpoints (checked, not reimplemented), OPEN-02, the Foundation-issued operator confirmation (OPEN-03/04/05/06), the minimum R-1 to R-3 migrations (OPEN-18), restricted worker-owned persistence (OPEN-17), and their PostgreSQL tests.
+**Not in scope (not implemented):** workspace isolation and any workspace table (OPEN-11, D-DEP-1); R-4; specialist adapter 0.3 and its verifier wiring (Specialist team); AI Engine code; any public HTTP write route; production activation.
 
-## 1. What changed
+## 1. Migrations (single Alembic head)
 
-| Item | Change | Source |
+| Revision | Purpose | Contract |
 |---|---|---|
-| AI-principal issue route | `POST /runs/{run_id}/ai-principal` moved to `POST /v1/runs/{run_id}/ai-principal` | OPEN-02, v1.1 section 6.2 |
-| AI-principal revoke route | `POST /runs/{run_id}/ai-principal/revoke` moved to `POST /v1/runs/{run_id}/ai-principal/revoke` | OPEN-02 |
-| Method refusal on AI routes | A 405 on any `/v1/ai/` path returns `{"contract":"ai-read/v1","error":"method_not_allowed"}` (was Starlette's plain-text 405). Other HTTP errors keep FastAPI's default | ai-read/v1 section 9 |
-| Tests | `tests/committed/test_ai_read_v1.py`: paths updated; five tests added (old paths return 404 and create or revoke nothing; read routes refuse every non-GET method with the contract error; every refusal has the contract shape; identifiers agree across routes; refused requests never record the token or its hash) | ai-read/v1 sections 6, 7, 9, 10 |
-| Docs | `docs/AI_FOUNDATION_READ_HANDOFF.md`: route paths corrected to `/v1/runs/...` | OPEN-02 |
+| `0060_s6_r1_operation` | Adds proof operation `specialist.execution.confirm` to the `operation_proofs` CHECK; rule row Approver with membership required; authority allowlist accepts the operation | 6.2, 8.1, 11.3 R-1 |
+| `0061_s6_r2_confirmation` | `operator_confirmation` table (binding, digests, 15-minute maximum lifetime, states `confirmed`/`consumed`/`revoked`); `fn_confirm_specialist_execution_with_proof`; `fn_revoke_specialist_confirmation_with_proof`; `fn_record_specialist_audit` | 8.2 to 8.4, 11.3 R-2 |
+| `0062_s6_r3_results` | `specialist_execution`, `ai_result`, `ai_finding`, `citation` tables; `fn_begin_specialist_execution` (atomic consumption plus execution record); `fn_persist_specialist_result` (provenance-checked persistence) | 9.2, 9.3, 10.1 to 10.4, 11.3 R-3 |
 
-The five read endpoints already existed on `5974d59` in `src/webdesk/api/ai.py` (`GET /v1/ai/runs/{run_id}`, `/project`, `/source-versions`, `/source-versions/{id}/segments`, `/source-versions/{id}/content`). They were checked against the contract and not reimplemented. No migration was added. No write endpoint was added. No workspace table or isolation was implemented (OPEN-11 blocked, see section 4).
+Verified on the scratch cluster (section 3):
+- `alembic heads` -> `0062_s6_r3_results (head)`: one head.
+- `alembic upgrade head` from `0059_int_mark_inputs_fence`: passed.
+- `alembic downgrade 0059_int_mark_inputs_fence` then `alembic upgrade head`: passed.
+- The five new tables exist at head (`information_schema` count = 5).
 
-## 2. Static checks (exact output)
+Frozen revisions `0001` to `0059` are unchanged. Migration `0060` embeds the deployed `fn_issue_operation_proof` text at 0059, so its downgrade restores that text exactly.
 
-Captured in the session with `uv sync --extra dev --frozen` (ruff 0.6.9, mypy 1.11.2).
+## 2. Tests and counts
 
-```
-$ uv run ruff check src/webdesk/api/ai.py src/webdesk/api/app.py tests/committed/test_ai_read_v1.py
-All checks passed!
-exit=0
+| Suite | Result |
+|---|---|
+| Full suite, final state (`uv run pytest -ra -v -p no:warnings`, all DB variables set) | **1058 passed, 0 failed, 0 skipped** (862.89 s) |
+| `tests/committed/test_ai_read_v1.py` (the 33 `ai-read/v1` PostgreSQL tests) | 33 passed |
+| `tests/committed/test_specialist_confirmation.py` (new, PostgreSQL) | 21 passed |
+| `tests/hardening/test_privilege_audit.py`, `tests/integration/test_phase_a.py`, `tests/unit/test_rbac_engine.py` (re-run after pin and matrix update) | 78 passed |
+| `tests/unit` (no database) | 312 passed |
 
-$ uv run ruff format --check src/webdesk/api/ai.py src/webdesk/api/app.py tests/committed/test_ai_read_v1.py
-3 files already formatted
-exit=0
+The first full-suite run on the same branch before the final fixes gave `4 failed, 1054 passed`. The four failures were consequences of this change and were corrected, not skipped:
+- `test_privilege_audit.py` (two cases): the pinned sets of functions executable by `webdesk_worker` and `webdesk_authority` now include the new guard functions. The pins were updated to the new sets.
+- `test_rbac_engine.py` and `test_phase_a.py`: the new `Permission.SPECIALIST_EXECUTION_CONFIRM` needs a matrix row. Row added: Approver `GRANTED`.
 
-$ uv run mypy --strict src/webdesk
-Success: no issues found in 71 source files
-exit=0
+No assertion was weakened and no test was removed.
 
-$ uv run pytest tests/unit -q
-312 passed in 21.27s
+### Confirmation and persistence tests (21)
 
-$ uv run pytest --collect-only -q tests/committed/test_ai_read_v1.py
-33 tests collected in 0.95s
-```
+- Canonical operation: Approver with membership only (1).
+- Confirmation: authenticated Approver with grant confirms once and spends the proof; proof for another project refused and spends nothing; caller without the Approver role refused; Approver without the project access grant refused; proof single-use; lifetime limited to 1 to 900 seconds (DB check); revoked confirmation cannot be consumed.
+- Consumption: one execution per confirmation; concurrent consumption has exactly one winner (two threads, row lock held by the first); mismatched binding does not spend the confirmation; expired confirmation refused at consumption; run leaving an active status refuses consumption.
+- Persistence: provenanced family A result persisted, execution completed, audit redacted of content; invented citation digest rolls back the whole result; citation into another project refused; `SUPPORTED` finding without citation refused; worker cannot write `verified`; family B requires https and timezone-aware `checked_at`.
+- Restricted boundary: `webdesk_app` cannot call confirm, begin or persist and cannot read or insert into the results tables (SQLSTATE 42501); `PUBLIC` has no EXECUTE on the persistence function.
 
-`ruff check .` over the whole repository was also run and passed (`All checks passed!`).
+## 3. PostgreSQL environment and isolation
 
-## 3. PostgreSQL integration tests: NOT RUN
+- Fresh container `sprint6-fpr-pg`, image `postgres:16.4`, published only on `127.0.0.1:56580`. Created for this run; no other container or database was used. Port `55432` was not used. Port `5433` (the repository's default compose cluster) was not used. The G0 cluster on `56544` was not used.
+- Roles created on this cluster only: `webdesk_owner` (superuser, provisioning), `webdesk_integration_owner` (LOGIN, CREATEDB, CREATEROLE), `webdesk_test_owner` (LOGIN, NOSUPERUSER), `webdesk_app_login` (LOGIN, NOSUPERUSER). Passwords were generated locally with `secrets.token_hex(24)` and stored in a file outside the repository (scratchpad, not committed). No password appears in this record, in Git, or in logs.
+- Databases: `webdesk_integration` (owner `webdesk_integration_owner`) and `webdesk_hardening` (owner `webdesk_test_owner`).
+- Documented test-only grants applied as `webdesk_owner` (per `docs/PHASE2_DEDICATED_TEST_CLUSTER.md`): group memberships of the integration owner with INHERIT and SET; membership of `webdesk_ceremony` for the test owner; `webdesk_test_clock` membership for the integration owner. These grants exist only on this scratch cluster and are not production configuration. No test assertion or grant check was relaxed to obtain a pass.
+- Each committed-database test runs in its own namespace database, and the run removes them after teardown (test harness behaviour).
 
-Required target: scratch cluster `127.0.0.1:56544` only (never `55432`), using the roles and URL pattern of `SPRINT6_G0_EVIDENCE_2026-11-03.md` sections 1 and 2 (branch `claude/sprint5-specialist-evaluations`).
+## 4. Static checks
 
-Blocker: sections 1 and 2 of that record name the roles (`webdesk_integration_owner`, `webdesk_test_owner`, `webdesk_app_login`) and the port, but they do not record a password, and no scratch credential was supplied in this session. The git-ignored `.env.integration.local` points at a different port (5433) and was not used. No credential was guessed.
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed! |
+| `uv run ruff format --check` on changed files (9 files) | 9 files already formatted |
+| `uv run ruff format --check .` (whole repository) | 4 files would be reformatted: `0017`, `0019`, `0020`, `0040`. These are the four documented frozen-migration exceptions in `docs/RUFF_FORMAT_EXCEPTIONS.md`; unchanged by this work |
+| `uv run mypy --strict src/webdesk` | Success: no issues found in 71 source files |
 
-Command to run once a scratch URL is supplied (the owner URL needs `CREATEDB`, per `tests/conftest.py`):
+## 5. CI status
 
-```bash
-WEBDESK_TEST_DATABASE_URL='postgresql+psycopg://<integration_owner_role>:<scratch password>@127.0.0.1:56544/<db>' uv run pytest tests/committed/test_ai_read_v1.py -ra -q
-```
+The repository contains no CI configuration (no `.github/` directory, no workflow files). **CI was not run and no CI PASS is claimed.** The equivalent local gates are the full suite (section 2), ruff and mypy (section 4).
 
-Result: **pending**. The output will be appended here verbatim, with any skip and its reason, when the run is made. Expected count: 33 tests in `test_ai_read_v1.py`.
+## 6. Security and design notes
 
-Full-suite and migration gates (`alembic heads`, upgrade and downgrade) were not run in this session for the same reason.
+- The confirmation is produced only by a Foundation proof for `specialist.execution.confirm`. The actor comes from the proof, never from the caller. Role and membership are checked by the existing validator against `operation_authorization_rules`. The project access grant whose `permitted_actions` holds the key is checked in `fn_confirm_specialist_execution_with_proof` (OPEN-04).
+- Expiry uses `now()` on the database. The lifetime is a check constraint of at most 15 minutes. The test clock is not used.
+- Consumption is one `UPDATE ... WHERE state = 'confirmed' AND expires_at > now() AND <every binding> AND <run and project active>` in the same transaction as the execution record.
+- Persistence is by `webdesk_worker` through a guard function only. No table grant to `webdesk_app` or `PUBLIC`. No HTTP write route was added.
+- Refusals in the confirmation and consumption functions write one audit row and return NULL. Refusals in persistence raise, rolling back the whole result, and the caller records the failure.
 
-## 4. Gaps not closed here
+## 7. Known gaps (not closed here)
 
-- **Workspace isolation (OPEN-11, D-DEP-1):** no workspace entity exists on `5974d59`. Authorization in this change is project-level only (the bound human's membership or grant, and the principal's single project and run). No `workspace_id` is accepted or checked.
-- **Migrations (OPEN-18, OPEN-06):** no new revision. The list in v1.1 section 11.3 is unconfirmed.
-- **Worker adapter, confirmation, results persistence (D-DEP-2, D-DEP-3, D-DEP-4):** not in scope.
-- **Production activation:** not authorized and not claimed.
-- **Independent QA:** not performed. This is a development-team record.
+- **Specialist identifiers:** `specialist_id` is checked for shape only. The seven canonical identifiers belong to the specialist registry, which is not in this repository.
+- **Source allowlist:** `source_url` is checked for `https://` only. The approved allowlist (contract section 13) is not in this repository.
+- **Per-citation outcome:** `check_outcome` is stored per finding. Contract 10.3 also lists it per citation; that is not implemented.
+- **Expiry state:** an expired confirmation keeps state `confirmed` and is treated as expired by its `expires_at`. The contract's terminal `expired` state is not stored.
+- **Public Python routes:** no HTTP route was added for confirmation or consumption. The contract defines none (section 6). The authority and worker call the guard functions.
+- **Independent QA and production:** not performed. This is a development-team record. Production is not authorized.
+- **Workspace (OPEN-11):** no workspace entity or check. Authorization is project-level only.

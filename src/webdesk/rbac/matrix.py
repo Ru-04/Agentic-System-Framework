@@ -49,6 +49,7 @@ class Permission(StrEnum):
     RUN_CANCEL = "run.cancel"
     RUN_RETRY = "run.retry"
     RUN_RESUME = "run.resume"
+    SPECIALIST_EXECUTION_CONFIRM = "specialist.execution.confirm"
     DELETION_REQUEST = "deletion.request"
     DELETION_AUTHORIZE = "deletion.authorize"
     CLASSIFICATION_REASSESS = "classification.reassess"
@@ -114,6 +115,8 @@ MATRIX: dict[Permission, dict[Role, Rule]] = {
     Permission.DELETION_REQUEST: {},
     Permission.DELETION_AUTHORIZE: {},
     Permission.CLASSIFICATION_REASSESS: {D: Rule.ROLE},
+    # Approver with a project access grant holding the key (contract section 3.4, OPEN-04).
+    Permission.SPECIALIST_EXECUTION_CONFIRM: {P: Rule.GRANTED},
     # Later phase: no SOW output exists in Gate 1, so no role may approve one.
     Permission.SOW_APPROVE: {},
 }
