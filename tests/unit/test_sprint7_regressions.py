@@ -16,6 +16,7 @@ from webdesk.review.estimates import (
     EstimateLine,
     EstimateSet,
     LineStatus,
+    publishable_range,
     total_estimate,
 )
 from webdesk.review.provenance import (
@@ -129,12 +130,12 @@ def test_D3_a_raw_string_uncertain_line_makes_the_set_incomplete() -> None:
     total = total_estimate(estimate)
     assert total.uncertain_count == 1
     assert not total.complete
-    assert total.publishable_range() is None
+    assert publishable_range(estimate) is None
 
 
 def test_D3_a_raw_string_unestimated_line_makes_the_set_incomplete() -> None:
     estimate = _set(_line("L1"), _line("L2", status="unestimated", low_hours=None, high_hours=None))
-    assert total_estimate(estimate).publishable_range() is None
+    assert publishable_range(estimate) is None
 
 
 def test_D3_a_raw_string_estimated_line_without_hours_is_refused() -> None:

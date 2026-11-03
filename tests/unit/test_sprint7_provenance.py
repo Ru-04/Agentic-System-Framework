@@ -195,7 +195,7 @@ def test_a_naive_timestamp_is_refused() -> None:
 
 def test_a_text_timestamp_is_refused() -> None:
     bad: Any = "yesterday"
-    with pytest.raises(ValueError, match="timezone-aware"):
+    with pytest.raises(ValueError, match="must be a datetime"):
         _ack(at=bad)
 
 

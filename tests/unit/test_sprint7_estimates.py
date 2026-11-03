@@ -10,6 +10,7 @@ from webdesk.review.estimates import (
     EstimateLine,
     EstimateSet,
     LineStatus,
+    publishable_range,
     render_total,
     total_estimate,
 )
@@ -55,12 +56,13 @@ def _set(*lines: EstimateLine) -> EstimateSet:
 
 
 def test_unestimated_work_is_not_counted_as_zero() -> None:
-    total = total_estimate(_set(_estimated("L1", "10", "20"), _unestimated("L2")))
+    estimate = _set(_estimated("L1", "10", "20"), _unestimated("L2"))
+    total = total_estimate(estimate)
     assert total.known_low == Decimal("10")
     assert total.known_high == Decimal("20")
     assert total.unestimated_count == 1
     assert not total.complete
-    assert total.publishable_range() is None
+    assert publishable_range(estimate) is None
 
 
 def test_a_set_with_only_unestimated_work_states_no_total_at_all() -> None:
@@ -79,7 +81,7 @@ def test_uncertain_work_is_not_counted_as_zero() -> None:
     total = total_estimate(estimate)
     assert total.uncertain_count == 1
     assert total.known_high == Decimal("8")
-    assert total.publishable_range() is None
+    assert publishable_range(estimate) is None
 
 
 def test_a_partial_total_is_rendered_as_partial_and_names_the_missing_work() -> None:
@@ -94,7 +96,7 @@ def test_a_complete_estimate_publishes_the_exact_decimal_sum() -> None:
     estimate = _set(_estimated("L1", "1.1", "2.2"), _estimated("L2", "0.2", "0.3"))
     total = total_estimate(estimate)
     assert total.complete
-    assert total.publishable_range() == (Decimal("1.3"), Decimal("2.5"))
+    assert publishable_range(estimate) == (Decimal("1.3"), Decimal("2.5"))
 
 
 def test_totals_do_not_depend_on_line_order() -> None:

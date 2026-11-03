@@ -2,12 +2,16 @@
 
 A citation is a reference to a source. This module only describes the status recorded for it. It
 never confirms a citation. No status in this module means "verified", and an upstream value of
-"verified" is shown as unknown. Verification would need an authority this module does
-not have.
+"verified" is shown as unknown. Verification would need an authority this module does not have.
 
 PROVISIONAL VOCABULARY. The source-status vocabulary (OPEN-07) and the confidence vocabulary
 (OPEN-08) are not confirmed. Every label below carries its open item, so that a later confirmed
 vocabulary replaces the labels in one place and no caller depends on the wording.
+
+Free text (identifier, source reference, edition, version) is shown beside the status. Text that
+reads as a verification claim is refused. The guard is best effort: it folds the Latin look-alikes
+listed below, and it does not map cross-script look-alikes such as Cyrillic letters. The status
+path does not depend on it, because status values come from a closed vocabulary.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass, field
 
-from webdesk.review.textutil import clean
+from webdesk.review.textutil import clean_key, clean_text, exact
 
 SOURCE_STATUS_OPEN_ITEM = "OPEN-07"
 CONFIDENCE_OPEN_ITEM = "OPEN-08"
@@ -41,27 +45,38 @@ UNKNOWN_SOURCE_LABEL = "Status unknown"
 UNKNOWN_CONFIDENCE_LABEL = "Confidence unknown"
 NOT_RECORDED = "not recorded"
 
+# Latin letters that look like other Latin letters once a diacritic or stroke is dropped. This is
+# a list of the same-script look-alikes found in QA, not a complete table of Latin look-alikes.
+_SAME_SCRIPT_FOLDS = str.maketrans(
+    {
+        "ı": "i",  # dotless i
+        "İ": "i",  # dotted capital I
+        "ſ": "s",  # long s
+        "ƒ": "f",  # f with hook
+        "ɪ": "i",  # small capital I
+        "ɡ": "g",  # script g
+        "ɑ": "a",  # alpha
+        "ɩ": "i",  # iota
+        "ɨ": "i",  # i with stroke
+    }
+)
+
 
 def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
-# Latin letters that look like other Latin letters once a diacritic or stroke is dropped.
-_SAME_SCRIPT_FOLDS = str.maketrans({"ı": "i", "ſ": "s"})
-
-
 def _claims_verification(text: str) -> bool:
     """True when the text, once normalised, contains "verif".
 
-    Normalisation applies NFKC (fullwidth and compatibility forms), drops format and combining
-    characters (zero-width spaces, dotted capitals), drops every non-letter (spaces and punctuation
-    used to split the word), and folds case. It does not map cross-script look-alikes such as
-    Cyrillic letters. That residual is recorded in the decision register.
+    Normalisation applies NFKC (fullwidth and compatibility forms), folds the Latin look-alikes
+    above, drops format and combining characters (zero-width spaces, dotted capitals), drops every
+    non-letter (spaces and punctuation used to split the word), and folds case.
     """
-    decomposed = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
+    folded = unicodedata.normalize("NFKC", text).casefold().translate(_SAME_SCRIPT_FOLDS)
     letters = "".join(
         char
-        for char in unicodedata.normalize("NFD", decomposed)
+        for char in unicodedata.normalize("NFD", folded)
         if unicodedata.category(char)[0] == "L"
     )
     return "verif" in letters
@@ -78,27 +93,25 @@ class Citation:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "citation_id", clean(self.citation_id, "a citation needs an identifier")
+            self, "citation_id", clean_key(self.citation_id, "a citation needs an identifier")
         )
         object.__setattr__(
             self,
             "source_ref",
-            clean(self.source_ref, "a citation needs a source reference"),
+            clean_key(self.source_ref, "a citation needs a source reference"),
         )
-        # Free text is rendered beside the status. Text that reads as a verification claim is
-        # refused so that it cannot pose as a status. This is a best-effort guard, see
-        # _claims_verification.
+        for name in ("edition", "version"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            object.__setattr__(self, name, clean_text(value, f"the citation {name} must be text"))
         for name, value in (
             ("identifier", self.citation_id),
             ("source reference", self.source_ref),
             ("edition", self.edition),
             ("version", self.version),
         ):
-            if value is None:
-                continue
-            if not isinstance(value, str):
-                raise ValueError(f"the citation {name} must be text")
-            if _claims_verification(value):
+            if value is not None and _claims_verification(value):
                 raise ValueError(f"the citation {name} must not contain a verification claim")
 
 
@@ -115,6 +128,7 @@ class CitationView:
 
 
 def render_citation(citation: Citation) -> CitationView:
+    citation = exact(citation, Citation, "a citation view is built from a Citation")
     source_label, note = _source_label(citation.source_status)
     return CitationView(
         citation_id=citation.citation_id,
@@ -127,8 +141,8 @@ def render_citation(citation: Citation) -> CitationView:
     )
 
 
-def _source_label(status: str) -> tuple[str, str]:
-    if isinstance(status, str) and status in SOURCE_STATUS_LABELS:
+def _source_label(status: object) -> tuple[str, str]:
+    if type(status) is str and status in SOURCE_STATUS_LABELS:
         return _provisional(SOURCE_STATUS_LABELS[status], SOURCE_STATUS_OPEN_ITEM), ""
     note = (
         f"Recorded status {status!r} is not an accepted source status. "
@@ -137,7 +151,7 @@ def _source_label(status: str) -> tuple[str, str]:
     return _provisional(UNKNOWN_SOURCE_LABEL, SOURCE_STATUS_OPEN_ITEM), note
 
 
-def _confidence_label(confidence: str) -> str:
-    if isinstance(confidence, str) and confidence in CONFIDENCE_LABELS:
+def _confidence_label(confidence: object) -> str:
+    if type(confidence) is str and confidence in CONFIDENCE_LABELS:
         return _provisional(CONFIDENCE_LABELS[confidence], CONFIDENCE_OPEN_ITEM)
     return _provisional(UNKNOWN_CONFIDENCE_LABEL, CONFIDENCE_OPEN_ITEM)

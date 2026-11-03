@@ -121,9 +121,11 @@ def test_N3_a_reviewer_of_only_invisible_characters_is_refused(reviewer: str) ->
         ReviewerAcknowledgement("REQ-1", reviewer, NOW, "accepted")
 
 
-def test_N3_a_reason_is_stored_without_invisible_characters() -> None:
-    ack = ReviewerAcknowledgement("REQ-1", "rev-1", NOW, "ac​cepted")
-    assert ack.reason == "accepted"
+def test_N3_internal_invisible_characters_are_kept_in_free_text() -> None:
+    # Free text keeps its internal format characters (emoji joiners, Persian joiners). Only the
+    # edges are trimmed, so a reason that is invisible at its edges is refused above.
+    ack = ReviewerAcknowledgement("REQ-1", "rev-1", NOW, "family 👨‍👩")
+    assert ack.reason == "family 👨‍👩"
 
 
 # --- N-4: non-text and non-integer values are refused; output stays escaped --------------------

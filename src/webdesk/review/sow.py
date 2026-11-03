@@ -7,6 +7,9 @@ estimate section states a total only when the estimate is complete (see estimate
 
 Preview and export come from one renderer (render_html), so the two cannot drift apart. All text
 is HTML-escaped, including source text that came from documents, because it is untrusted.
+
+Every input is of its exact type (see textutil). A DraftSow compares its stored derived fields with
+values it recomputes from its source, field by field, so a caller cannot substitute them.
 """
 
 from __future__ import annotations
@@ -30,11 +33,21 @@ from webdesk.review.provenance import (
     SourceType,
     pending_inferred_ids,
 )
-from webdesk.review.textutil import clean, text_tuple
+from webdesk.review.textutil import clean_key, clean_text, exact, items_of
 
 DRAFT_WATERMARK = "DRAFT - NOT APPROVED - NOT FOR CLIENT RELEASE"
 APPROVAL_STATE = "draft_unapproved"
 SOW_ID_PREFIX = "SOW-"
+
+_VIEW_TEXT_FIELDS = (
+    "citation_id",
+    "source_ref",
+    "source_label",
+    "confidence_label",
+    "edition",
+    "version",
+    "note",
+)
 
 
 @dataclass(frozen=True)
@@ -45,13 +58,14 @@ class SowItem:
     refs: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "text", clean(self.text, "a SOW item needs text"))
-        refs = text_tuple(self.refs, "every SOW item must carry text references")
-        cleaned = tuple(
-            clean(ref, "every SOW item must carry at least one non-empty reference") for ref in refs
-        )
-        if not cleaned:
+        object.__setattr__(self, "text", clean_text(self.text, "a SOW item needs text"))
+        refs = items_of(self.refs, str, "every SOW item must carry text references")
+        if not refs:
             raise ValueError("every SOW item must carry at least one non-empty reference")
+        cleaned = tuple(
+            clean_key(ref, "every SOW item must carry at least one non-empty reference")
+            for ref in refs
+        )
         object.__setattr__(self, "refs", cleaned)
 
 
@@ -73,8 +87,10 @@ class DraftSowInput:
     citations: tuple[Citation, ...] = ()
 
     def __post_init__(self) -> None:
-        # Copy every collection into a tuple, so a caller's list cannot change the draft after
-        # its identifier and derived fields have been computed.
+        object.__setattr__(self, "title", clean_text(self.title, "a draft SOW needs a title"))
+        object.__setattr__(
+            self, "objective", clean_text(self.objective, "a draft SOW needs an objective")
+        )
         for name in (
             "in_scope",
             "out_of_scope",
@@ -85,14 +101,24 @@ class DraftSowInput:
             "exclusions",
             "uncertainties",
             "risks",
-            "requirements",
-            "citations",
         ):
-            object.__setattr__(self, name, tuple(getattr(self, name)))
-        if self.estimate is not None and not isinstance(self.estimate, EstimateSet):
-            raise ValueError("a draft SOW holds an EstimateSet or no estimate")
-        if not self.title.strip() or not self.objective.strip():
-            raise ValueError("a draft SOW needs a title and an objective")
+            object.__setattr__(
+                self, name, items_of(getattr(self, name), SowItem, "a SOW section holds SowItems")
+            )
+        requirements = items_of(
+            self.requirements, Requirement, "the requirements must be Requirement values"
+        )
+        requirement_ids = [req.requirement_id for req in requirements]
+        if len(set(requirement_ids)) != len(requirement_ids):
+            raise ValueError("requirement identifiers must be unique in a draft")
+        object.__setattr__(self, "requirements", requirements)
+        object.__setattr__(
+            self,
+            "citations",
+            items_of(self.citations, Citation, "the citations must be Citation values"),
+        )
+        if self.estimate is not None:
+            exact(self.estimate, EstimateSet, "a draft SOW holds an EstimateSet or no estimate")
         if not (self.in_scope and self.deliverables and self.acceptance_criteria):
             raise ValueError(
                 "a draft SOW needs in-scope items, deliverables and acceptance criteria"
@@ -109,26 +135,48 @@ class DraftSow:
     approval_state: str = APPROVAL_STATE
 
     def __post_init__(self) -> None:
+        exact(self.source, DraftSowInput, "a draft SOW is built from a DraftSowInput")
         _require_draft(self)
         # Derived fields are recomputed, never trusted. A caller cannot supply a total, a citation
         # status or an identifier that the source does not produce.
-        if self.sow_id != _sow_identifier(self.source):
+        if type(self.sow_id) is not str or self.sow_id != _sow_identifier(self.source):
             raise ValueError("the SOW identifier does not match its source")
-        if self.estimate_summary != _estimate_summary(self.source.estimate):
+        expected_summary = _estimate_summary(self.source.estimate)
+        if type(self.estimate_summary) is not type(expected_summary) or (
+            self.estimate_summary != expected_summary
+        ):
             raise ValueError("the estimate summary does not match its source")
         expected_views = tuple(render_citation(c) for c in self.source.citations)
-        if self.citation_views != expected_views:
+        if not _same_views(self.citation_views, expected_views):
             raise ValueError("the citation views do not match their source")
 
 
 def _require_draft(sow: DraftSow) -> None:
     """The watermark and the draft state are fixed. Nothing in this module can change them."""
-    if sow.watermark != DRAFT_WATERMARK or sow.approval_state != APPROVAL_STATE:
-        raise ValueError("a draft SOW must carry the draft watermark and the draft state")
+    if type(sow.watermark) is not str or sow.watermark != DRAFT_WATERMARK:
+        raise ValueError("a draft SOW must carry the draft watermark")
+    if type(sow.approval_state) is not str or sow.approval_state != APPROVAL_STATE:
+        raise ValueError("a draft SOW must carry the draft state")
+
+
+def _same_views(views: tuple[CitationView, ...], expected: tuple[CitationView, ...]) -> bool:
+    if type(views) is not tuple or len(views) != len(expected):
+        return False
+    for view, want in zip(views, expected, strict=True):
+        if type(view) is not CitationView:
+            return False
+        for name in _VIEW_TEXT_FIELDS:
+            got = getattr(view, name)
+            if type(got) is not str or got != getattr(want, name):
+                return False
+        if type(view.verified) is not bool or view.verified != want.verified:
+            return False
+    return True
 
 
 def assemble_draft_sow(source: DraftSowInput) -> DraftSow:
     """Build the draft. The identifier is derived from the input, so equal inputs give equal ids."""
+    source = exact(source, DraftSowInput, "a draft SOW is built from a DraftSowInput")
     return DraftSow(
         sow_id=_sow_identifier(source),
         source=source,
@@ -139,6 +187,7 @@ def assemble_draft_sow(source: DraftSowInput) -> DraftSow:
 
 def render_html(sow: DraftSow) -> str:
     """Render the draft as an HTML document. Preview and export both use this output."""
+    sow = exact(sow, DraftSow, "only a DraftSow can be rendered")
     _require_draft(sow)
     source = sow.source
     parts = [

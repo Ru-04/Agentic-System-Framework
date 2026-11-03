@@ -11,6 +11,9 @@ it. Every Requirement that carries an acknowledgement checks the binding, so dat
 cannot change the text, source, type, identity, reviewer, time or reason of an acknowledged
 inference while keeping the acknowledgement.
 
+Every input must be of its exact type. A subclass of datetime, str or a model class is refused,
+because a subclass can override comparisons that the checks depend on.
+
 Limits (not enforced here, and recorded in the register):
 - A pure model cannot stop code that builds a fresh Requirement from nothing, or that drops the
   acknowledgement and returns the object to pending as a client-stated requirement. Those routes
@@ -19,7 +22,9 @@ Limits (not enforced here, and recorded in the register):
 - The digest is unkeyed SHA-256. It detects accidental or partial edits. It does not authenticate
   a reviewer, and a caller who computes the digest can forge an acknowledgement.
 - The time bound (no acknowledgement dated after the acceptance time plus CLOCK_SKEW) is checked in
-  acknowledge_inference, which takes an explicit ``now``. The constructor has no clock.
+  acknowledge_inference, which takes an explicit ``now``. The constructor has no clock. The tzinfo
+  of a datetime is trusted to report its own offset; the standard library zones are used in
+  practice.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from webdesk.review.textutil import clean
+from webdesk.review.textutil import clean_key, clean_text, enum_of, exact
 
 # An acknowledgement may not be dated more than this far after the moment it is accepted.
 CLOCK_SKEW = timedelta(minutes=5)
@@ -54,13 +59,10 @@ SOURCE_LABELS = {
 
 
 def _aware(value: object, name: str) -> datetime:
-    if not isinstance(value, datetime) or value.utcoffset() is None:
+    checked = exact(value, datetime, f"{name} must be a datetime")
+    if checked.utcoffset() is None:
         raise ValueError(f"{name} must be a timezone-aware datetime")
-    return value
-
-
-def _text(value: object, message: str) -> str:
-    return clean(value, message)
+    return checked
 
 
 @dataclass(frozen=True)
@@ -79,13 +81,20 @@ class ReviewerAcknowledgement:
     binding: str | None = None
 
     def __post_init__(self) -> None:
-        requirement_id = _text(self.requirement_id, "acknowledgement names no requirement")
-        reviewer_id = _text(self.reviewer_id, "an acknowledgement needs a reviewer identity")
-        reason = _text(self.reason, "an acknowledgement needs a reason")
+        object.__setattr__(
+            self,
+            "requirement_id",
+            clean_key(self.requirement_id, "acknowledgement names no requirement"),
+        )
+        object.__setattr__(
+            self,
+            "reviewer_id",
+            clean_key(self.reviewer_id, "an acknowledgement needs a reviewer identity"),
+        )
+        object.__setattr__(
+            self, "reason", clean_text(self.reason, "an acknowledgement needs a reason")
+        )
         _aware(self.acknowledged_at, "acknowledged_at")
-        object.__setattr__(self, "requirement_id", requirement_id)
-        object.__setattr__(self, "reviewer_id", reviewer_id)
-        object.__setattr__(self, "reason", reason)
 
 
 @dataclass(frozen=True)
@@ -99,14 +108,24 @@ class Requirement:
 
     def __post_init__(self) -> None:
         # Coerce first, so raw strings from untyped boundaries get the same checks as enums.
-        object.__setattr__(self, "source_type", SourceType(self.source_type))
-        object.__setattr__(self, "confirmation", ConfirmationState(self.confirmation))
         object.__setattr__(
-            self, "requirement_id", _text(self.requirement_id, "a requirement needs an identifier")
+            self, "source_type", enum_of(self.source_type, SourceType, "unknown source type")
         )
-        _text(self.text, "a requirement needs text")
         object.__setattr__(
-            self, "source_ref", _text(self.source_ref, "a requirement needs a source reference")
+            self,
+            "confirmation",
+            enum_of(self.confirmation, ConfirmationState, "unknown confirmation state"),
+        )
+        object.__setattr__(
+            self,
+            "requirement_id",
+            clean_key(self.requirement_id, "a requirement needs an identifier"),
+        )
+        object.__setattr__(self, "text", clean_text(self.text, "a requirement needs text"))
+        object.__setattr__(
+            self,
+            "source_ref",
+            clean_key(self.source_ref, "a requirement needs a source reference"),
         )
         if self.is_confirmed and self.source_type != SourceType.INFERRED:
             raise ValueError("only an acknowledged inference can be confirmed in this model")
@@ -116,14 +135,14 @@ class Requirement:
             self._check_acknowledgement(self.acknowledgement)
 
     def _check_acknowledgement(self, ack: object) -> None:
-        if not isinstance(ack, ReviewerAcknowledgement):
+        if type(ack) is not ReviewerAcknowledgement:
             raise ValueError("the acknowledgement must be a ReviewerAcknowledgement")
         if self.source_type != SourceType.INFERRED or not self.is_confirmed:
             raise ValueError("an acknowledgement belongs only to a confirmed inferred requirement")
         if ack.requirement_id != self.requirement_id:
             raise ValueError("the acknowledgement names a different requirement")
         expected = _binding(self.requirement_id, self.text, self.source_ref, self.source_type, ack)
-        if ack.binding != expected:
+        if type(ack.binding) is not str or ack.binding != expected:
             raise ValueError(
                 "the acknowledgement does not bind this requirement's identity, text and source"
             )
@@ -145,11 +164,13 @@ def acknowledge_inference(
     ``now`` is supplied by the caller so that the time check is deterministic. The acknowledgement
     may not be dated after ``now`` plus CLOCK_SKEW.
     """
+    if type(requirement) is not Requirement:
+        raise ValueError("the requirement must be a Requirement")
     if requirement.source_type != SourceType.INFERRED:
         raise ValueError("only an inferred requirement takes a reviewer acknowledgement here")
     if requirement.is_confirmed:
         raise ValueError("the requirement is already confirmed")
-    if not isinstance(reviewer, ReviewerAcknowledgement):
+    if type(reviewer) is not ReviewerAcknowledgement:
         raise ValueError("the acknowledgement must be a ReviewerAcknowledgement")
     if reviewer.requirement_id != requirement.requirement_id:
         raise ValueError("the acknowledgement names a different requirement")
@@ -157,7 +178,7 @@ def acknowledge_inference(
         limit = _aware(now, "now") + CLOCK_SKEW
     except OverflowError as error:
         raise ValueError("now is too late to bound the acknowledgement time") from error
-    if reviewer.acknowledged_at > limit:
+    if _aware(reviewer.acknowledged_at, "acknowledged_at") > limit:
         raise ValueError("the acknowledgement is dated in the future")
     bound = replace(
         reviewer,

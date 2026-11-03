@@ -9,8 +9,10 @@ Rules enforced here:
 - A total never counts unestimated or uncertain work as zero. A partial set states no total at all;
   it names the counts of unresolved work, and the per-line ranges stay visible in the SOW.
 - An estimated line is a range (low, high). A degenerate range with low equal to high is allowed.
-- Hours are plain Decimal values with a bounded number of significant digits and exponent, summed
+- Hours are exact Decimal values with a bounded number of significant digits and exponent, summed
   under an explicit precision, so every total is exact and independent of line order.
+- Every input is of its exact type (see textutil). A total is publishable only when it is computed
+  from its estimate here; no caller-supplied total is trusted.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from dataclasses import dataclass
 from decimal import Decimal, localcontext
 from enum import StrEnum
 
-from webdesk.review.textutil import clean, text_tuple
+from webdesk.review.textutil import clean_key, clean_text, enum_of, exact, items_of, text_items
 
 # Every estimate set is a draft until S7-07 provides an authorized approval path.
 DRAFT_STATE = "draft"
@@ -31,6 +33,14 @@ MAX_HOURS = Decimal(1_000_000)
 MIN_ADJUSTED_EXPONENT = -6
 MAX_SIGNIFICANT_DIGITS = 30
 SUM_PRECISION = 80
+
+_TOTAL_FIELDS = (
+    "known_low",
+    "known_high",
+    "estimated_count",
+    "unestimated_count",
+    "uncertain_count",
+)
 
 
 class LineStatus(StrEnum):
@@ -53,28 +63,30 @@ class EstimateLine:
     assumptions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "status", LineStatus(self.status))
+        object.__setattr__(self, "status", enum_of(self.status, LineStatus, "unknown line status"))
         object.__setattr__(
-            self, "line_id", clean(self.line_id, "an estimate line needs a line identifier")
+            self, "line_id", clean_key(self.line_id, "an estimate line needs a line identifier")
         )
         object.__setattr__(
-            self, "work_item", clean(self.work_item, "an estimate line needs a work item")
+            self, "work_item", clean_text(self.work_item, "an estimate line needs a work item")
         )
         object.__setattr__(
             self,
             "scope_boundary",
-            clean(self.scope_boundary, "an estimate line needs a scope boundary"),
+            clean_text(self.scope_boundary, "an estimate line needs a scope boundary"),
         )
         object.__setattr__(
             self,
             "provenance_ref",
-            clean(self.provenance_ref, "an estimate line needs a provenance reference"),
+            clean_key(self.provenance_ref, "an estimate line needs a provenance reference"),
         )
-        # Copy the nested collections first, so a caller's list or generator cannot change the line
-        # after the assumption check below has run. A bare string is refused as a collection.
         for name in ("complexity_drivers", "dependencies", "assumptions"):
-            items = text_tuple(getattr(self, name), f"the estimate line {name} must hold text only")
-            object.__setattr__(self, name, items)
+            items = text_items(getattr(self, name), f"the estimate line {name} must hold text only")
+            cleaned = tuple(
+                clean_text(item, f"the estimate line {name} must hold non-empty text")
+                for item in items
+            )
+            object.__setattr__(self, name, cleaned)
         if self.status == LineStatus.ESTIMATED:
             self._check_range()
         elif self.low_hours is not None or self.high_hours is not None:
@@ -89,7 +101,7 @@ class EstimateLine:
             raise ValueError("estimated hours need low <= high")
         object.__setattr__(self, "low_hours", low)
         object.__setattr__(self, "high_hours", high)
-        if not any(item.strip() for item in self.assumptions):
+        if not self.assumptions:
             raise ValueError("an estimated line needs at least one stated assumption")
 
 
@@ -102,18 +114,14 @@ class EstimateSet:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "estimate_id", clean(self.estimate_id, "an estimate set needs an identifier")
+            self, "estimate_id", clean_key(self.estimate_id, "an estimate set needs an identifier")
         )
-        object.__setattr__(self, "owner", clean(self.owner, "an estimate set needs an owner"))
-        if isinstance(self.version, bool) or not isinstance(self.version, int):
+        object.__setattr__(self, "owner", clean_text(self.owner, "an estimate set needs an owner"))
+        if type(self.version) is not int:
             raise ValueError("an estimate set version is a whole number")
         if self.version < 1:
             raise ValueError("an estimate set version starts at 1")
-        # Copy into a tuple first: a generator is consumed once, and a caller's list cannot change
-        # the set after the checks below have run.
-        lines = tuple(self.lines)
-        if not all(isinstance(line, EstimateLine) for line in lines):
-            raise ValueError("an estimate set holds only EstimateLine values")
+        lines = items_of(self.lines, EstimateLine, "an estimate set holds only EstimateLine values")
         object.__setattr__(self, "lines", lines)
         if not lines:
             raise ValueError("an estimate set needs at least one line")
@@ -128,7 +136,7 @@ class EstimateSet:
 
 @dataclass(frozen=True)
 class EstimateTotal:
-    """Counts and known hours. The known sums are internal; a partial total is never published."""
+    """Counts and known hours computed by total_estimate. Use publishable_range for a total."""
 
     known_low: Decimal | None
     known_high: Decimal | None
@@ -142,14 +150,9 @@ class EstimateTotal:
             self.estimated_count > 0 and self.unestimated_count == 0 and self.uncertain_count == 0
         )
 
-    def publishable_range(self) -> tuple[Decimal, Decimal] | None:
-        """The total range, or None while any line is unestimated or uncertain."""
-        if not self.complete or self.known_low is None or self.known_high is None:
-            return None
-        return self.known_low, self.known_high
-
 
 def total_estimate(estimate: EstimateSet) -> EstimateTotal:
+    estimate = exact(estimate, EstimateSet, "a total is computed from an EstimateSet")
     estimated = [line for line in estimate.lines if line.status == LineStatus.ESTIMATED]
     return EstimateTotal(
         known_low=_sum(line.low_hours for line in estimated),
@@ -160,34 +163,50 @@ def total_estimate(estimate: EstimateSet) -> EstimateTotal:
     )
 
 
+def publishable_range(estimate: EstimateSet) -> tuple[Decimal, Decimal] | None:
+    """The total range for ``estimate``, or None while any line is unestimated or uncertain."""
+    total = total_estimate(estimate)
+    if not total.complete or total.known_low is None or total.known_high is None:
+        return None
+    return total.known_low, total.known_high
+
+
 def render_total(estimate: EstimateSet, total: EstimateTotal) -> str:
     """A plain-text statement of the total. A partial set states no total.
 
-    The total must be the one computed from the estimate. A total supplied by a caller that does not
-    match is refused, so a partial estimate cannot be rendered with a complete-looking total.
+    The total is recomputed from the estimate. A total supplied by a caller that does not match the
+    estimate, field for field and by exact type, is refused.
     """
-    if total != total_estimate(estimate):
+    expected = total_estimate(estimate)
+    if type(total) is not EstimateTotal or not _same_total(total, expected):
         raise ValueError("the total does not match its estimate")
     header = f"Draft estimate {estimate.estimate_id} v{estimate.version} (state: {estimate.state})"
-    if total.complete:
-        body = f"total {_range_text(total.known_low, total.known_high)} hours"
-    elif total.estimated_count == 0:
+    if expected.complete:
+        body = f"total {_range_text(expected.known_low, expected.known_high)} hours"
+    elif expected.estimated_count == 0:
         body = "no line is estimated; no total is stated"
     else:
         body = (
-            f"partial; total not stated: {total.unestimated_count} unestimated and "
-            f"{total.uncertain_count} uncertain line(s) are unresolved; "
-            f"{total.estimated_count} line(s) carry their own ranges"
+            f"partial; total not stated: {expected.unestimated_count} unestimated and "
+            f"{expected.uncertain_count} uncertain line(s) are unresolved; "
+            f"{expected.estimated_count} line(s) carry their own ranges"
         )
     return f"{header}: {body}."
 
 
+def _same_total(total: EstimateTotal, expected: EstimateTotal) -> bool:
+    for name in _TOTAL_FIELDS:
+        left = getattr(total, name)
+        right = getattr(expected, name)
+        if type(left) is not type(right) or left != right:
+            return False
+    return True
+
+
 def _hours(value: object) -> Decimal:
-    if not isinstance(value, Decimal):
-        raise ValueError("estimated hours must be a Decimal, not a float or text")
-    # Rebuild as a plain Decimal from its tuple, so that a subclass cannot change the comparisons
-    # or the value that is stored.
-    plain = Decimal(Decimal.__format__(value, "f"))
+    plain = exact(
+        value, Decimal, "estimated hours must be a Decimal, not a float, text or subclass"
+    )
     if not plain.is_finite():
         raise ValueError("estimated hours must be finite")
     if plain < 0:
