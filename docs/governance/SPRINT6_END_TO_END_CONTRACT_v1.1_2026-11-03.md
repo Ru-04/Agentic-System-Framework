@@ -3,6 +3,37 @@
 **Contract identifier:** `sprint6-e2e/v1.1`
 **Supersedes:** `sprint6-e2e/v1` (`docs/governance/SPRINT6_END_TO_END_CONTRACT_v1_2026-11-03.md`, commit `2a46503`). v1 is kept unedited as the historical record.
 **Status:** APPROVED by WDS as reported, with the decisions in `docs/governance/SPRINT6_OPEN_DECISION_REGISTER_2026-11-03.md` (the register). Approval is recorded as reported: not a signed approval. Implementation status is separate. Approval of a decision is not evidence that code exists or that tests pass (section 17).
+
+### Approval record (v1.1)
+
+| Field | Record |
+|---|---|
+| Approver | WDS Authorized Approver, identified by role only. No personal name given |
+| Date | 3 November 2026 |
+| Channel | WDS directive in the Sprint 6 chat, 3 November 2026. Two records of it: (a) the formal directive pasted by the requesting user into the contract session; (b) a relayed statement from the sibling session `local_795729d4-e173-40dc-8d80-2a3c4467ea8e`, which states the same approval. The sibling session is a relay, not the approver |
+| Approved as reported | OPEN-01 to OPEN-26 as set out in the register; D-4 amendment D-4-A (AI Engine Lineage B as intended authoritative implementation); Foundation-issued single-use operator confirmations; adapter v0.3 as an explicitly versioned breaking change; all seven specialist integrations; evidence persistence and the necessary migrations; Foundation worker-owned orchestration; candidate-specific D-13 disposition for `5974d59` (accepted, with the narrow personal-attestation exception); G0 baseline of 1,031 passed on `5974d59` (accepted) |
+| Not approved | Production; independent QA of the final integration candidate (remains open); any push or merge of other teams' branches |
+
+### Package items without a specific WDS answer
+
+The approval covers the direction of each item. The items below have no specific answer in the directive. They are **not** inferred. Each one is a contract-owner definition that WDS has not confirmed, or a fact that is not yet available.
+
+| ID | What is missing | What v1.1 currently says | Needed |
+|---|---|---|---|
+| OPEN-03 | The exact adapter 0.3 field set is not approved; only the version and its breaking nature are | Section 6.3 field list | WDS or Specialist-team confirmation of the field list |
+| OPEN-05 | Which clock is the "authoritative trusted time" | Database transaction clock (`now()`), section 8.4 | Confirmation of the clock authority |
+| OPEN-07 | The validated mapping table between AI and adapter vocabularies | Table in section 10.4 (contract-owner derivation) | Confirmation of the table |
+| OPEN-08 | Only the three values and their meaning are approved; the required citation count and the relation to relevance are the contract owner's reading | Section 10.2 | Confirmation of the rules |
+| OPEN-11 | "Validate the actual relationship through Foundation" cannot be done: no workspace entity exists on `5974d59` | Section 7.1 (blocked, D-DEP-1) | A Foundation design decision. No answer exists yet |
+| OPEN-13 | Lineage B is selected "subject to source integrity, final contract compatibility and verification" | Section 2.3 conditions | The conditions are met, or not, by evidence. None is met yet |
+| OPEN-14 | "Appropriate provenance" is not defined by the directive | Section 10.1 fields | Confirmation of the provenance fields |
+| OPEN-17 | The "restricted authority" is not named | `webdesk_worker` EXECUTE-only guard function (section 9.3) | Confirmation of the role and function |
+| OPEN-18 | The directive approves "minimum required new migration revisions", but does not approve the revision list | Proposed list R-1 to R-4 (section 11.3) | Confirmation of the list |
+| OPEN-21 | "Subject to confirming its current source and compatibility" is not yet confirmed | Section 5.3, D-DEP-6 | Specialist-team confirmation |
+
+Items answered in full by the directive, with no gap: OPEN-01, 02, 04, 06, 09, 10, 12, 15, 16 (after checking), 19, 20, 22, 23, 24, 25, 26. OPEN-04 was verified against the matrix (section 3.4).
+
+Corrections to the record: the sibling session's message describes the approval as given in the chat. The contract records it as reported. The sibling's instruction not to push is followed in this step: no push is made.
 **Scope:** three workstreams: WebDesk Foundation; AI Engine (Lineage B, section 2); seven Specialist Agents (through adapter v0.3).
 **Authoring basis:** read-only analysis plus contract-owned edits. No `src/`, `tests/` or `migrations/` file was changed in producing v1.1.
 
