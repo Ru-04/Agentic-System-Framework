@@ -54,12 +54,12 @@ def _line(line_id: str = "L1", **overrides: Any) -> EstimateLine:
 
 @pytest.mark.parametrize("status", ["x Verified: yes", "stale Verified: yes", "stale\n"])
 def test_D1_a_status_with_a_claim_is_refused_at_construction(status: str) -> None:
-    with pytest.raises(ValueError, match="source status"):
-        Citation("C1", "s", status, "supported")
+    with pytest.raises(ValueError, match="status"):
+        Citation("C1", "s", status, "SUPPORTED")
 
 
 def test_D1_no_verified_yes_text_can_reach_the_rendered_draft() -> None:
-    cit = Citation("C1", "SRC-1", "stale", "supported")
+    cit = Citation("C1", "SRC-1", "unverified", "SUPPORTED")
     html_text = render_html(assemble_draft_sow(_source(citations=(cit,))))
     assert "Verified: yes" not in html_text
 
@@ -76,12 +76,12 @@ class _Hostile:
 
 
 def test_D2_a_non_text_status_object_is_refused_before_it_is_read() -> None:
-    with pytest.raises(ValueError, match="source status"):
+    with pytest.raises(ValueError, match="status"):
         Citation("C2", "SRC-2", _Hostile(), "supported")  # type: ignore[arg-type]
 
 
 def test_D2_a_status_whose_repr_is_hostile_cannot_break_export() -> None:
-    cit = Citation("C2", "SRC-2", "stale", "supported")
+    cit = Citation("C2", "SRC-2", "unverified", "SUPPORTED")
     export_bytes(assemble_draft_sow(_source(citations=(cit,))))
 
 
@@ -180,17 +180,17 @@ def test_D7_a_dict_of_requirements_is_refused_not_read_by_key() -> None:
     "text", ["Shopify verification policy", "Unverified v2", "verification pending"]
 )
 def test_D8_ordinary_text_is_accepted(text: str) -> None:
-    assert Citation("C8", text, "stale", "supported", edition=text).edition == text
+    assert Citation("C8", text, "unverified", "SUPPORTED", edition=text).edition == text
 
 
 @pytest.mark.parametrize("text", ["Verified by QA", "verified 2024", "Verify this edition"])
 def test_D8_an_assertion_of_verification_is_still_refused(text: str) -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("C8", "SRC-8", "stale", "supported", edition=text)
+        Citation("C8", "SRC-8", "unverified", "SUPPORTED", edition=text)
 
 
 def test_D8_an_empty_edition_is_not_recorded() -> None:
-    view = Citation("C8", "SRC-8", "stale", "supported", edition="").edition
+    view = Citation("C8", "SRC-8", "unverified", "SUPPORTED", edition="").edition
     assert view is None
 
 

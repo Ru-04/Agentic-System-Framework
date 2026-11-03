@@ -20,8 +20,8 @@ def _citation(**overrides: Any) -> Citation:
     fields: dict[str, Any] = {
         "citation_id": "C9",
         "source_ref": "SRC-9",
-        "source_status": "stale",
-        "confidence": "supported",
+        "evidence_status": "unverified",
+        "check_outcome": "SUPPORTED",
     }
     fields.update(overrides)
     return Citation(**fields)

@@ -111,7 +111,8 @@ def resolve(
         raise ResolutionRefused("only an open clarification can be resolved")
     if authority is None:
         raise ResolutionRefused("no resolution authority is available; resolution is blocked")
-    permitted = authority.may_resolve(clarification.clarification_id, actor_id)
+    checked_actor = clean_key(actor_id, "a resolution needs an actor identity")
+    permitted = authority.may_resolve(clarification.clarification_id, checked_actor)
     if type(permitted) is not bool or permitted is not True:
         raise ResolutionRefused("the resolution authority did not permit this resolution")
     return Clarification(

@@ -111,8 +111,9 @@ def _load(path: Path = FIXTURE) -> DraftSowInput:
             Citation(
                 citation_id=c["citation_id"],
                 source_ref=c["source_ref"],
-                source_status=c["source_status"],
-                confidence=c["confidence"],
+                evidence_status=c["evidence_status"],
+                check_outcome=c.get("check_outcome", "UNKNOWN"),
+                source_condition=c.get("source_condition"),
                 edition=c.get("edition"),
                 version=c.get("version"),
             )
@@ -274,10 +275,11 @@ def test_no_unestimated_line_is_shown_as_zero_hours() -> None:
     assert "LINE-SYN-2: Synthetic unestimated work" in html_text
 
 
-def test_citations_are_shown_unverified_even_when_the_source_claims_verified() -> None:
+def test_citations_are_shown_unverified_with_their_approved_outcomes() -> None:
     html_text = _html()
     assert "Verified: no." in html_text
     assert "Verified: yes" not in html_text
-    assert "Unverified citation [provisional OPEN-07]" in html_text
-    assert "Status unknown" not in html_text
-    assert "Stale source [provisional OPEN-07]" in html_text
+    assert "Evidence status: unverified (OPEN-07 mapping)" in html_text
+    assert "Check outcome: SUPPORTED (OPEN-08)" in html_text
+    assert "Check outcome: UNKNOWN (OPEN-08)" in html_text
+    assert "Source condition: stale (provisional marker; not an approved vocabulary)" in html_text

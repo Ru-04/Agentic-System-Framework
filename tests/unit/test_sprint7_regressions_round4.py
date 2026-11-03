@@ -177,7 +177,7 @@ def test_N5_a_decimal_subclass_is_stored_as_a_plain_decimal() -> None:
 @pytest.mark.parametrize("text", ["verıfied 2025", "VERİFIED", "verifıed"])
 def test_N6_a_dotless_i_look_alike_is_refused(text: str) -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("CIT-6", "SRC-6", "stale", "supported", edition=text)
+        Citation("CIT-6", "SRC-6", "unverified", "SUPPORTED", edition=text)
 
 
 # --- N-7: a caller cannot supply a total that does not match its estimate ----------------------
@@ -230,11 +230,11 @@ def test_D_a_degenerate_range_with_low_equal_to_high_is_allowed() -> None:
 
 def test_D_a_missing_citation_identifier_is_a_value_error() -> None:
     with pytest.raises(ValueError):
-        Citation(None, "SRC-D", "stale", "supported")  # type: ignore[arg-type]
+        Citation(None, "SRC-D", "unverified", "SUPPORTED")  # type: ignore[arg-type]
 
 
 def test_D_an_unhashable_source_status_is_refused_at_construction() -> None:
-    with pytest.raises(ValueError, match="source status"):
+    with pytest.raises(ValueError, match="evidence status"):
         Citation("CIT-D", "SRC-D", ["stale"], "supported")  # type: ignore[arg-type]
 
 

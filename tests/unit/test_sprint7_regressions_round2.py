@@ -273,10 +273,15 @@ def test_N2_a_replaced_estimate_summary_is_refused() -> None:
 
 def test_N2_replaced_citation_views_are_refused() -> None:
     cit = Citation(
-        citation_id="CIT-R-1", source_ref="SRC-R-1", source_status="stale", confidence="supported"
+        citation_id="CIT-R-1",
+        source_ref="SRC-R-1",
+        evidence_status="unverified",
+        check_outcome="SUPPORTED",
     )
     sow = assemble_draft_sow(_source(citations=(cit,)))
-    forged_view = dataclasses.replace(render_citation(cit), source_label="Verified source")
+    forged_view = dataclasses.replace(
+        render_citation(cit), evidence_label="Evidence status: verified"
+    )
     with pytest.raises(ValueError, match="citation views"):
         dataclasses.replace(sow, citation_views=(forged_view,))
 
@@ -406,39 +411,39 @@ def test_ND_A_a_non_text_assumption_is_refused() -> None:
 )
 def test_D10_an_edition_with_a_verification_claim_is_refused(text: str) -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("CIT-D10", "SRC-D10", "stale", "supported", edition=text)
+        Citation("CIT-D10", "SRC-D10", "unverified", "SUPPORTED", edition=text)
 
 
 def test_D10_a_version_with_a_verification_claim_is_refused() -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("CIT-D10", "SRC-D10", "stale", "supported", version="verified 2")
+        Citation("CIT-D10", "SRC-D10", "unverified", "SUPPORTED", version="verified 2")
 
 
 def test_D10_a_source_reference_with_a_verification_claim_is_refused() -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("CIT-D10", "Verified by QA: yes", "stale", "supported")
+        Citation("CIT-D10", "Verified by QA: yes", "unverified", "SUPPORTED")
 
 
 def test_D10_a_citation_identifier_with_a_verification_claim_is_refused() -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("VERIFIED-OK", "SRC-D10", "stale", "supported")
+        Citation("VERIFIED-OK", "SRC-D10", "unverified", "SUPPORTED")
 
 
 @pytest.mark.parametrize(
     "text", ["verification pending", "Unverified v2", "Shopify verification policy"]
 )
 def test_D8_ordinary_text_with_verif_in_a_noun_or_status_is_accepted(text: str) -> None:
-    assert Citation("CIT-D8", "SRC-D8", "stale", "supported", edition=text).edition
+    assert Citation("CIT-D8", "SRC-D8", "unverified", "SUPPORTED", edition=text).edition
 
 
 def test_D10_an_ordinary_edition_is_accepted() -> None:
-    assert Citation("CIT-D10", "SRC-D10", "stale", "supported", edition="2024 ed.").edition
+    assert Citation("CIT-D10", "SRC-D10", "unverified", "SUPPORTED", edition="2024 ed.").edition
 
 
 def test_D10_documented_residual_cross_script_look_alikes_are_not_caught() -> None:
     # Residual: a Cyrillic look-alike is not mapped to Latin. The guard is best-effort. The status
     # path does not depend on it, because status values are checked against a closed vocabulary.
-    citation = Citation("CIT-D10", "SRC-D10", "stale", "supported", edition="веrif")
+    citation = Citation("CIT-D10", "SRC-D10", "unverified", "SUPPORTED", edition="веrif")
     assert citation.edition
 
 

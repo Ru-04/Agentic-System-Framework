@@ -228,7 +228,7 @@ def test_F5_a_datetime_subclass_is_refused_as_now() -> None:
 @pytest.mark.parametrize("text", ["Veriƒied edition", "verɪfied edition", "VERIFɪED"])
 def test_F6_a_same_script_look_alike_is_refused(text: str) -> None:
     with pytest.raises(ValueError, match="verification claim"):
-        Citation("CIT-F6", "SRC-F6", "stale", "supported", edition=text)
+        Citation("CIT-F6", "SRC-F6", "unverified", "SUPPORTED", edition=text)
 
 
 # --- F7: citations must be exact Citation values --------------------------------------------------
@@ -243,7 +243,7 @@ def test_F7_a_citation_subclass_is_refused() -> None:
     class SubCitation(Citation):
         pass
 
-    sub = SubCitation("CIT-7", "SRC-7", "stale", "supported", edition="synthetic-edition")
+    sub = SubCitation("CIT-7", "SRC-7", "unverified", "SUPPORTED", edition="synthetic-edition")
     with pytest.raises(ValueError, match="Citation"):
         _source(citations=(sub,))
 

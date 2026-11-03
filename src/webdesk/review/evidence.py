@@ -1,18 +1,20 @@
 """Evidence-status rendering for citations (S7-05).
 
-A citation is a reference to a source. This module only describes the status recorded for it. It
-never confirms a citation. No status in this module means "verified", and an upstream value of
-"verified" is shown as unknown. Verification would need an authority this module does not have.
+A citation carries two approved fields and one provisional field:
 
-PROVISIONAL VOCABULARY. The source-status vocabulary (OPEN-07) and the confidence vocabulary
-(OPEN-08) are not confirmed. Every label below carries its open item, so that a later confirmed
-vocabulary replaces the labels in one place and no caller depends on the wording.
+- evidence_status: the AI evidence vocabulary (Sprint 6 register OPEN-07, contract section 10.4).
+  This module accepts unverified, not_applicable and conflicting. The values verified and
+  partially_verified are set only by a human Foundation workflow (contract section 10.4), which
+  this module does not implement, so they are refused. An adapter value "cited" maps to unverified.
+- check_outcome: SUPPORTED, UNSUPPORTED or UNKNOWN (Sprint 6 register OPEN-08, contract 10.2).
+  It defaults to UNKNOWN, as the contract does.
+- source_condition: stale, revoked, absent or synthetic. This is a provisional marker from the
+  S7-05 requirement. It is not an approved vocabulary and is labelled as such.
 
-Free text (identifier, source reference, edition, version) is shown beside the status. A word in
-that text that claims verification is refused (see _claims_verification). The guard is best effort:
-it folds the Latin look-alikes listed below, and it does not map cross-script look-alikes such as
-Cyrillic letters. The status path does not depend on it, because status values come from a closed
-vocabulary and are refused at construction otherwise.
+A citation is never shown as verified. Free text (identifier, source reference, edition, version) is
+guarded against verification claims (see _claims_verification). The guard is best effort: it folds
+the Latin look-alikes listed below, and it does not map cross-script look-alikes such as Cyrillic
+letters. The status fields do not depend on it, because they come from closed vocabularies.
 """
 
 from __future__ import annotations
@@ -23,28 +25,18 @@ from dataclasses import dataclass, field
 
 from webdesk.review.textutil import clean_key, clean_text, exact, is_blank
 
-SOURCE_STATUS_OPEN_ITEM = "OPEN-07"
-CONFIDENCE_OPEN_ITEM = "OPEN-08"
+# The AI evidence vocabulary (OPEN-07). verified and partially_verified are human-only (10.4).
+EVIDENCE_STATUSES = frozenset({"unverified", "not_applicable", "conflicting"})
+HUMAN_ONLY_EVIDENCE_STATUSES = frozenset({"verified", "partially_verified"})
+# Adapter evidence values map to the AI vocabulary through this table only (OPEN-07).
+ADAPTER_EVIDENCE_MAP: dict[str, str] = {"cited": "unverified", "unverified": "unverified"}
 
-# Provisional source statuses. "verified" is intentionally absent, see the module docstring.
-SOURCE_STATUS_LABELS: dict[str, str] = {
-    "stale": "Stale source",
-    "revoked": "Source revoked",
-    "absent": "Source absent",
-    "synthetic": "Synthetic evidence, not client source",
-    "unverified": "Unverified citation",
-}
+# The check outcome vocabulary (OPEN-08). UNKNOWN is the default when neither of the others holds.
+CHECK_OUTCOMES = frozenset({"SUPPORTED", "UNSUPPORTED", "UNKNOWN"})
 
-# Provisional confidence levels. Confidence describes support for a statement, not verification.
-CONFIDENCE_LABELS: dict[str, str] = {
-    "supported": "Supported by cited text",
-    "uncertain": "Uncertain",
-    "unsupported": "Unsupported",
-    "unknown": "Unknown",
-}
+# Provisional source conditions from the S7-05 requirement. Not an approved vocabulary.
+SOURCE_CONDITIONS = frozenset({"stale", "revoked", "absent", "synthetic"})
 
-UNKNOWN_SOURCE_LABEL = "Status unknown"
-UNKNOWN_CONFIDENCE_LABEL = "Confidence unknown"
 NOT_RECORDED = "not recorded"
 
 # Latin letters that look like other Latin letters once a diacritic or stroke is dropped. This is
@@ -62,10 +54,6 @@ _SAME_SCRIPT_FOLDS = str.maketrans(
         "ɨ": "i",  # i with stroke
     }
 )
-
-
-def _provisional(label: str, open_item: str) -> str:
-    return f"{label} [provisional {open_item}]"
 
 
 # The stems that assert a result: verified, verify, verifies, verifying, verifier, verifiable,
@@ -120,12 +108,20 @@ def _word_index(starts: list[int], position: int) -> int:
     return index
 
 
+def ai_status_from_adapter(status: str) -> str:
+    """Map an adapter evidence value to the AI vocabulary (OPEN-07 table). Others are refused."""
+    if type(status) is not str or status not in ADAPTER_EVIDENCE_MAP:
+        raise ValueError("an adapter evidence value outside the mapping table is refused")
+    return ADAPTER_EVIDENCE_MAP[status]
+
+
 @dataclass(frozen=True)
 class Citation:
     citation_id: str
     source_ref: str
-    source_status: str
-    confidence: str
+    evidence_status: str
+    check_outcome: str = "UNKNOWN"
+    source_condition: str | None = None
     edition: str | None = None
     version: str | None = None
 
@@ -138,15 +134,22 @@ class Citation:
             "source_ref",
             clean_key(self.source_ref, "a citation needs a source reference"),
         )
-        # The status and confidence come from the closed vocabularies. Anything else is refused, so
-        # a free-text status can never be shown beside the real status (QA 6, D-1 and D-2).
-        if type(self.source_status) is not str or self.source_status not in SOURCE_STATUS_LABELS:
+        if (
+            type(self.evidence_status) is str
+            and self.evidence_status in HUMAN_ONLY_EVIDENCE_STATUSES
+        ):
             raise ValueError(
-                "the source status must be one of the recorded source statuses; "
-                "a citation is never recorded as verified"
+                "verified and partially_verified are set only by a human Foundation workflow; "
+                "a citation is never verified in this module"
             )
-        if type(self.confidence) is not str or self.confidence not in CONFIDENCE_LABELS:
-            raise ValueError("the confidence must be one of the recorded confidence levels")
+        if type(self.evidence_status) is not str or self.evidence_status not in EVIDENCE_STATUSES:
+            raise ValueError("the evidence status must be one of the AI evidence statuses")
+        if type(self.check_outcome) is not str or self.check_outcome not in CHECK_OUTCOMES:
+            raise ValueError("the check outcome must be SUPPORTED, UNSUPPORTED or UNKNOWN")
+        if self.source_condition is not None and (
+            type(self.source_condition) is not str or self.source_condition not in SOURCE_CONDITIONS
+        ):
+            raise ValueError("the source condition must be stale, revoked, absent or synthetic")
         for name in ("edition", "version"):
             value = getattr(self, name)
             if value is None or is_blank(value):
@@ -168,39 +171,30 @@ class Citation:
 class CitationView:
     citation_id: str
     source_ref: str
-    source_label: str
-    confidence_label: str
+    evidence_label: str
+    check_label: str
+    condition_label: str
     edition: str
     version: str
-    note: str
     verified: bool = field(default=False, init=False)
 
 
 def render_citation(citation: Citation) -> CitationView:
     citation = exact(citation, Citation, "a citation view is built from a Citation")
-    source_label, note = _source_label(citation.source_status)
+    condition = (
+        ""
+        if citation.source_condition is None
+        else (
+            f"Source condition: {citation.source_condition} "
+            "(provisional marker; not an approved vocabulary). "
+        )
+    )
     return CitationView(
         citation_id=citation.citation_id,
         source_ref=citation.source_ref,
-        source_label=source_label,
-        confidence_label=_confidence_label(citation.confidence),
+        evidence_label=f"Evidence status: {citation.evidence_status} (OPEN-07 mapping)",
+        check_label=f"Check outcome: {citation.check_outcome} (OPEN-08)",
+        condition_label=condition,
         edition=citation.edition or NOT_RECORDED,
         version=citation.version or NOT_RECORDED,
-        note=note,
     )
-
-
-def _source_label(status: object) -> tuple[str, str]:
-    if type(status) is str and status in SOURCE_STATUS_LABELS:
-        return _provisional(SOURCE_STATUS_LABELS[status], SOURCE_STATUS_OPEN_ITEM), ""
-    note = (
-        f"Recorded status {status!r} is not an accepted source status. "
-        "The citation is not treated as verified."
-    )
-    return _provisional(UNKNOWN_SOURCE_LABEL, SOURCE_STATUS_OPEN_ITEM), note
-
-
-def _confidence_label(confidence: object) -> str:
-    if type(confidence) is str and confidence in CONFIDENCE_LABELS:
-        return _provisional(CONFIDENCE_LABELS[confidence], CONFIDENCE_OPEN_ITEM)
-    return _provisional(UNKNOWN_CONFIDENCE_LABEL, CONFIDENCE_OPEN_ITEM)

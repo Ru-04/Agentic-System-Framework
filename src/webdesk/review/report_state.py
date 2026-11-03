@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from webdesk.review.textutil import clean_key, enum_of, items_of
+from webdesk.review.textutil import clean_key, enum_of, exact, items_of
 from webdesk.runs.hashing import InputTuple, input_revision_hash
 
 
@@ -45,7 +45,7 @@ class ReportSnapshot:
         object.__setattr__(
             self, "outcome", enum_of(self.outcome, RunOutcome, "unknown run outcome")
         )
-        inputs = items_of(self.inputs, InputTuple, "a snapshot holds InputTuple values")
+        inputs = _checked_inputs(self.inputs, "a snapshot holds InputTuple values")
         if not inputs:
             raise ValueError("a snapshot needs at least one recorded input")
         object.__setattr__(self, "inputs", inputs)
@@ -67,7 +67,8 @@ class Assessment:
 
 def assess(snapshot: ReportSnapshot, current_inputs: tuple[InputTuple, ...]) -> Assessment:
     """Judge a snapshot against the current inputs. Nothing is changed."""
-    current = items_of(current_inputs, InputTuple, "current inputs must be InputTuple values")
+    snapshot = exact(snapshot, ReportSnapshot, "a report is judged from a ReportSnapshot")
+    current = _checked_inputs(current_inputs, "current inputs must be InputTuple values")
     stale = input_revision_hash(snapshot.inputs) != input_revision_hash(current)
     complete = (
         snapshot.outcome == RunOutcome.COMPLETED and not snapshot.missing_evidence and not stale
@@ -83,8 +84,13 @@ def assess(snapshot: ReportSnapshot, current_inputs: tuple[InputTuple, ...]) -> 
 
 def status_line(assessment: Assessment) -> str:
     """The text a report shows. It never says the report is fully verified."""
+    assessment = exact(assessment, Assessment, "a status line is written from an Assessment")
+    missing = ", ".join(assessment.missing_evidence) or "none recorded"
     if assessment.stale:
-        return f"Stale: the inputs changed after this report ({assessment.report_id})."
+        return (
+            f"Stale: the inputs changed after this report ({assessment.report_id}); "
+            f"missing evidence: {missing}."
+        )
     if assessment.complete:
         return f"Complete run; citations remain unverified ({assessment.report_id})."
     missing = ", ".join(assessment.missing_evidence) or "none recorded"
@@ -92,6 +98,22 @@ def status_line(assessment: Assessment) -> str:
         f"Incomplete: run {assessment.outcome} ({assessment.report_id}); "
         f"missing evidence: {missing}."
     )
+
+
+def _checked_inputs(values: object, message: str) -> tuple[InputTuple, ...]:
+    """Exact input tuples with exact field types, each entity at most once."""
+    items = items_of(values, InputTuple, message)
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        if type(item.entity_type) is not str or type(item.entity_id) is not str:
+            raise ValueError("an input's entity type and identifier must be text")
+        if type(item.revision) is not int or item.revision < 0:
+            raise ValueError("an input's revision is a whole number from 0")
+        key = (item.entity_type, item.entity_id)
+        if key in seen:
+            raise ValueError("each entity may appear once in a snapshot")
+        seen.add(key)
+    return items
 
 
 def regenerate(

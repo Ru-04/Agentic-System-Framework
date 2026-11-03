@@ -47,11 +47,11 @@ SOW_ID_PREFIX = "SOW-"
 _VIEW_TEXT_FIELDS = (
     "citation_id",
     "source_ref",
-    "source_label",
-    "confidence_label",
+    "evidence_label",
+    "check_label",
+    "condition_label",
     "edition",
     "version",
-    "note",
 )
 
 
@@ -377,11 +377,9 @@ def _citations_section(views: tuple[CitationView, ...]) -> str:
         return "<h2>Evidence</h2><p>No citations recorded.</p>"
     rows = "".join(
         f"<li>{_e(view.citation_id)}: {_e(view.source_ref)}. "
-        f"Source status: {_e(view.source_label)}. Confidence: {_e(view.confidence_label)}. "
+        f"{_e(view.evidence_label)}. {_e(view.check_label)}. {_e(view.condition_label)}"
         f"Edition: {_e(view.edition)}. Version: {_e(view.version)}. "
-        f"Verified: {'yes' if view.verified else 'no'}."
-        + (f" {_e(view.note)}" if view.note else "")
-        + "</li>"
+        f"Verified: {'yes' if view.verified else 'no'}." + "</li>"
         for view in views
     )
     return f"<h2>Evidence</h2><ul>{rows}</ul>"

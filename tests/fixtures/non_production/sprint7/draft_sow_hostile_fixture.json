@@ -3,30 +3,76 @@
   "title": "Synthetic draft <script>alert(1)</script> \"quoted\" & Co",
   "objective": "Synthetic objective </h2><img src=x onerror=alert(2)> for escaping only.",
   "in_scope": [
-    {"text": "Synthetic in-scope item one", "refs": ["FIND-SYN-001"]},
-    {"text": "Synthetic item with markup <b>bold</b>", "refs": ["FIND-SYN-002", "SRC-SYN-009"]}
+    {
+      "text": "Synthetic in-scope item one",
+      "refs": [
+        "FIND-SYN-001"
+      ]
+    },
+    {
+      "text": "Synthetic item with markup <b>bold</b>",
+      "refs": [
+        "FIND-SYN-002",
+        "SRC-SYN-009"
+      ]
+    }
   ],
   "out_of_scope": [
-    {"text": "Synthetic out-of-scope item", "refs": ["REQ-SYN-004"]}
+    {
+      "text": "Synthetic out-of-scope item",
+      "refs": [
+        "REQ-SYN-004"
+      ]
+    }
   ],
   "deliverables": [
-    {"text": "Synthetic deliverable A", "refs": ["REQ-SYN-001"]}
+    {
+      "text": "Synthetic deliverable A",
+      "refs": [
+        "REQ-SYN-001"
+      ]
+    }
   ],
   "acceptance_criteria": [
-    {"text": "Synthetic acceptance criterion \" onmouseover=\"x()", "refs": ["REQ-SYN-001"]}
+    {
+      "text": "Synthetic acceptance criterion \" onmouseover=\"x()",
+      "refs": [
+        "REQ-SYN-001"
+      ]
+    }
   ],
   "dependencies": [
-    {"text": "Synthetic dependency on an open item", "refs": ["OPEN-SYN-011"]}
+    {
+      "text": "Synthetic dependency on an open item",
+      "refs": [
+        "OPEN-SYN-011"
+      ]
+    }
   ],
   "assumptions": [
-    {"text": "Synthetic assumption about the platform", "refs": ["FIND-SYN-001"]}
+    {
+      "text": "Synthetic assumption about the platform",
+      "refs": [
+        "FIND-SYN-001"
+      ]
+    }
   ],
   "exclusions": [],
   "uncertainties": [
-    {"text": "Synthetic uncertainty with no source", "refs": ["FIND-SYN-003"]}
+    {
+      "text": "Synthetic uncertainty with no source",
+      "refs": [
+        "FIND-SYN-003"
+      ]
+    }
   ],
   "risks": [
-    {"text": "Synthetic risk of partial evidence", "refs": ["FIND-SYN-002"]}
+    {
+      "text": "Synthetic risk of partial evidence",
+      "refs": [
+        "FIND-SYN-002"
+      ]
+    }
   ],
   "requirements": [
     {
@@ -69,7 +115,9 @@
         "provenance_ref": "REQ-SYN-001",
         "low_hours": "10.5",
         "high_hours": "14",
-        "assumptions": ["Synthetic assumption for line one"]
+        "assumptions": [
+          "Synthetic assumption for line one"
+        ]
       },
       {
         "line_id": "LINE-SYN-2",
@@ -91,16 +139,17 @@
     {
       "citation_id": "CIT-SYN-1",
       "source_ref": "SRC-SYN-001 page 2",
-      "source_status": "unverified",
-      "confidence": "supported",
+      "evidence_status": "unverified",
+      "check_outcome": "SUPPORTED",
       "edition": "synthetic-edition-1",
       "version": "1"
     },
     {
       "citation_id": "CIT-SYN-2",
       "source_ref": "SRC-SYN-009",
-      "source_status": "stale",
-      "confidence": "uncertain"
+      "evidence_status": "unverified",
+      "check_outcome": "UNKNOWN",
+      "source_condition": "stale"
     }
   ]
 }
