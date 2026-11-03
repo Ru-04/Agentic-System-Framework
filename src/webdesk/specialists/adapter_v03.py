@@ -32,6 +32,7 @@ from typing import Annotated, Final, Literal, Protocol
 from uuid import UUID
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -63,6 +64,7 @@ CONFIDENCE_STATUS: Final[Literal["not_assessed"]] = "not_assessed"
 ERROR_VERSION_UNSUPPORTED: Final[str] = "adapter_version_unsupported"
 ERROR_CONFIRMATION_NOT_VERIFIED: Final[str] = "confirmation_not_verified"
 ERROR_ACTIONS_DIGEST_MISMATCH: Final[str] = "allowed_actions_digest_mismatch"
+ERROR_SOURCE_SCOPE_DIGEST_MISMATCH: Final[str] = "source_scope_digest_mismatch"
 
 # The closed allowed_actions vocabulary (contract v1.1). Anything else is refused, and so is any
 # FORBIDDEN_ACTIONS value. The check is the same one the v0.2 adapter uses.
@@ -87,6 +89,27 @@ EMPTY_SOURCE_SCOPE_DIGEST: Final[str] = hashlib.sha256(b"[]").hexdigest()
 Sha256Hex = Annotated[str, StringConstraints(pattern=SHA256_HEX_PATTERN)]
 
 
+def _canonical_source_entry(entry: str) -> str:
+    # Canonical form: https, lowercase host, no userinfo, port, query or fragment, and no trailing
+    # slash unless the path is "/". A non-canonical entry is refused, never rewritten.
+    scheme = "https://"
+    if not entry.startswith(scheme) or not entry.isascii() or entry != entry.strip():
+        raise ValueError("source entry is not in canonical form")
+    rest = entry[len(scheme) :]
+    if any(ch in rest for ch in "@?# \t\r\n\\"):
+        raise ValueError("source entry is not in canonical form")
+    host, slash, path = rest.partition("/")
+    full_path = f"/{path}" if slash else ""
+    if not host or host != host.lower() or ":" in host:
+        raise ValueError("source entry is not in canonical form")
+    if full_path.endswith("/") and full_path != "/":
+        raise ValueError("source entry is not in canonical form")
+    return entry
+
+
+SourceEntry = Annotated[str, AfterValidator(_canonical_source_entry)]
+
+
 class AdapterRequest(BaseModel):
     """Envelope WebDesk sends to the adapter. Unknown fields are refused, including actor fields."""
 
@@ -105,6 +128,7 @@ class AdapterRequest(BaseModel):
     task: NonBlank
     allowed_actions: tuple[NonBlank, ...] = Field(min_length=1)
     allowed_actions_digest: Sha256Hex
+    source_scope: tuple[SourceEntry, ...] = ()
     source_scope_digest: Sha256Hex
     confirmation_ref: NonBlank
 
@@ -163,6 +187,7 @@ class ConfirmationBinding:
     requirement_refs_digest: str
     allowed_actions_digest: str
     source_scope_digest: str
+    source_scope: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -279,6 +304,11 @@ def _digest(values: Sequence[str]) -> str:
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
+def source_scope_digest_of(entries: Sequence[str]) -> str:
+    """SHA-256 hex of the sorted unique JSON array of canonical source entries (contract v1.1)."""
+    return _digest(entries)
+
+
 def binding_for(request: AdapterRequest) -> ConfirmationBinding:
     return ConfirmationBinding(
         run_id=request.run_id,
@@ -288,6 +318,7 @@ def binding_for(request: AdapterRequest) -> ConfirmationBinding:
         requirement_refs_digest=_digest(request.requirement_refs),
         allowed_actions_digest=_digest(request.allowed_actions),
         source_scope_digest=request.source_scope_digest,
+        source_scope=request.source_scope,
     )
 
 
@@ -342,6 +373,9 @@ def call_adapter(
     The verifier is called exactly once, because a Foundation confirmation is single-use. The
     verified actor is returned alongside the response, for the audit record only.
     """
+    # The digest is recomputed from the envelope's own list before anything is verified.
+    if source_scope_digest_of(request.source_scope) != request.source_scope_digest:
+        return _refused(request, request.capability_id, ERROR_SOURCE_SCOPE_DIGEST_MISMATCH), None
     # Checked before the verifier, so a malformed action set never spends a confirmation.
     if _digest(request.allowed_actions) != request.allowed_actions_digest:
         return _refused(request, request.capability_id, ERROR_ACTIONS_DIGEST_MISMATCH), None

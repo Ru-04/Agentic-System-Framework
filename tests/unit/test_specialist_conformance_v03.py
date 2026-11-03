@@ -119,7 +119,7 @@ def _provider(specialist: SpecialistId, retriever: CountingRetriever) -> Any:
     return PLATFORM_CLASSES[specialist](retriever, **kwargs)
 
 
-def _actions_digest(actions: Any) -> str:
+def _list_digest(actions: Any) -> str:
     # Contract v1.1 encoding: SHA-256 hex of the sorted unique compact JSON array.
     canonical = json.dumps(sorted(set(actions)), separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
@@ -138,12 +138,14 @@ def _envelope(specialist: SpecialistId, **overrides: Any) -> dict[str, Any]:
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
-        "source_scope_digest": "a" * 64,
+        "source_scope": ["https://www.shopify.com/pricing"],
         "confirmation_ref": f"conf-{specialist.value}",
     }
     data.update(overrides)
     if "allowed_actions_digest" not in overrides:
-        data["allowed_actions_digest"] = _actions_digest(data["allowed_actions"])
+        data["allowed_actions_digest"] = _list_digest(data["allowed_actions"])
+    if "source_scope_digest" not in overrides:
+        data["source_scope_digest"] = _list_digest(data["source_scope"])
     return data
 
 

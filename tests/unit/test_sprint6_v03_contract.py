@@ -73,7 +73,7 @@ class CountingRetriever:
         return self._inner.search(query)
 
 
-def _actions_digest(actions: Any) -> str:
+def _list_digest(actions: Any) -> str:
     # Contract v1.1 encoding: SHA-256 hex of the sorted unique compact JSON array.
     canonical = json.dumps(sorted(set(actions)), separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
@@ -92,12 +92,14 @@ def _envelope(**overrides: Any) -> dict[str, Any]:
         "evidence_refs": [],
         "task": TASK,
         "allowed_actions": ["read_evidence"],
-        "source_scope_digest": "a" * 64,
+        "source_scope": ["https://www.shopify.com/pricing"],
         "confirmation_ref": "conf-s6-1",
     }
     data.update(overrides)
     if "allowed_actions_digest" not in overrides:
-        data["allowed_actions_digest"] = _actions_digest(data["allowed_actions"])
+        data["allowed_actions_digest"] = _list_digest(data["allowed_actions"])
+    if "source_scope_digest" not in overrides:
+        data["source_scope_digest"] = _list_digest(data["source_scope"])
     return data
 
 
@@ -298,11 +300,10 @@ def test_requirement_digest_is_sha256_of_the_sorted_unique_compact_array() -> No
 
 
 def test_an_empty_source_scope_runs_no_retrieval_and_no_provider() -> None:
-    empty = hashlib.sha256(b"[]").hexdigest()
     retriever = CountingRetriever([_vendor("https://www.shopify.com/pricing/plans")])
     response, verified = call_adapter(
         _shopify(retriever),
-        parse_request(_envelope(source_scope_digest=empty)),
+        parse_request(_envelope(source_scope=[])),
         CountingVerifier(),
     )
     assert retriever.calls == 0
@@ -337,7 +338,7 @@ def test_an_altered_action_set_is_refused_without_consuming_the_confirmation() -
     verifier = CountingVerifier()
     # The digest is for read_evidence only, but the envelope now asks for more.
     envelope = _envelope(allowed_actions=["read_evidence", "propose_candidates"])
-    envelope["allowed_actions_digest"] = _actions_digest(["read_evidence"])
+    envelope["allowed_actions_digest"] = _list_digest(["read_evidence"])
     response, verified = call_adapter(
         _shopify(CountingRetriever([])), parse_request(envelope), verifier
     )
@@ -368,3 +369,92 @@ def test_the_allowed_actions_digest_is_required() -> None:
     del envelope["allowed_actions_digest"]
     with pytest.raises(AdapterRequestError):
         parse_request(envelope)
+
+
+class AuthorizedVerifier:
+    """CONTRACT DOUBLE for the Foundation verifier. Recomputes the source scope digest from the
+    entries in the binding, and requires every entry to be in the Foundation-authorized set."""
+
+    def __init__(self, authorized: frozenset[str]) -> None:
+        self._authorized = authorized
+        self.calls = 0
+
+    def verify(
+        self, confirmation_ref: str, binding: ConfirmationBinding
+    ) -> VerifiedConfirmation | None:
+        self.calls += 1
+        if _list_digest(binding.source_scope) != binding.source_scope_digest:
+            return None
+        if not set(binding.source_scope) <= self._authorized:
+            return None
+        return VerifiedConfirmation(actor_ref="proof-actor")
+
+
+APPROVED_ENTRY = "https://www.shopify.com/pricing"
+
+
+def test_a_syntactically_valid_but_wrong_source_digest_is_refused_before_verification() -> None:
+    verifier = CountingVerifier()
+    response, verified = call_adapter(
+        _shopify(CountingRetriever([])),
+        parse_request(_envelope(source_scope_digest="b" * 64)),
+        verifier,
+    )
+    assert verifier.calls == 0
+    assert verified is None
+    assert response.error is not None
+    assert response.error.code == "source_scope_digest_mismatch"
+
+
+def test_an_authorized_source_scope_verifies_and_runs() -> None:
+    verifier = AuthorizedVerifier(frozenset({APPROVED_ENTRY}))
+    response, verified = call_adapter(
+        _shopify(CountingRetriever([_vendor("https://www.shopify.com/pricing/plans")])),
+        parse_request(_envelope()),
+        verifier,
+    )
+    assert verifier.calls == 1
+    assert verified == VerifiedConfirmation(actor_ref="proof-actor")
+    assert response.error is None
+
+
+def test_an_entry_outside_the_foundation_authorized_set_is_refused() -> None:
+    verifier = AuthorizedVerifier(frozenset({"https://www.shopify.com/plus"}))
+    response, verified = call_adapter(
+        _shopify(CountingRetriever([])), parse_request(_envelope()), verifier
+    )
+    assert verifier.calls == 1
+    assert verified is None
+    assert response.error is not None
+    assert response.error.code == ERROR_CONFIRMATION_NOT_VERIFIED
+
+
+def test_the_binding_carries_the_entries_the_digest_was_computed_from() -> None:
+    entries = ["https://www.shopify.com/pricing", "https://www.shopify.com/plus"]
+    binding = binding_for(parse_request(_envelope(source_scope=entries)))
+    assert binding.source_scope == tuple(entries)
+    assert _list_digest(binding.source_scope) == binding.source_scope_digest
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "http://www.shopify.com/pricing",
+        "https://WWW.shopify.com/pricing",
+        "https://www.shopify.com/pricing/",
+        "https://user@www.shopify.com/pricing",
+        "https://www.shopify.com/pricing?x=1",
+        "https://www.shopify.com/pricing#top",
+        "https://www.shopify.com:443/pricing",
+        "https://www.shopify.com/pricing ",
+        "",
+    ],
+)
+def test_non_canonical_source_entries_are_refused(entry: str) -> None:
+    with pytest.raises(AdapterRequestError):
+        parse_request(_envelope(source_scope=[entry]))
+
+
+def test_root_path_and_host_only_entries_are_canonical() -> None:
+    assert parse_request(_envelope(source_scope=["https://www.shopify.com/"])).source_scope
+    assert parse_request(_envelope(source_scope=["https://www.shopify.com"])).source_scope
