@@ -69,6 +69,22 @@ from source material, which is S7-02 and S7-10 authority.
 - R5: the D10 guard is best effort. It normalises NFKC, zero-width and combining characters, and spacing, but it does not map cross-script look-alikes (for example Cyrillic letters). The status path does not depend on the guard: status values come from a closed vocabulary.
 - R6: edition, version and source reference are free text. They are escaped, and they cannot set the status. A verification claim in them is refused where detected (R5 limits detection).
 
+### 1.4 Independent QA 4 and 5, and the round-5 remediation
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 4 | `f58c4de` | **FAIL**: N-1 major (a bare string used as references was split into characters); N-2 to N-8 minor. |
+| Remediation | `784a368` | N-1 to N-8 addressed; regression tests in `tests/unit/test_sprint7_regressions_round4.py` |
+| Independent QA 5 | `784a368` | **FAIL**: F1 to F5 major (caller-supplied subclasses and duck types defeated `!=`, `>` and `isinstance`); F6 to F12 minor. |
+| Round-5 remediation | this commit | The category is closed by construction: every boundary accepts exact types only (`type(x) is cls`), and every comparison is made on exact types. `EstimateTotal` no longer publishes a range; `publishable_range(estimate)` recomputes from the estimate. `render_total` compares fields by exact type. Identifiers and free text are cleaned by different rules (see textutil). Regression tests: `tests/unit/test_sprint7_regressions_round5.py`. |
+
+**New residual, found in QA 5 and accepted as a text-guard limit (R7):** the verification-claim guard
+folds a finite list of same-script Latin look-alikes. A visually similar letter outside that list,
+for example U+0192 (f with hook) in a word where it stands for a letter that the fold does not
+reconstruct ("Verƒied" reads as "Verified" but folds to "Verfied"), is not caught. This is a display
+spoof in free text only. The citation status cannot be upgraded by it, because status values come from
+a closed vocabulary.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |
