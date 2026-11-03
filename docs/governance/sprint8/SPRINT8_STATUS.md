@@ -9,8 +9,8 @@ Status words: **Done** means implemented and verified in this repository, with t
 
 | ID | Matrix class | Status | Evidence (in repository) | Not done, and why |
 |---|---|---|---|---|
-| S8-01 | GREEN | **Done (document)** | `docs/governance/sprint8/S8_01_THREAT_MODEL_REGISTER.md`; independent review and re-check recorded in its history | Independent re-review of the 13 corrections not in the re-check. OPEN-11 and specialist boundaries stay UNKNOWN or NOT IN REPO by design |
-| S8-02 | AMBER | **Partial** | Unit: 18 passed. Database: 10 passed, 2 BLOCKED (`tests/sprint8/test_s8_02_fail_closed_db.py`). Independent QA passed on `976f255`; fixes re-checked at `0f474b0` | Workspace read (OPEN-11) and specialist path (S6-INT) are BLOCKED. Final cross-workstream misuse tests need S6-INT |
+| S8-01 | GREEN | **Done (document)** | `docs/governance/sprint8/S8_01_THREAT_MODEL_REGISTER.md`; engineering session recorded an independent review and re-check; those reviewer reports are not in the repository | Independent re-review of the 13 corrections not in the re-check. OPEN-11 and specialist boundaries stay UNKNOWN or NOT IN REPO by design |
+| S8-02 | AMBER | **Partial** | Unit: 18 passed. Database: 10 passed, 2 BLOCKED (`tests/sprint8/test_s8_02_fail_closed_db.py`). Independent QA passed on `976f255` according to the engineering session's record; that QA report is not in the repository | Workspace read (OPEN-11) and specialist path (S6-INT) are BLOCKED. Final cross-workstream misuse tests need S6-INT |
 | S8-03 | AMBER | **Partial** | Migration cycle and catalog tests: 2 passed on the dedicated cluster (this continuation). Single alembic head: `0059_int_mark_inputs_fence` (verified). Privilege audit and restricted-login negative suites exist (`tests/hardening/test_privilege_audit.py`, `tests/hardening/test_app_role_negative.py`); they were **not executed** in this continuation | Restricted-role matrix on the final schema needs OPEN-18. Production identities and secrets are not provisioned (`PRODUCTION_BOUNDARY.md` §4). Scratch-superuser grants used by the test setup are not a production configuration |
 | S8-04 | AMBER | **Partial** | Redaction: `tests/unit/test_audit_redaction.py` (passed in the 312-test unit regression). Sensitive-data path to prompts: AI content limit and restricted/quarantined exclusion (`tests/committed/test_ai_read_v1.py`, passed in the 132-test regression) | Report and export authorization needs Sprint 7 (not built). Retention policy is not approved |
 | S8-05 | AMBER | **Partial** | `ai-read/v1` contract regression: `tests/committed/test_ai_read_v1.py` (passed in the 132-test regression) | Seven-specialist and v1.1 regression needs S6-INT (BLOCKED) |
@@ -20,7 +20,7 @@ Status words: **Done** means implemented and verified in this repository, with t
 | S8-09 | AMBER | **Measured baseline, no threshold** | `tests/perf/test_s8_09_outbox_baseline.py`; three runs, figures below | No approved SLO, so none is set or checked |
 | S8-10 | AMBER | **Partial: measured concurrency harness added** | Concurrency harness with 1 and 4 workers: each of 200 notices sent exactly once; figures below (`tests/perf/test_s8_10_concurrent_outbox.py`). Payload limits: `tests/unit/test_upload_body_bound.py` (20 MiB), `tests/committed/test_ai_read_v1.py` line 529 (10 MiB) | No capacity threshold is approved. Capacity conclusions under production load need S6-INT and an approved target |
 | S8-11 | AMBER | **Draft runbook** | `docs/governance/sprint8/S8_11_OPERATIONS_RUNBOOK.md`: detection, triage, recovery, each marked as tested or not rehearsed. Correlation keys: `tests/committed/test_durable_execution.py` (line 958 onward) | Not accepted. No alerting or paging is wired. The worker is not under a real supervisor. Full runbook drills need S6-INT |
-| S8-12 | RED | **Partial: rehearsal on the current head** | `tests/recovery/test_s8_12_restore_rehearsal.py`; three runs passed; `docs/governance/sprint8/S8_12_RESTORE_REHEARSAL.md` | Final-schema rehearsal is BLOCKED on OPEN-18. No approved RPO or RTO. No backup schedule |
+| S8-12 | RED | **Partial: rehearsal on the current head** | `tests/recovery/test_s8_12_restore_rehearsal.py`; three engineering runs passed (one run reproduced by QA); `docs/governance/sprint8/S8_12_RESTORE_REHEARSAL.md` | Final-schema rehearsal is BLOCKED on OPEN-18. No approved RPO or RTO. No backup schedule |
 | S8-13 | AMBER | **Partial: gate script run end to end** | `scripts/s8_qa_gate.sh` (exit 0 in database mode on the working tree). `tests/sprint8/conftest.py` gate modes | No CI configuration exists in the repository (no `.github`). CI execution is BLOCKED until WDS approves a platform and runner. Traceability to S6 and S7 controls needs those workstreams |
 | S8-14 | RED | **Draft, NOT READY** | `docs/governance/sprint8/S8_14_UAT_READINESS_DRAFT.md` | Depends on S6, S7 and final Sprint 8 QA. No UAT entry is recommended |
 
@@ -41,10 +41,10 @@ Dataset: 200 notices. Workers are threads, each with its own worker object, shar
 
 | Workers | Wall time (s) | Throughput (notices/s) | Sent exactly once | Per-worker split |
 |---|---|---|---|---|
-| 1 | 23.10 | 8.66 | yes | 200 / 0 / 0 / 0 |
+| 1 | 23.10 | 8.66 | yes | 200 (one key) |
 | 4 | 6.13 | 32.65 | yes | 50 / 50 / 50 / 50 |
 
-Four workers were about 3.8 times faster than one on this host, with no duplicate sends. These are measurements. They are not an accepted capacity figure.
+Four workers were about 3.8 times faster than one on this host in the engineering run, with no duplicate sends. Independent QA on `08cae91` reproduced the correctness result (every notice sent once) and measured 39.31 s with one worker and 10.07 s with four, about 3.9 times faster. The timings differ between runs, so the figures above are not reproduced by QA. None is an accepted capacity figure.
 
 ## 4. S8-12 rehearsal (observed, current head only)
 
@@ -59,7 +59,7 @@ Four workers were about 3.8 times faster than one on this host, with no duplicat
 1. **OPEN-11 workspace identity.** Owner: WDS decision. One placeholder test (`test_sprint8/test_s8_02_fail_closed_db.py`, workspace read).
 2. **S6-INT specialist execution path.** Owner: Sprint 6 integration. One placeholder test.
 3. **S6-INT run-level recovery.** Owner: Sprint 6 integration. One placeholder test (`test_s8_07_08_replay_and_fencing.py`).
-4. **OPEN-18 final migration list.** Owner: WDS decision. Blocks the final-schema rehearsal (S8-12) and the final restricted-role matrix (S8-03).
+4. **OPEN-18 final migration list.** Owner: WDS decision. The definition is in the dependency matrix, which is not on this branch. Blocks the final-schema rehearsal (S8-12) and the final restricted-role matrix (S8-03).
 5. **CI platform and runner.** Owner: WDS decision. Blocks CI execution (S8-13).
 6. **Sprint 7 review and reporting.** Owner: Sprint 7. Blocks S8-04 export authorization and S8-14.
 

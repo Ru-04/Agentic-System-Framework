@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Stuck worker jobs | `python -m webdesk.worker --report-stuck --stale-seconds 300` | Prints one JSON line per stuck job (`event: job.stuck`). Exit 0 when nothing is stuck, 1 when a job is stuck longer than the threshold, 2 on configuration error. It changes nothing. | `src/webdesk/worker/__main__.py`; `tests/committed/test_durable_execution.py` (stuck report cases) |
 | Outbox delivery failure | Audit event `outbox.delivery.failed` (reason code only); `ops.alert.delivery_failed` at dead letter | Repeated failures for one notice mean the transport is refusing it. The alert row is unique per notice. | `src/webdesk/outbox/worker.py`; `tests/integration/test_outbox_worker.py` |
-| Refused authority proofs | Audit event `authority.proof.refused` with a reason code | A spike means repeated misuse or a broken client. | `tests/committed/test_ai_read_v1.py`; `docs/PRODUCTION_BOUNDARY.md` §7 |
+| Refused authority proofs | Audit event `authority.proof.refused` with a reason code | A spike means repeated misuse or a broken client. | `tests/hardening/test_eval_f11j.py`; `tests/hardening/test_proof_rollback.py`; `docs/PRODUCTION_BOUNDARY.md` §7 |
 | Database refused or unavailable | CLI exit 2 (insufficient privilege) or 3 (database unavailable) | Exit 2 means a role or grant must be fixed. Exit 3 means the database is not reachable. | `src/webdesk/cli/diagnostics.py`; `tests/unit/test_phase6_cli.py` |
 
 No alerting system is wired to these signals. Monitoring is therefore manual until the production monitoring blocker (`PRODUCTION_BOUNDARY.md` §7) is closed.
@@ -25,6 +25,7 @@ No alerting system is wired to these signals. Monitoring is therefore manual unt
 ## 3. Recovery procedures
 
 ### 3.1 Restart a worker after a crash
+- The worker needs `WEBDESK_WORKER_DATABASE_URL` (the worker login) and `WEBDESK_STORAGE_ROOT` (the content-store root). Without them it exits with status 2.
 - Start the worker again with `python -m webdesk.worker --once --owner <name>` for a single pass, or without `--once` for the loop. Use a new `--owner` for each start.
 - Expired leases are reclaimed by the next claim. A job with attempts left is retried. A job with no attempts left is failed by the reaper.
 - **Tested:** lease reclaim after a killed worker and attempt exhaustion (`tests/committed/test_durable_execution.py`, cases for killed and exhausted workers).

@@ -10,7 +10,7 @@
 4. Compare source and restored: alembic revision; schema DDL digest (comment lines and connect lines removed, owners and grants kept); row counts of every public table; table privileges granted to `webdesk*` roles.
 5. Drop the restored database.
 
-Test: `tests/recovery/test_s8_12_restore_rehearsal.py`. Run on request with `S8_RECOVERY=1 S8_DOCKER_CONTAINER=<container>`.
+Test: `tests/recovery/test_s8_12_restore_rehearsal.py`. Run on request with `S8_RECOVERY=1 S8_DOCKER_CONTAINER=<container> S8_CLUSTER_ADMIN=<cluster admin role>`. `S8_CLUSTER_ADMIN` defaults to `s8_cluster_admin` and must match the cluster's administrator.
 
 ## 2. Results (dedicated cluster, PostgreSQL 16.4)
 
@@ -20,7 +20,9 @@ Test: `tests/recovery/test_s8_12_restore_rehearsal.py`. Run on request with `S8_
 | 2 | 0.350 | 2.013 | 32 | 62 | `0059_int_mark_inputs_fence` | passed |
 | 3 | 0.363 | 1.857 | 32 | 62 | `0059_int_mark_inputs_fence` | passed |
 
-Dump size: about 314 kB. Row count is small because the source holds only the installed fixtures.
+Dump size: about 314 kB.
+
+Independent QA ran the rehearsal once on `08cae91` against its own container. It passed, with the same revision, dump size (314,110 bytes), 32 tables and 62 rows, and a dump of 0.505 s and a restore of 2.927 s. Timings vary between runs and hosts, so the three runs above are not reproduced by QA. Row count is small because the source holds only the installed fixtures.
 
 ## 3. What these numbers are, and are not
 - They are **measured times for this rehearsal**, on one scratch cluster, with a small dataset. They are not an accepted RPO or RTO.
