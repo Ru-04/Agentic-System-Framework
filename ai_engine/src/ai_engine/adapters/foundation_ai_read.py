@@ -267,7 +267,9 @@ class AiReadClient:
         return response
 
     def _require_contract_header(self, response: AiReadResponse) -> None:
-        if response.headers.get("X-AI-Contract-Version") != CONTRACT_VERSION:
+        # Foundation answers with X-AI-Contract on every AI response (contract section 6). The
+        # request header X-AI-Contract-Version is never echoed back.
+        if response.headers.get("X-AI-Contract") != CONTRACT_TAG:
             raise AiReadRefused("successful response does not declare the contract version")
 
     def _get_json(self, path: str, model: type[_M]) -> _M:

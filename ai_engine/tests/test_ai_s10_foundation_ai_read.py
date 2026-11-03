@@ -25,7 +25,7 @@ PROJECT = "22222222-2222-4222-8222-222222222222"
 VERSION = "33333333-3333-4333-8333-333333333333"
 SYNTHETIC_CREDENTIAL = "SYNTHETIC-AI-PRINCIPAL-SYNTHETIC_CREDENTIAL-0001"
 BASE = f"/v1/ai/runs/{RUN}"
-CONTRACT_HEADERS = {"X-AI-Contract-Version": "ai-read/v1"}
+CONTRACT_HEADERS = {"X-AI-Contract": "ai-read/v1"}
 
 
 class FakeTransport:
@@ -311,12 +311,12 @@ def test_content_larger_than_the_limit_is_refused_even_with_status_200() -> None
         client.content(VERSION)
 
 
-def test_content_without_the_contract_tag_is_refused() -> None:
-    headers = {**CONTRACT_HEADERS, "Content-Type": "text/plain"}
+def test_content_declaring_another_contract_is_refused() -> None:
+    headers = {"X-AI-Contract": "ai-read/v2", "Content-Type": "text/plain"}
     client, _ = client_for(
         {f"{BASE}/source-versions/{VERSION}/content": AiReadResponse(200, headers, b"ok")}
     )
-    with pytest.raises(AiReadRefused, match="contract tag"):
+    with pytest.raises(AiReadRefused, match="does not declare the contract version"):
         client.content(VERSION)
 
 
@@ -482,8 +482,8 @@ def test_content_without_a_content_type_is_refused() -> None:
         client.content(VERSION)
 
 
-def test_content_without_the_contract_version_header_is_refused() -> None:
-    headers = {"X-AI-Contract": "ai-read/v1", "Content-Type": "text/plain"}
+def test_content_without_the_contract_response_header_is_refused() -> None:
+    headers = {"Content-Type": "text/plain"}
     url = f"{BASE}/source-versions/{VERSION}/content"
     client, _ = client_for({url: AiReadResponse(200, headers, b"bytes")})
     with pytest.raises(AiReadRefused, match="does not declare the contract version"):
