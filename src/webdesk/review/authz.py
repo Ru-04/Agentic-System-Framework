@@ -11,10 +11,12 @@ workspace_id is a compatibility label and is not an authorization identity; this
 reads it.
 
 Operations with no Foundation permission are refused, with the reason named. This is the case for
-the decision, resolution, estimate approval and estimate revision operations: the Foundation
-matrix has no permission for them, and SOW_APPROVE is disabled in Gate 1 (an empty matrix row), so
-approval is denied by policy. Adding a permission changes the Foundation matrix and its rule table
-and needs a WDS decision and a migration review. That is outside this module.
+decision, resolution and estimate revision: the Foundation matrix has no permission for them.
+Estimate approval uses the existing sow.approve permission (WDS decision, 3 November 2026). That
+row is empty in the Gate 1 matrix, so the policy denies approval until the narrowly scoped
+Foundation policy change is integrated and verified. Until then, approval execution is denied.
+Adding a permission changes the Foundation matrix and its rule table, and needs a migration
+review.
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ OPERATION_PERMISSION: dict[ReviewOperation, Permission | None] = {
     ReviewOperation.VIEW_QUEUE: Permission.REQUIREMENT_VIEW,
     ReviewOperation.DECIDE: None,
     ReviewOperation.RESOLVE_CLARIFICATION: None,
-    ReviewOperation.APPROVE_ESTIMATE: None,
+    ReviewOperation.APPROVE_ESTIMATE: Permission.SOW_APPROVE,
     ReviewOperation.REVISE_ESTIMATE: None,
 }
 

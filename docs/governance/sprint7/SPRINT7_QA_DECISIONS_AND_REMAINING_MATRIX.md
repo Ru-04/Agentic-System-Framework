@@ -280,3 +280,35 @@ non-production. Everything else waits on a named WDS or Sprint 6 decision.
 - **Real project-isolation tests on PostgreSQL.** Same reason: the SQL-store test is written and skipped.
 - **S7-12 ingestion.** Not started. It needs the published adapter v0.3 contract read in full and the Line B registry, and real integration waits for the verified Sprint 6 candidate.
 - **Wiring.** The authorization port and audit writer have no caller yet, because no service layer or route exists in this Sprint 7 scope.
+
+### 1.13 S7-07 estimate approval (WDS decision: sow.approve)
+
+**Decision applied:** WDS authorised the existing Foundation permission `sow.approve` for Sprint 7
+estimate approval, through the Foundation policy engine.
+
+**Implemented (`review/estimate_approval.py`, `review/authz.py`):**
+- Approval is decided by `authorize_review` (APPROVE_ESTIMATE maps to sow.approve) and the real
+  engine. Nothing bypasses the policy.
+- Only a complete estimate can be approved; a partial one is refused.
+- The draft revision is kept unchanged. Approval appends an approved revision with the actor, the
+  approval time, and the audit event identifier.
+- The approval is recorded through the Foundation audit writer. A denial is also recorded, with
+  outcome `denied`. If the writer records nothing, no approved revision is returned.
+- An approved revision cannot be approved again.
+
+**Current state: approval execution is DENIED.** The Gate 1 matrix row for `sow.approve` is empty, so
+the policy denies every approval, as WDS required until the change is integrated and verified.
+
+**Outstanding, and outside this worktree:**
+1. The Foundation owner must enable sow.approve for the Approver role, narrowly scoped to a project
+   grant, in the matrix (`src/webdesk/rbac/matrix.py`). The matrix is also mirrored in the database
+   rule table (`operation_authorization_rules`, migration `0035`), so a change to the database rules
+   needs its own migration review. I did not make either change: the Foundation code and migrations
+   are not mine to change in this worktree.
+2. Persistence of the approval through PostgreSQL is not verified. `WEBDESK_TEST_DATABASE_URL` is not
+   set in this environment, so the integration test is skipped with its reason.
+
+**Test evidence (contract tests, labelled):** the positive path is exercised only with the row enabled
+inside the test (monkeypatch). The Gate 1 negative tests run against the real matrix. Negative cases
+cover no grant, a grant in another project, an inactive user, the wrong role, a revoked or expired
+grant (modelled as removal), a partial estimate, and an already approved revision.

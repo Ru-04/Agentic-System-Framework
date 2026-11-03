@@ -115,7 +115,6 @@ def test_a_user_with_no_role_is_refused() -> None:
     [
         ReviewOperation.DECIDE,
         ReviewOperation.RESOLVE_CLARIFICATION,
-        ReviewOperation.APPROVE_ESTIMATE,
         ReviewOperation.REVISE_ESTIMATE,
     ],
 )
@@ -173,3 +172,14 @@ def test_the_sql_store_decides_the_queue_the_same_way() -> None:  # pragma: no c
         store = SqlAuthorizationStore(conn)
         access = authorize_review(store, USER, ReviewOperation.VIEW_QUEUE, PROJECT_A)
         assert access.allowed is False
+
+
+def test_approval_is_decided_by_sow_approve_and_denied_by_gate_one_policy() -> None:
+    # WDS decision: estimate approval uses sow.approve. Its Gate 1 row is empty, so the real
+    # engine denies it by policy for every role, whatever is granted.
+    store = _store(Role.APPROVER)
+    store.memberships.add((USER, PROJECT_A))
+    store.grants.add((USER, PROJECT_A, Permission.SOW_APPROVE.value))
+    access = authorize_review(store, USER, ReviewOperation.APPROVE_ESTIMATE, PROJECT_A)
+    assert access.allowed is False
+    assert access.decision.reason == "denied_by_policy"
