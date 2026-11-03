@@ -85,6 +85,25 @@ reconstruct ("Verƒied" reads as "Verified" but folds to "Verfied"), is not caug
 spoof in free text only. The citation status cannot be upgraded by it, because status values come from
 a closed vocabulary.
 
+### 1.5 Independent QA 6 and the round-6 remediation
+
+| Step | SHA | Result |
+|---|---|---|
+| Independent QA 6 | `9409225` | **FAIL**: D-1 major (a free-text citation status could spoof a verification line); D-2 medium (a non-text status ran caller code before the check, and a hostile repr broke export); D-3 medium (sets and dicts accepted as ordered sections, so the identifier differed between runs); D-4 medium (a public total summed unresolved work as zero); D-5 low (an estimate row did not flag a pending inference); D-6 to D-9 low. |
+| Round-6 remediation | `614c992` | D-1 to D-9 addressed. Regression tests: `tests/unit/test_sprint7_regressions_round6.py`. |
+
+**Behaviour changes made in round 6 (for WDS to note):**
+- A citation whose source status or confidence is outside the closed vocabularies is now refused at construction. The earlier design displayed such a value as "Status unknown". "verified" is therefore refused, not displayed.
+- Sections, requirements, citations and references must be a list or a tuple. Sets, dicts and generators are refused, because their order is not fixed.
+- A public total gives no sum for a partial estimate. The counts remain.
+- The verification-claim guard refuses only the assertion forms "verified", "verify" and "verifier". Ordinary words such as "verification" and "unverified" are accepted, and an empty edition or version means "not recorded".
+- Free text (requirement text, titles, assumptions) is kept as written. NFKC is applied to identifiers only, so "m²" is not changed to "m2".
+- The SOW identifier and the acknowledgement binding treat equal values as equal: Decimal values are normalised, and datetimes are compared in UTC.
+
+**Residual R7 is unchanged** (same-script look-alikes outside the fold table). Round 6 also reports that
+the free-text guard can be bypassed by a visual look-alike; R7 covers this, and the citation status
+cannot be upgraded by it.
+
 ## 2A. Decision P6 (new, this round)
 
 | ID | Decision | Status | Evidence and limits |
