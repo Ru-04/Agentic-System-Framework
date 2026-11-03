@@ -37,7 +37,7 @@ pytestmark = pytest.mark.integration
 
 if os.environ.get("WEBDESK_TEST_DATABASE_URL") is None:
     pytest.skip(
-        "BLOCKED: no PostgreSQL credential for the scratch cluster at 127.0.0.1:56544 is "
+        "BLOCKED: no PostgreSQL credential for the scratch cluster is "
         "provisioned in this worktree (WEBDESK_TEST_DATABASE_URL unset)",
         allow_module_level=True,
     )

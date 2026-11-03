@@ -24,10 +24,13 @@ _MODES = ("unit", "db")
 
 
 def _is_blocked(report: pytest.TestReport) -> bool:
+    """True only for a skip whose reason starts with ``BLOCKED:``."""
     longrepr = report.longrepr
-    if isinstance(longrepr, tuple) and len(longrepr) == 3:
-        return "BLOCKED" in str(longrepr[2])
-    return "BLOCKED" in str(longrepr)
+    message = (
+        str(longrepr[2]) if isinstance(longrepr, tuple) and len(longrepr) == 3 else str(longrepr)
+    )
+    reason = message.split(": ", 1)[-1]
+    return reason.startswith("BLOCKED:")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -55,11 +58,13 @@ def _counts(terminalreporter: Any) -> dict[str, int]:
 def pytest_terminal_summary(terminalreporter: Any) -> None:
     counts = _counts(terminalreporter)
     if MODE == "db":
-        verdict = (
-            "PASS"
-            if counts["failed"] == 0 and counts["skipped"] == 0 and counts["passed"] > 0
-            else "FAIL"
-        )
+        clean = counts["failed"] == 0 and counts["skipped"] == 0 and counts["passed"] > 0
+        if not clean:
+            verdict = "FAIL"
+        elif counts["blocked"]:
+            verdict = f"PASS WITH {counts['blocked']} BLOCKED (not verified)"
+        else:
+            verdict = "PASS"
     else:
         verdict = "UNIT ONLY" + (": database verification NOT RUN" if counts["blocked"] else "")
     terminalreporter.write_sep(

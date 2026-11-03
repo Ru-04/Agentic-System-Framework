@@ -32,7 +32,7 @@ pytestmark = pytest.mark.integration
 
 if os.environ.get("WEBDESK_TEST_DATABASE_URL") is None:
     pytest.skip(
-        "BLOCKED: no PostgreSQL credential for the scratch cluster at 127.0.0.1:56544 is "
+        "BLOCKED: no PostgreSQL credential for the scratch cluster is "
         "provisioned in this worktree (WEBDESK_TEST_DATABASE_URL unset)",
         allow_module_level=True,
     )
@@ -203,6 +203,30 @@ def test_a_revoked_administrator_cannot_obtain_a_new_administrator_proof(
             prove(conn, other, "role.revoke", assignment)
 
 
+def test_a_revoked_analyst_fresh_proof_is_refused_at_consumption(
+    committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """Issuance does not check the role for ``project.create``; consumption must refuse it.
+
+    Migration 0042 issues ``project.create`` to any live session. A revoked Analyst can therefore
+    hold a fresh proof, but ``create_project`` must still refuse it and write no project.
+    """
+    admin, _ = committed_admins
+    analyst = _analyst(committed_engine, committed_admins, "revoked-fresh")
+    assignment = _analyst_assignment(committed_engine, analyst)
+    with committed_engine.begin() as conn:
+        _app(conn)
+        revoke_role(conn, prove(conn, admin, "role.revoke", assignment), assignment)
+    name = f"fresh-{uuid.uuid4().hex[:8]}"
+    with committed_engine.begin() as conn:
+        _app(conn)
+        fresh = prove(conn, analyst, "project.create")
+        with pytest.raises(ProofRefused) as refused:
+            projects.create_project(conn, fresh, name=name, data_classification="internal")
+    assert refused.value.reason in {"proof_permission_not_held", "proof_role_not_held"}
+    assert _project_count(committed_engine, name) == 0
+
+
 def test_a_proof_issued_before_revocation_is_refused_after_it(
     committed_engine: Engine, committed_admins: tuple[uuid.UUID, uuid.UUID]
 ) -> None:
@@ -267,7 +291,7 @@ def test_a_member_of_one_project_cannot_change_another_through_the_service(
 ) -> None:
     """The authority issues ``project.membership.add`` to a live session; the database refuses it.
 
-    Migration 0024 onward checks ``proof_permission_not_held`` inside ``fn_proof_actor`` before the
+    Migration 0035 defines ``proof_permission_not_held``; ``fn_proof_actor`` raises it before the
     service runs. The Analyst's proof for another project is refused there, and no membership row
     is written.
     """
