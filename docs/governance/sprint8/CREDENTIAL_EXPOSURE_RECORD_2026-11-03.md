@@ -24,6 +24,9 @@ Neither the original nor the replacement password is recorded here, in the repos
   was rotated and that the rotation passed the owner's verification.
 - WDS authorized closure of T-31 on that confirmation, provided this record captures the owner's confirmation and
   the available supporting evidence.
+- Basis of closure, stated precisely: the confirmation was relayed to the engineering session in a WDS directive.
+  The directive is not in this repository. The owner's own written confirmation artifact, if one exists, is held
+  by the owner. This record does not show that a written confirmation was received, and it does not claim one.
 
 ## What this record does NOT claim
 - It does not record the owner's verification steps in detail. The engineering session did not perform or observe them.
@@ -39,3 +42,4 @@ Neither the original nor the replacement password is recorded here, in the repos
 ## Residual conditions for the record
 1. The infrastructure owner's rotation evidence, if one is needed for audit, is held by that owner and not in this repository.
 2. Any login-log review for 3 November 2026 onward remains the owner's to supply, if WDS requires it.
+3. The owner's written confirmation, if WDS requires a written record, is to be filed by WDS or the owner. It is not in this repository.
