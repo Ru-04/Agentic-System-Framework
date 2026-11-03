@@ -20,9 +20,11 @@ from typing import Any, cast
 
 from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from webdesk.api.routes import Token, _proof
 from webdesk.api.transactions import run_in_transaction
@@ -75,6 +77,15 @@ def contract_error_response(_request: Request, exc: Exception) -> JSONResponse:
     """Render a refused AI request in the contract's error shape (the app's exception handler)."""
     error = exc if isinstance(exc, ContractError) else ContractError(500, "internal_error")
     return _error(error.status, error.error)
+
+
+async def ai_http_error(request: Request, exc: Exception) -> Response:
+    """Render a method refusal on an AI route in the contract shape; other errors pass through."""
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
+    if exc.status_code == 405 and request.url.path.startswith("/v1/ai/"):
+        return _error(405, "method_not_allowed")
+    return await http_exception_handler(request, exc)
 
 
 def _uuid(value: str) -> uuid.UUID:
@@ -265,7 +276,7 @@ def _project_of_run(engine: Engine, run: uuid.UUID) -> uuid.UUID | None:
     return run_in_transaction(engine, read)
 
 
-@ai_router.post("/runs/{run_id}/ai-principal")
+@ai_router.post("/v1/runs/{run_id}/ai-principal")
 async def issue_ai_principal(run_id: str, request: Request, token: Token) -> Response:
     """Issue the AI principal of a run (human, proof ``ai.principal.issue``); token shown once."""
     run = _uuid(run_id)
@@ -293,7 +304,7 @@ async def issue_ai_principal(run_id: str, request: Request, token: Token) -> Res
     )
 
 
-@ai_router.post("/runs/{run_id}/ai-principal/revoke")
+@ai_router.post("/v1/runs/{run_id}/ai-principal/revoke")
 async def revoke_ai_principal(run_id: str, request: Request, token: Token) -> Response:
     """Revoke the live AI principal of a run (human, proof ``ai.principal.revoke``)."""
     run = _uuid(run_id)

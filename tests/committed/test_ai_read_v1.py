@@ -6,6 +6,7 @@ authority, and real projects, runs and uploads. See ``docs/AI_FOUNDATION_READ_CO
 
 from __future__ import annotations
 
+import hashlib
 import time
 import uuid
 from collections.abc import Iterator
@@ -180,7 +181,9 @@ class Stack:
         return str(response.json()["run_id"])
 
     def issue(self, run: str) -> str:
-        response = self.client.post(f"/runs/{run}/ai-principal", headers=_human(self.analyst_token))
+        response = self.client.post(
+            f"/v1/runs/{run}/ai-principal", headers=_human(self.analyst_token)
+        )
         assert response.status_code == 200, response.text
         return str(response.json()["token"])
 
@@ -366,7 +369,7 @@ def test_an_explicit_revocation_refuses_the_principal(stack: Stack) -> None:
     run = stack.start_run()
     token = stack.issue(run)
     revoked = stack.client.post(
-        f"/runs/{run}/ai-principal/revoke", headers=_human(stack.analyst_token)
+        f"/v1/runs/{run}/ai-principal/revoke", headers=_human(stack.analyst_token)
     )
     assert revoked.status_code == 200, revoked.text
     assert revoked.json()["revoked"] == 1
@@ -455,7 +458,7 @@ def test_disabling_the_bound_human_refuses_the_principal(stack: Stack) -> None:
 
 def test_an_administrator_without_membership_cannot_obtain_a_principal(stack: Stack) -> None:
     run = stack.start_run()
-    response = stack.client.post(f"/runs/{run}/ai-principal", headers=_human(stack.admin_token))
+    response = stack.client.post(f"/v1/runs/{run}/ai-principal", headers=_human(stack.admin_token))
     assert response.status_code == 403
     assert response.json() == {"contract": "ai-read/v1", "error": "ai_principal_refused"}
 
@@ -463,7 +466,7 @@ def test_an_administrator_without_membership_cannot_obtain_a_principal(stack: St
 def test_the_bound_human_is_never_taken_from_the_client(stack: Stack) -> None:
     run = stack.start_run()
     response = stack.client.post(
-        f"/runs/{run}/ai-principal",
+        f"/v1/runs/{run}/ai-principal",
         headers={**_human(stack.analyst_token), "X-Bound-User-Id": str(stack.admin)},
     )
     assert response.status_code == 200
@@ -659,3 +662,116 @@ def test_a_request_refused_before_any_database_work_writes_no_audit_row(stack: S
     )
     assert response.status_code == 400
     assert _audit_rows(stack.engine, correlation) == []
+
+
+# --- Route path and read-only surface (OPEN-02; ai-read/v1 sections 3.1, 6 and 9) ----------------
+
+
+def test_the_principal_routes_answer_only_on_the_v1_path(stack: Stack) -> None:
+    """OPEN-02: the unversioned paths are gone; issuance and revocation never run through them."""
+    run = stack.start_run()
+    body = {"expected_run_revision": 1}
+    old_issue = stack.client.post(
+        f"/runs/{run}/ai-principal", headers=_human(stack.analyst_token), json=body
+    )
+    assert old_issue.status_code == 404
+    with stack.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT count(*) FROM ai_principals WHERE run_id = :r"), {"r": run}
+            ).scalar_one()
+            == 0
+        )
+    token = stack.issue(run)
+    old_revoke = stack.client.post(
+        f"/runs/{run}/ai-principal/revoke", headers=_human(stack.analyst_token), json=body
+    )
+    assert old_revoke.status_code == 404
+    assert stack.client.get(f"/v1/ai/runs/{run}", headers=_ai(token)).status_code == 200
+
+
+def test_the_read_routes_refuse_every_method_but_get(stack: Stack) -> None:
+    clean = stack.upload(stack.project, "internal", b"method body\n")
+    run = stack.start_run()
+    token = stack.issue(run)
+    paths = [
+        f"/v1/ai/runs/{run}",
+        f"/v1/ai/runs/{run}/project",
+        f"/v1/ai/runs/{run}/source-versions",
+        f"/v1/ai/runs/{run}/source-versions/{clean}/segments",
+        f"/v1/ai/runs/{run}/source-versions/{clean}/content",
+    ]
+    for path in paths:
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            response = stack.client.request(method, path, headers=_ai(token), json={})
+            assert response.status_code == 405, (method, path)
+            assert response.json() == {"contract": "ai-read/v1", "error": "method_not_allowed"}
+    for path in paths:
+        assert stack.client.get(path, headers=_ai(token)).status_code == 200, path
+
+
+def test_every_refusal_on_an_ai_route_has_the_contract_error_shape(stack: Stack) -> None:
+    run = stack.start_run()
+    token = stack.issue(run)
+    cases = {
+        "contract_version_unsupported": stack.client.get(
+            f"/v1/ai/runs/{run}", headers={"Authorization": f"AI-Principal {token}"}
+        ),
+        "ai_credential_invalid": stack.client.get(f"/v1/ai/runs/{run}", headers=_ai("wrong")),
+        "not_found": stack.client.get(
+            f"/v1/ai/runs/{run}/source-versions/{uuid.uuid4()}/content", headers=_ai(token)
+        ),
+        "invalid_request": stack.client.get(
+            f"/v1/ai/runs/{run}/source-versions?limit=0", headers=_ai(token)
+        ),
+        "method_not_allowed": stack.client.delete(f"/v1/ai/runs/{run}", headers=_ai(token)),
+    }
+    for error, response in cases.items():
+        assert response.json() == {"contract": "ai-read/v1", "error": error}, response.text
+        assert response.headers["X-AI-Contract"] == "ai-read/v1"
+    assert cases["method_not_allowed"].status_code == 405
+    assert cases["not_found"].status_code == 404
+
+
+# --- Consistent identifiers (contract section 7) -------------------------------------------------
+
+
+def test_identifiers_agree_across_the_read_routes(stack: Stack) -> None:
+    clean = stack.upload(stack.project, "internal", b"consistent body\n")
+    run = stack.start_run()
+    token = stack.issue(run)
+    run_view = stack.client.get(f"/v1/ai/runs/{run}", headers=_ai(token)).json()
+    project_view = stack.client.get(f"/v1/ai/runs/{run}/project", headers=_ai(token)).json()
+    listed = stack.client.get(f"/v1/ai/runs/{run}/source-versions", headers=_ai(token)).json()
+    segments = stack.client.get(
+        f"/v1/ai/runs/{run}/source-versions/{clean}/segments", headers=_ai(token)
+    ).json()
+    assert run_view["run_id"] == run
+    assert run_view["project_id"] == project_view["project_id"] == str(stack.project)
+    item = next(row for row in listed["items"] if row["source_version_id"] == clean)
+    uuid.UUID(item["source_id"])
+    assert segments["source_version_id"] == clean
+    for row in segments["items"]:
+        uuid.UUID(row["segment_id"])
+
+
+# --- Audit redaction, beyond the single request (D-AI-5) -----------------------------------------
+
+
+def test_refused_requests_never_record_the_token_or_its_hash(stack: Stack) -> None:
+    quarantined = stack.upload(stack.project, "restricted", b"hash check body\n")
+    run = stack.start_run()
+    token = stack.issue(run)
+    correlation = str(uuid.uuid4())
+    response = stack.client.get(
+        f"/v1/ai/runs/{run}/source-versions/{quarantined}/content",
+        headers={**_ai(token), "X-Correlation-Id": correlation},
+    )
+    assert response.status_code == 404
+    rows = _audit_rows(stack.engine, correlation)
+    assert [row.event_type for row in rows] == ["ai.read.denied"]
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    for row in rows:
+        assert token not in row.redacted_details
+        assert digest not in row.redacted_details
+        assert "hash check body" not in row.redacted_details

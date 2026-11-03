@@ -8,8 +8,9 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from webdesk.api.ai import ContractError, ai_router, contract_error_response
+from webdesk.api.ai import ContractError, ai_http_error, ai_router, contract_error_response
 from webdesk.api.errors import DOMAIN_ERRORS, body_for, status_for
 from webdesk.api.routes import router
 from webdesk.authority.client import AuthorityClient
@@ -42,6 +43,7 @@ def create_app(
         return {"status": "ok"}
 
     app.add_exception_handler(ContractError, contract_error_response)
+    app.add_exception_handler(StarletteHTTPException, ai_http_error)
     # The AI routes are mounted first: their paths must not fall through to the generic run route.
     app.include_router(ai_router)
     app.include_router(router)

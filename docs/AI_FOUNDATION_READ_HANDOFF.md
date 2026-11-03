@@ -7,9 +7,9 @@ Contract: `docs/AI_FOUNDATION_READ_CONTRACT_v1.md` (`ai-read/v1`, WDS-approved).
 
 | Ruling | Implementation |
 |---|---|
-| D-AI-1 identity | `POST /runs/{run_id}/ai-principal` (human session plus proof `ai.principal.issue`, resource = the run's project). The authority generates the token and calls `webdesk_guard.fn_issue_ai_principal_with_proof`. The database consumes the proof, sets `bound_user_id` from the proof actor, and stores only the SHA-256 hash. Scope is one project and one run. The AI principal never inherits membership; every read also requires the bound human's current membership or project access grant (`fn_ai_resolve`). |
+| D-AI-1 identity | `POST /v1/runs/{run_id}/ai-principal` (human session plus proof `ai.principal.issue`, resource = the run's project). The authority generates the token and calls `webdesk_guard.fn_issue_ai_principal_with_proof`. The database consumes the proof, sets `bound_user_id` from the proof actor, and stores only the SHA-256 hash. Scope is one project and one run. The AI principal never inherits membership; every read also requires the bound human's current membership or project access grant (`fn_ai_resolve`). |
 | D-AI-2 restricted | Restricted content is refused for every principal (`fn_ai_version_gate`, `fn_ai_list_versions`). Quarantined content is never listed, read or acknowledged. The contract's exception path does not exist in v1. |
-| D-AI-3 lifecycle | TTL at most 900 seconds, enforced by a table `CHECK` and the issuance function. Rotation revokes the previous live principal of the run (unique partial index). Explicit revocation via `POST /runs/{run_id}/ai-principal/revoke` (proof `ai.principal.revoke`). Run status, project status, bound-human status and membership are re-checked on every request. |
+| D-AI-3 lifecycle | TTL at most 900 seconds, enforced by a table `CHECK` and the issuance function. Rotation revokes the previous live principal of the run (unique partial index). Explicit revocation via `POST /v1/runs/{run_id}/ai-principal/revoke` (proof `ai.principal.revoke`). Run status, project status, bound-human status and membership are re-checked on every request. |
 | D-AI-4 persistence | No AI write route exists. Every AI route is `GET`; any other method returns 405. Results and requirement records are not implemented. |
 | D-AI-5 logging | One `audit_events` row per AI request, with principal identity (`ai-principal:<id>` or `ai-principal:unresolved`), project, run and resource references, correlation id, decision, status and bound-human id. Token values, hashes, content and segment text are never recorded. The database writes issuance and revocation rows, with no secret values. |
 
@@ -19,8 +19,8 @@ Human routes (existing session plus proof):
 
 | Route | Function | Notes |
 |---|---|---|
-| `POST /runs/{run_id}/ai-principal` | `issue_ai_principal` → authority `/v1/ai-principal/issue` → `fn_issue_ai_principal_with_proof` | Returns the token once |
-| `POST /runs/{run_id}/ai-principal/revoke` | `revoke_ai_principal` → `fn_revoke_ai_principal_with_proof` | Returns the count revoked |
+| `POST /v1/runs/{run_id}/ai-principal` | `issue_ai_principal` → authority `/v1/ai-principal/issue` → `fn_issue_ai_principal_with_proof` | Returns the token once |
+| `POST /v1/runs/{run_id}/ai-principal/revoke` | `revoke_ai_principal` → `fn_revoke_ai_principal_with_proof` | Returns the count revoked |
 
 AI read routes (`AI-Principal` credential and `X-AI-Contract-Version: ai-read/v1`; `GET` only):
 
