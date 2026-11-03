@@ -18,7 +18,7 @@ from webdesk.review.estimates import (
     render_total,
     total_estimate,
 )
-from webdesk.review.evidence import Citation, render_citation
+from webdesk.review.evidence import Citation
 from webdesk.review.provenance import (
     Requirement,
     ReviewerAcknowledgement,
@@ -233,11 +233,9 @@ def test_D_a_missing_citation_identifier_is_a_value_error() -> None:
         Citation(None, "SRC-D", "stale", "supported")  # type: ignore[arg-type]
 
 
-def test_D_an_unhashable_source_status_renders_as_unknown_not_a_type_error() -> None:
-    citation = Citation("CIT-D", "SRC-D", ["stale"], "supported")  # type: ignore[arg-type]
-    view = render_citation(citation)
-    assert view.source_label.startswith("Status unknown")
-    assert view.verified is False
+def test_D_an_unhashable_source_status_is_refused_at_construction() -> None:
+    with pytest.raises(ValueError, match="source status"):
+        Citation("CIT-D", "SRC-D", ["stale"], "supported")  # type: ignore[arg-type]
 
 
 def test_D_acknowledgement_still_binds_after_cleaning() -> None:

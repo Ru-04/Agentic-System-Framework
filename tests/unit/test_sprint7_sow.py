@@ -278,6 +278,6 @@ def test_citations_are_shown_unverified_even_when_the_source_claims_verified() -
     html_text = _html()
     assert "Verified: no." in html_text
     assert "Verified: yes" not in html_text
-    assert "Status unknown [provisional OPEN-07]" in html_text
-    assert "not treated as verified" in html_text
+    assert "Unverified citation [provisional OPEN-07]" in html_text
+    assert "Status unknown" not in html_text
     assert "Stale source [provisional OPEN-07]" in html_text

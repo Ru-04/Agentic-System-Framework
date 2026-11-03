@@ -91,7 +91,7 @@
     {
       "citation_id": "CIT-SYN-1",
       "source_ref": "SRC-SYN-001 page 2",
-      "source_status": "verified",
+      "source_status": "unverified",
       "confidence": "supported",
       "edition": "synthetic-edition-1",
       "version": "1"

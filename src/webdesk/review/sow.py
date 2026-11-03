@@ -18,8 +18,11 @@ import hashlib
 import html
 import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from decimal import Context, Decimal
 
 from webdesk.review.estimates import (
+    SUM_PRECISION,
     EstimateLine,
     EstimateSet,
     LineStatus,
@@ -230,9 +233,24 @@ def export_bytes(sow: DraftSow) -> bytes:
 
 
 def _sow_identifier(source: DraftSowInput) -> str:
-    canonical = json.dumps(asdict(source), sort_keys=True, separators=(",", ":"), default=str)
+    canonical = json.dumps(
+        asdict(source), sort_keys=True, separators=(",", ":"), default=_canonical_value
+    )
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f"{SOW_ID_PREFIX}{digest[:16].upper()}"
+
+
+def _canonical_value(value: object) -> str:
+    """One text form per value, so that equal values give equal identifiers.
+
+    Decimal values are normalised (1.5 and 1.50 are the same hours). Datetimes are written in UTC
+    (the same instant with a different offset is the same time). Anything else is refused.
+    """
+    if type(value) is Decimal:
+        return format(value.normalize(Context(prec=SUM_PRECISION)), "f")
+    if type(value) is datetime:
+        return value.astimezone(UTC).isoformat()
+    raise TypeError(f"no canonical form for {type(value).__name__}")
 
 
 def _estimate_summary(estimate: EstimateSet | None) -> str | None:
@@ -300,14 +318,22 @@ def _estimate_section(sow: DraftSow) -> str:
     estimate = sow.source.estimate
     if estimate is None or sow.estimate_summary is None:
         return "<h2>Estimated effort</h2><p>No estimate recorded; no total is stated.</p>"
-    rows = "".join(_estimate_row(line) for line in estimate.lines)
+    pending = pending_inferred_ids(sow.source.requirements)
+    rows = "".join(_estimate_row(line, pending) for line in estimate.lines)
     return (
         f"<h2>Estimated effort</h2><p>{_e(sow.estimate_summary)}</p>"
         f"<p>Owner: {_e(estimate.owner)}. Version {_e(str(estimate.version))}.</p><ul>{rows}</ul>"
     )
 
 
-def _estimate_row(line: EstimateLine) -> str:
+def _estimate_row(line: EstimateLine, pending: frozenset[str]) -> str:
+    # A line that rests on an unacknowledged inference says so, as an SOW item does (QA 6, D-5).
+    flag = (
+        f' <span class="provenance">Rests on unacknowledged inference: '
+        f"{_e(line.provenance_ref)}</span>"
+        if line.provenance_ref in pending
+        else ""
+    )
     if line.status == LineStatus.ESTIMATED:
         hours = f"{line.low_hours}-{line.high_hours} hours"
     elif line.status == LineStatus.UNCERTAIN:
@@ -320,7 +346,7 @@ def _estimate_row(line: EstimateLine) -> str:
     return (
         f"<li>{_e(line.line_id)}: {_e(line.work_item)} ({_e(line.scope_boundary)}). "
         f"{_e(hours)}. Complexity drivers: {_e(drivers)}. Dependencies: {_e(dependencies)}. "
-        f"Assumptions: {_e(assumptions)}. Reference: {_e(line.provenance_ref)}</li>"
+        f"Assumptions: {_e(assumptions)}. Reference: {_e(line.provenance_ref)}{flag}</li>"
     )
 
 

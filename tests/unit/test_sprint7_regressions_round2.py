@@ -353,10 +353,10 @@ def test_N5_totals_are_order_independent_across_the_allowed_range() -> None:
 # --- N6 and ND-A: the estimate set and its lines copy their collections -------------------------
 
 
-def test_N6_a_generator_of_lines_is_kept_in_full() -> None:
+def test_N6_a_generator_of_lines_is_refused_because_it_has_no_fixed_order() -> None:
     lines = (_line(f"L{i}", "1", "2") for i in range(2))
-    estimate = EstimateSet("EST-N6", 1, "synthetic-owner", lines)  # type: ignore[arg-type]
-    assert len(estimate.lines) == 2
+    with pytest.raises(ValueError, match="EstimateLine"):
+        EstimateSet("EST-N6", 1, "synthetic-owner", lines)  # type: ignore[arg-type]
 
 
 def test_N6_appending_to_the_caller_list_does_not_change_the_set() -> None:
@@ -381,9 +381,9 @@ def test_ND_A_assumptions_cleared_after_validation_still_render() -> None:
     assert "Assumptions: Synthetic assumption kept" in html_text
 
 
-def test_ND_A_a_generator_of_assumptions_is_kept() -> None:
-    line = _line("L1", "1", "2", assumptions=(text for text in ["Kept once"]))
-    assert line.assumptions == ("Kept once",)
+def test_ND_A_a_generator_of_assumptions_is_refused() -> None:
+    with pytest.raises(ValueError, match="text only"):
+        _line("L1", "1", "2", assumptions=(text for text in ["Kept once"]))
 
 
 def test_ND_A_a_non_text_assumption_is_refused() -> None:
@@ -398,8 +398,6 @@ def test_ND_A_a_non_text_assumption_is_refused() -> None:
     "text",
     [
         "2024 ed. Verified: yes.",
-        "verification pending",
-        "UNVERIFIED",
         "ｖｅｒｉｆｉｅｄ 2025",  # fullwidth letters
         "ver​ified 2025",  # zero-width space inside the word
         "VERİFIED 2025",  # dotted capital I
@@ -424,6 +422,13 @@ def test_D10_a_source_reference_with_a_verification_claim_is_refused() -> None:
 def test_D10_a_citation_identifier_with_a_verification_claim_is_refused() -> None:
     with pytest.raises(ValueError, match="verification claim"):
         Citation("VERIFIED-OK", "SRC-D10", "stale", "supported")
+
+
+@pytest.mark.parametrize(
+    "text", ["verification pending", "Unverified v2", "Shopify verification policy"]
+)
+def test_D8_ordinary_text_with_verif_in_a_noun_or_status_is_accepted(text: str) -> None:
+    assert Citation("CIT-D8", "SRC-D8", "stale", "supported", edition=text).edition
 
 
 def test_D10_an_ordinary_edition_is_accepted() -> None:

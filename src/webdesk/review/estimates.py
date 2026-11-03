@@ -152,14 +152,22 @@ class EstimateTotal:
 
 
 def total_estimate(estimate: EstimateSet) -> EstimateTotal:
+    """The counts for an estimate, and its sum only when every line is estimated.
+
+    For a partial estimate the sums are None. A sum over the estimated lines would count the
+    unresolved lines as zero, so none is given (QA 6, D-4).
+    """
     estimate = exact(estimate, EstimateSet, "a total is computed from an EstimateSet")
     estimated = [line for line in estimate.lines if line.status == LineStatus.ESTIMATED]
+    unestimated = _count(estimate.lines, LineStatus.UNESTIMATED)
+    uncertain = _count(estimate.lines, LineStatus.UNCERTAIN)
+    complete = bool(estimated) and unestimated == 0 and uncertain == 0
     return EstimateTotal(
-        known_low=_sum(line.low_hours for line in estimated),
-        known_high=_sum(line.high_hours for line in estimated),
+        known_low=_sum(line.low_hours for line in estimated) if complete else None,
+        known_high=_sum(line.high_hours for line in estimated) if complete else None,
         estimated_count=len(estimated),
-        unestimated_count=_count(estimate.lines, LineStatus.UNESTIMATED),
-        uncertain_count=_count(estimate.lines, LineStatus.UNCERTAIN),
+        unestimated_count=unestimated,
+        uncertain_count=uncertain,
     )
 
 

@@ -18,7 +18,6 @@ Both refuse lone surrogates, because such text cannot be encoded for export.
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any, TypeVar
 
@@ -63,7 +62,8 @@ def clean_text(value: object, message: str) -> str:
     """Return cleaned free text. Invisible characters inside the text are kept."""
     if type(value) is not str:
         raise ValueError(message)
-    stripped = _trim(unicodedata.normalize("NFKC", value))
+    # Free text is kept as written. NFKC is not applied, so "m²" stays "m²" in a requirement.
+    stripped = _trim(value)
     if not stripped:
         raise ValueError(message)
     return _checked(stripped, message)
@@ -105,11 +105,9 @@ def text_items(values: object, message: str) -> tuple[str, ...]:
 
 
 def _collect(values: object, message: str) -> tuple[Any, ...]:
-    # A string is an iterable of characters, so it is refused as a collection. A generator that
-    # raises partway is reported as a ValueError, not as the raw exception.
-    if isinstance(values, str | bytes) or not isinstance(values, Iterable):
+    # Only a list or a tuple is an ordered collection. A set, a dict, a generator or a subclass is
+    # refused: their order is not fixed, so the same content could give a different draft.
+    # The type is read with type(), which runs no caller code.
+    if type(values) is not list and type(values) is not tuple:
         raise ValueError(message)
-    try:
-        return tuple(values)
-    except Exception as error:
-        raise ValueError(message) from error
+    return tuple(values)

@@ -16,6 +16,7 @@ path does not depend on it, because status values come from a closed vocabulary.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -66,6 +67,11 @@ def _provisional(label: str, open_item: str) -> str:
     return f"{label} [provisional {open_item}]"
 
 
+# The assertion forms of the word: verified, verify, verifier. Not "unverified" (a status label in
+# the vocabulary), and not "verification" (an ordinary noun in a source name).
+_VERIFICATION_CLAIM = re.compile(r"(?<!un)verif(?:ied|y|ier)")
+
+
 def _claims_verification(text: str) -> bool:
     """True when the text, once normalised, contains "verif".
 
@@ -79,7 +85,7 @@ def _claims_verification(text: str) -> bool:
         for char in unicodedata.normalize("NFD", folded)
         if unicodedata.category(char)[0] == "L"
     )
-    return "verif" in letters
+    return _VERIFICATION_CLAIM.search(letters) is not None
 
 
 @dataclass(frozen=True)
@@ -100,9 +106,20 @@ class Citation:
             "source_ref",
             clean_key(self.source_ref, "a citation needs a source reference"),
         )
+        # The status and confidence come from the closed vocabularies. Anything else is refused, so
+        # a free-text status can never be shown beside the real status (QA 6, D-1 and D-2).
+        if type(self.source_status) is not str or self.source_status not in SOURCE_STATUS_LABELS:
+            raise ValueError(
+                "the source status must be one of the recorded source statuses; "
+                "a citation is never recorded as verified"
+            )
+        if type(self.confidence) is not str or self.confidence not in CONFIDENCE_LABELS:
+            raise ValueError("the confidence must be one of the recorded confidence levels")
         for name in ("edition", "version"):
             value = getattr(self, name)
-            if value is None:
+            if value is None or (type(value) is str and value == ""):
+                # An empty edition or version means that none was recorded.
+                object.__setattr__(self, name, None)
                 continue
             object.__setattr__(self, name, clean_text(value, f"the citation {name} must be text"))
         for name, value in (

@@ -58,8 +58,9 @@ def _set(*lines: EstimateLine) -> EstimateSet:
 def test_unestimated_work_is_not_counted_as_zero() -> None:
     estimate = _set(_estimated("L1", "10", "20"), _unestimated("L2"))
     total = total_estimate(estimate)
-    assert total.known_low == Decimal("10")
-    assert total.known_high == Decimal("20")
+    # A partial set gives no sum at all: a sum would count the unresolved line as zero.
+    assert total.known_low is None
+    assert total.known_high is None
     assert total.unestimated_count == 1
     assert not total.complete
     assert publishable_range(estimate) is None
@@ -80,7 +81,7 @@ def test_uncertain_work_is_not_counted_as_zero() -> None:
     estimate = _set(_estimated("L1", "5", "8"), _uncertain("L2"))
     total = total_estimate(estimate)
     assert total.uncertain_count == 1
-    assert total.known_high == Decimal("8")
+    assert total.known_high is None
     assert publishable_range(estimate) is None
 
 

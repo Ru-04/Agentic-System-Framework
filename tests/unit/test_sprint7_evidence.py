@@ -1,8 +1,13 @@
-"""S7-05 unit tests: evidence rendering never upgrades a citation to verified."""
+"""S7-05 unit tests: evidence rendering never upgrades a citation to verified.
+
+Status and confidence come from closed vocabularies. A value outside them is refused when the
+citation is built, so it cannot appear beside the real status. "verified" is refused.
+"""
 
 from __future__ import annotations
 
 import dataclasses
+from typing import Any
 
 import pytest
 
@@ -13,8 +18,8 @@ from webdesk.review.evidence import (
     render_citation,
 )
 
-ALL_SOURCE_STATUSES = [*SOURCE_STATUS_LABELS, "verified", "VERIFIED", "", "mystery"]
-ALL_CONFIDENCES = [*CONFIDENCE_LABELS, "verified", "certain", ""]
+INVALID_SOURCE_STATUSES = ["verified", "VERIFIED", " verified", "", "mystery", "verified\n"]
+INVALID_CONFIDENCES = ["verified", "certain", ""]
 
 
 def _citation(status: str = "unverified", confidence: str = "supported") -> Citation:
@@ -28,25 +33,36 @@ def _citation(status: str = "unverified", confidence: str = "supported") -> Cita
     )
 
 
-@pytest.mark.parametrize("status", ALL_SOURCE_STATUSES)
-@pytest.mark.parametrize("confidence", ALL_CONFIDENCES)
-def test_no_citation_is_ever_rendered_as_verified(status: str, confidence: str) -> None:
+@pytest.mark.parametrize("status", list(SOURCE_STATUS_LABELS))
+@pytest.mark.parametrize("confidence", list(CONFIDENCE_LABELS))
+def test_no_recorded_citation_is_rendered_as_verified(status: str, confidence: str) -> None:
     view = render_citation(_citation(status, confidence))
     assert view.verified is False
     assert "Verified" not in view.source_label
     assert "Verified" not in view.confidence_label
-    assert "verified" not in view.source_label.lower().replace("unverified", "")
 
 
-def test_an_upstream_verified_status_is_refused_and_shown_as_unknown() -> None:
-    view = render_citation(_citation(status="verified"))
-    assert view.source_label.startswith("Status unknown")
-    assert "not treated as verified" in view.note
-    assert view.verified is False
+@pytest.mark.parametrize("status", INVALID_SOURCE_STATUSES)
+def test_an_unaccepted_source_status_is_refused_at_construction(status: str) -> None:
+    with pytest.raises(ValueError, match="source status"):
+        _citation(status=status)
 
 
-def test_a_recognised_status_has_no_note() -> None:
-    assert render_citation(_citation(status="stale")).note == ""
+@pytest.mark.parametrize("status", [None, ["stale"], 1])
+def test_a_non_text_source_status_is_refused(status: Any) -> None:
+    with pytest.raises(ValueError, match="source status"):
+        _citation(status=status)
+
+
+@pytest.mark.parametrize("confidence", INVALID_CONFIDENCES)
+def test_an_unaccepted_confidence_is_refused_at_construction(confidence: str) -> None:
+    with pytest.raises(ValueError, match="confidence"):
+        _citation(confidence=confidence)
+
+
+def test_an_upstream_verified_status_is_refused_not_shown() -> None:
+    with pytest.raises(ValueError, match="never recorded as verified"):
+        _citation(status="verified")
 
 
 @pytest.mark.parametrize("status", list(SOURCE_STATUS_LABELS))
@@ -75,6 +91,14 @@ def test_a_missing_edition_or_version_is_shown_as_not_recorded() -> None:
             source_status="absent",
             confidence="unknown",
         )
+    )
+    assert view.edition == "not recorded"
+    assert view.version == "not recorded"
+
+
+def test_an_empty_edition_is_not_recorded_rather_than_an_error() -> None:
+    view = render_citation(
+        Citation("CIT-T-4", "SRC-T-4", "absent", "unknown", edition="", version="")
     )
     assert view.edition == "not recorded"
     assert view.version == "not recorded"

@@ -32,10 +32,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from webdesk.review.textutil import clean_key, clean_text, enum_of, exact
+from webdesk.review.textutil import clean_key, clean_text, enum_of, exact, items_of
 
 # An acknowledgement may not be dated more than this far after the moment it is accepted.
 CLOCK_SKEW = timedelta(minutes=5)
@@ -199,9 +199,10 @@ def acknowledge_inference(
 
 def pending_inferred_ids(requirements: tuple[Requirement, ...]) -> frozenset[str]:
     """Identifiers of inferred requirements that no reviewer has acknowledged yet."""
+    items = items_of(requirements, Requirement, "the requirements must be Requirement values")
     return frozenset(
         req.requirement_id
-        for req in requirements
+        for req in items
         if req.source_type == SourceType.INFERRED and not req.is_confirmed
     )
 
@@ -221,7 +222,7 @@ def _binding(
             source_type.value,
             ack.requirement_id,
             ack.reviewer_id,
-            ack.acknowledged_at.isoformat(),
+            ack.acknowledged_at.astimezone(UTC).isoformat(),
             ack.reason,
         ],
         ensure_ascii=True,
