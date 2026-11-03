@@ -102,7 +102,7 @@ Status key: **VERIFIED-REPO** (control and named test exist); **PARTIAL**; **UNK
 | T-27 | TB-10 | Ceremony run without owner authorization (E) | Installation needs an Ed25519 owner signature verified by ceremony code before any write (`src/webdesk/ceremony/install.py:109`); the database enforces expiry, appointment and single use | `tests/unit/test_install_authorization.py`; `tests/integration/test_install_ceremony.py` | PARTIAL | Owner signing key custody is open (`PRODUCTION_BOUNDARY.md` §2) | WDS decision |
 | T-28 | TB-11 | Audit events modified or deleted (T) | Append-only trigger `audit_events_append_only` (`migrations/versions/0001_gate1_foundation_schema.py` line 532); application writes only through the audit service | `ARCHITECTURE.md` §13; `tests/hardening/test_privilege_audit.py`; `tests/integration/test_audit_service.py` | PARTIAL | Tamper-evident storage is future work (ARCHITECTURE §13) | Foundation |
 | T-29 | TB-12 | Contact ciphertext opened under the wrong purpose or user (I, T) | AES-GCM with associated data (purpose, user) | `src/webdesk/crypto/contact_box.py`; `tests/unit/test_contact_box.py`; outbox tests (unreadable row dead-lettered) | VERIFIED-REPO | Key custody open | WDS decision |
-| T-31 | TB-3 | Database login password exposed in tool output and a local file (I, S) | Password held in a git-ignored local file (`.gitignore`); fingerprint check found no other copy in local env files | `docs/governance/sprint8/CREDENTIAL_EXPOSURE_RECORD_2026-11-03.md` | **OPEN. NOT ROTATED.** | Rotation, owner notification and old-value check are not done. Closes only on the credential owner's written confirmation | Credential owner (WDS infrastructure) |
+| T-31 | TB-3 | Database login password exposed in tool output and a local file (I, S) | Password held in a git-ignored local file (`.gitignore`); fingerprint check found no other copy in local env files; owner rotated the password and confirmed verification (3 November 2026) | `docs/governance/sprint8/CREDENTIAL_EXPOSURE_RECORD_2026-11-03.md` | CLOSED on owner confirmation (WDS authorized closure) | Owner's rotation evidence is held by the owner. No login-log review for the exposure window is evidenced in this repository | Credential owner (WDS infrastructure) |
 | T-30 | All | Unbounded request, body or payload size (D) | Upload body bound; AI response limit 10 MiB; per-subject rate limits | `tests/unit/test_upload_body_bound.py`; contract §9; `src/webdesk/ratelimit/limiter.py`; `tests/committed/test_phase7_ratelimit.py` | PARTIAL | Load and capacity behaviour is S8-10, out of this scope | Foundation |
 
 ## 6. Verification status of the S8-02, S8-07 and S8-08 tests
@@ -126,16 +126,18 @@ The counts above are the engineering run's reported results (§6A). They were no
 5. **Transport security.** No TLS or mutual authentication between application and authority (T-06).
 6. **Malware scanning.** No scanner is configured; every source is `not_scanned` (T-24).
 7. **Shared scratch cluster.** The DB tests were not run on `127.0.0.1:56544`. The engineering run used a dedicated cluster (§6A).
-9. **Database credential exposure (open).** A database login password was echoed in tool output on 3 November 2026. Rotation is NOT done and NOT verified. See T-31 and `CREDENTIAL_EXPOSURE_RECORD_2026-11-03.md`.
+9. **Database credential exposure (closed on owner confirmation).** A database login password was echoed in tool output on 3 November 2026. The owner confirmed rotation and verification; WDS authorized closure. No login-log review is evidenced here. See T-31 and `CREDENTIAL_EXPOSURE_RECORD_2026-11-03.md`.
 8. **Restore and recovery.** Not verified here (S8-12 is RED).
 
 ## 8. Owners and next actions
+
+See also `SPRINT8_STATUS.md` for S8-09 to S8-14 status (not complete).
 
 | Action | Owner | Gate |
 |---|---|---|
 | Resolve OPEN-11 | WDS decision | Blocks T-12 and S8-02 workspace test |
 | Scratch credential for `127.0.0.1:56544` | Not needed: DB checks ran on a dedicated Sprint 8 cluster | Closed for this register |
-| Rotate `webdesk_integration_owner` where valid; confirm the old value fails (T-31) | Credential owner | OPEN |
+| Rotate `webdesk_integration_owner` where valid; confirm the old value fails (T-31) | Credential owner | CLOSED on owner confirmation |
 | Close production blockers 1–7 in `PRODUCTION_BOUNDARY.md` | WDS decision and deployment | Not part of Sprint 8 acceptance here |
 | Independent review of this register | Independent reviewer (not this session) | Required for S8-01 completion |
 

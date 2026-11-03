@@ -1,6 +1,8 @@
 # Credential exposure record (sanitized), 3 November 2026
 
-**Status: OPEN. Rotation has NOT been performed and is NOT verified.**
+**Status: CLOSED on owner confirmation (recorded 3 November 2026). Closure authorized by WDS.**
+
+Neither the original nor the replacement password is recorded here, in the repository, or in any commit.
 
 ## What happened
 - During Sprint 8 engineering, a PostgreSQL connection-string error echoed a connection string that
@@ -9,33 +11,31 @@
   outputs in the engineering session. It was not written to any repository file or commit.
 - The value is identified by a SHA-256 prefix only: `c6834f84593a`.
 
-## Identification (done)
+## Identification (done before closure)
 - Role: `webdesk_integration_owner`. Configured target in the file: `localhost:5433`, database `webdesk_integration`.
 - Local copies: a fingerprint check of the `.env*` files in the main checkout and in every worktree found the value in
-  `.env.integration.local` only. The copy in `foundation-phase-3` has a different value.
+  `.env.integration.local` only.
 - Tracking: `.env.integration.local` is git-ignored (`.gitignore`). It is not tracked by git.
-- Validity: at verification time nothing listened on `localhost:5433`. One login attempt on `127.0.0.1:56544`
-  (scratch cluster for G0) failed authentication. Whether the value is valid elsewhere has NOT been tested.
-  Testing it against other shared clusters would have been an unapproved probe, so it was not done.
+- Validity: at identification time nothing listened on `localhost:5433`. One login attempt on `127.0.0.1:56544`
+  failed authentication. Reuse on any other shared cluster was not tested by the engineering session.
 
-## Reuse (partly checked)
-- No other local env file contains the value.
-- Reuse on any shared cluster or CI system is UNKNOWN. An inventory by the credential owner is required.
+## Rotation and verification (owner confirmation)
+- The authorized infrastructure owner confirmed on 3 November 2026 that the `webdesk_integration_owner` password
+  was rotated and that the rotation passed the owner's verification.
+- WDS authorized closure of T-31 on that confirmation, provided this record captures the owner's confirmation and
+  the available supporting evidence.
 
-## Actions not performed (and why)
-| Action | Status | Reason |
-|---|---|---|
-| Notify the credential owner through the established secure process | NOT DONE | The engineering session has no approved notification channel. The WDS owner or the infrastructure owner must be informed. |
-| Rotate the password for `webdesk_integration_owner` on each cluster where it is valid | NOT DONE | The cluster and role are owned by another environment. Rotation there is outside this engineering session. |
-| Verify the old password no longer works | NOT POSSIBLE here | Depends on rotation. |
-| Update authorized secret configuration | NOT DONE | Depends on rotation. The owner updates the local file. |
+## What this record does NOT claim
+- It does not record the owner's verification steps in detail. The engineering session did not perform or observe them.
+- It does not claim that a login-log review for the exposure window was performed. No such review is evidenced here.
+  If one is required, the infrastructure owner must supply it.
+- The owner-confirmed date is the date of confirmation as recorded above. The owner did not supply a separate
+  rotation timestamp.
 
 ## Not reused
-- The Sprint 8 verification did not use this value. It used a dedicated cluster (`127.0.0.1:55808`) with a
-  password generated for that cluster and held in a scratch file outside the repository.
+- The Sprint 8 verification did not use this value. It used dedicated clusters with generated credentials held
+  in scratch files outside the repository.
 
-## Required follow-up
-1. Credential owner rotates `webdesk_integration_owner` on every cluster where it is valid, then confirms with the new value.
-2. Credential owner checks the cluster audit logs for logins with the old value since 3 November 2026 (time of exposure).
-3. Engineering confirms the old value fails, by a login attempt that the owner approves.
-4. Close this record only with the owner's written confirmation.
+## Residual conditions for the record
+1. The infrastructure owner's rotation evidence, if one is needed for audit, is held by that owner and not in this repository.
+2. Any login-log review for 3 November 2026 onward remains the owner's to supply, if WDS requires it.
