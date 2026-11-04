@@ -1,6 +1,8 @@
 # Sprint 8 status (requirement matrix S8-01 to S8-14)
 
-**Scope of this record:** the status of every Sprint 8 requirement at the current repository state. It is not a Sprint 8 completion record. WDS has not declared Sprint 8 complete, and this document does not do so.
+**Phase 8 (Sprint 8) status: CLOSED BY WDS FORMAL ACCEPTANCE, recorded 2026-11-04.** The WDS Authorized Approver gave formal acceptance and directed phase 8 to be closed. The open blockers listed in section 5 are to be resolved at merge, as WDS stated. This record reports the acceptance; it is not an engineering declaration of completion.
+
+**Scope of this record:** the status of every Sprint 8 requirement at the repository state `6c23621`.
 **Credential item:** T-31 is CLOSED BY WDS MANAGEMENT ATTESTATION. No independent technical evidence is in the repository (`CREDENTIAL_EXPOSURE_RECORD_2026-11-03.md`).
 
 Status words: **Done** means implemented and verified in this repository, with the evidence named. **Partial** means some of the requirement is verified and a named part is not. **Draft** means written but not accepted. **RED** means a mandatory dependency is absent, per the dependency matrix. **BLOCKED** means a test or step cannot be verified until a named dependency exists.
@@ -68,3 +70,11 @@ Four workers were about 3.8 times faster than one on this host in the engineerin
 - No production infrastructure was used. All database work ran on dedicated scratch clusters.
 - No password or credential value appears in any file in this repository.
 - Nothing is pushed or merged to a protected branch. This record makes no deployment claim.
+
+## 7. WDS formal acceptance (recorded 2026-11-04)
+
+- **Decision:** the WDS Authorized Approver gave formal acceptance of Sprint 8 and directed that phase 8 be closed.
+- **Basis:** the verified engineering candidate on `feature/sprint8-hardening-resilience` (`6c23621`), the independent QA reports described in sections 1 to 4, and the closure of T-31 by WDS management attestation.
+- **Carried to merge (not resolved in this repository):** the three BLOCKED tests (OPEN-11 workspace read; S6-INT specialist path; S6-INT run-level recovery); OPEN-18 for the final-schema rehearsal and the final restricted-role matrix; the CI platform and runner; Sprint 7 review and reporting; S8-14 UAT readiness (draft, NOT READY).
+- **Not done by this acceptance:** no merge into a protected branch, no deployment, and no change to the status of the BLOCKED tests. None is reported as passed.
+- **Independent reviewer records:** the reviewer reports cited in this document are held in the engineering session and are not in the repository.
