@@ -312,3 +312,32 @@ the policy denies every approval, as WDS required until the change is integrated
 inside the test (monkeypatch). The Gate 1 negative tests run against the real matrix. Negative cases
 cover no grant, a grant in another project, an inactive user, the wrong role, a revoked or expired
 grant (modelled as removal), a partial estimate, and an already approved revision.
+
+### 1.14 Formal acceptance of Sprint 7 (recorded as given, 4 November 2026)
+
+**Acceptance given by the user, in this session, in these words:** "the open blockers and remaining
+work will be solved at merge now. I am officially giving my formal acceptance. Close phase 7."
+
+**Accepted commit:** `cd129515fbe4c09bf63dddcca59e38a96a47bfb4` on
+`feature/sprint7-human-review-estimation`. The working tree is clean at that commit, and the remote
+branch matches it. Checks on that commit: 769 unit tests passed, 3 skipped (the PostgreSQL integration
+tests, which need `WEBDESK_TEST_DATABASE_URL`), 0 failed; ruff clean; `mypy --strict` clean on 84 files.
+
+**Recorded as open and carried into the merge, per the acceptance:**
+1. Foundation owner: enable `sow.approve` for the Approver role, narrowly scoped to a project grant,
+   in the matrix and its database rule table (migration `0035`). Until then, estimate approval is
+   denied by policy, and the approval execution is not verified.
+2. PostgreSQL verification: no integration test has run against a database. These are the approval
+   persistence, audit persistence, and the SQL-store project-isolation tests.
+3. S7-12 (seven specialists): not implemented. Adapter v0.3 exists at `c2d3eb3`; its ingestion model and
+   the real integration against a verified Sprint 6 candidate are outstanding.
+4. Wiring: the authorization port and the audit writer have no service layer or route caller yet.
+5. Independent QA of `cd12951`: not run. The last independent QA was of `daa0706`, before the approval
+   and authorization increments.
+
+**Not claimed by this acceptance:** that any requirement is verified beyond the evidence in sections
+1.1 to 1.13. In particular, S7-07 approval execution, S7-10 durable audit, and S7-12 are not verified.
+
+**Acceptance scope:** this record closes Sprint 7 as a phase, on the terms above. The merge owner is
+responsible for the open items listed here. No merge into a protected branch was performed by this
+session.
